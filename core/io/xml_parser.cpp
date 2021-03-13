@@ -75,7 +75,7 @@ void XMLParser::_parse_closing_xml_element() {
 	++P;
 	const char *pBeginClose = P;
 
-	while (*P != '>') {
+	while (*P != '>' && P.valid()) {
 		++P;
 	}
 
@@ -91,7 +91,7 @@ void XMLParser::_ignore_definition() {
 
 	char *F = P;
 	// move until end marked with '>' reached
-	while (*P != '>') {
+	while (*P != '>' && P.valid()) {
 		++P;
 	}
 	node_name.parse_utf8(F, P - F);
@@ -107,7 +107,7 @@ bool XMLParser::_parse_cdata() {
 
 	// skip '<![CDATA['
 	int count = 0;
-	while (*P && count < 8) {
+	while (*P && count < 8 && P.valid()) {
 		++P;
 		++count;
 	}
@@ -151,7 +151,7 @@ void XMLParser::_parse_comment() {
 	int count = 1;
 
 	// move until end of comment reached
-	while (count) {
+	while (count && P.valid()) {
 		if (*P == '>') {
 			--count;
 		} else if (*P == '<') {
@@ -178,14 +178,14 @@ void XMLParser::_parse_opening_xml_element() {
 	const char *startName = P;
 
 	// find end of element
-	while (*P != '>' && !_is_white_space(*P)) {
+	while (*P != '>' && !_is_white_space(*P) && P.valid()) {
 		++P;
 	}
 
 	const char *endName = P;
 
 	// find attributes
-	while (*P != '>') {
+	while (*P != '>' && P.valid()) {
 		if (_is_white_space(*P)) {
 			++P;
 		} else {
@@ -195,7 +195,7 @@ void XMLParser::_parse_opening_xml_element() {
 				// read the attribute names
 				const char *attributeNameBegin = P;
 
-				while (!_is_white_space(*P) && *P != '=') {
+				while (!_is_white_space(*P) && *P != '=' && P.valid()) {
 					++P;
 				}
 
@@ -204,7 +204,7 @@ void XMLParser::_parse_opening_xml_element() {
 
 				// read the attribute value
 				// check for quotes and single quotes, thx to murphy
-				while ((*P != '\"') && (*P != '\'') && *P) {
+				while ((*P != '\"') && (*P != '\'') && *P && P.valid()) {
 					++P;
 				}
 
@@ -217,7 +217,7 @@ void XMLParser::_parse_opening_xml_element() {
 				++P;
 				const char *attributeValueBegin = P;
 
-				while (*P != attributeQuoteChar && *P) {
+				while (*P != attributeQuoteChar && *P && P.valid()) {
 					++P;
 				}
 
@@ -310,7 +310,7 @@ Error XMLParser::seek(uint64_t p_pos) {
 	ERR_FAIL_COND_V(!data, ERR_FILE_EOF);
 	ERR_FAIL_COND_V(p_pos >= length, ERR_FILE_EOF);
 
-	P = data + p_pos;
+	P.seek(data + p_pos);
 
 	return read();
 }
@@ -344,13 +344,11 @@ void XMLParser::_bind_methods() {
 }
 
 Error XMLParser::read() {
-	// if not end reached, parse the node
-	if (P && (P - data) < (int64_t)length - 1 && *P != 0) {
-		_parse_current_node();
-		return OK;
+	if (*P == '\0') {
+		return ERR_FILE_EOF;
 	}
-
-	return ERR_FILE_EOF;
+	_parse_current_node();
+	return P.valid() ? OK : ERR_INVALID_DATA;
 }
 
 XMLParser::NodeType XMLParser::get_node_type() {
@@ -435,7 +433,7 @@ Error XMLParser::open_buffer(const Vector<uint8_t> &p_buffer) {
 	data = memnew_arr(char, length + 1);
 	copymem(data, p_buffer.ptr(), length);
 	data[length] = 0;
-	P = data;
+	P.set(data, data + length);
 	return OK;
 }
 
@@ -455,7 +453,7 @@ Error XMLParser::open(const String &p_path) {
 	data = memnew_arr(char, length + 1);
 	file->get_buffer((uint8_t *)data, length);
 	data[length] = 0;
-	P = data;
+	P.set(data, data + length);
 
 	memdelete(file);
 
@@ -487,7 +485,7 @@ void XMLParser::close() {
 	}
 	data = nullptr;
 	length = 0;
-	P = nullptr;
+	P.reset();
 	node_empty = false;
 	node_type = NODE_NONE;
 	node_offset = 0;
