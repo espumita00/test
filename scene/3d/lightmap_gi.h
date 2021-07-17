@@ -48,6 +48,10 @@ class LightmapGIData : public Resource {
 	bool uses_spherical_harmonics = false;
 	bool interior = false;
 
+	// Mirrors LightmapGI properties (set before each bake). Required to save images correctly.
+	bool use_hdr = true;
+	bool use_color = true;
+
 	RID lightmap;
 	AABB bounds;
 	float baked_exposure = 1.0;
@@ -85,6 +89,12 @@ public:
 
 	void set_uses_spherical_harmonics(bool p_enable);
 	bool is_using_spherical_harmonics() const;
+
+	void set_use_hdr(bool p_enable);
+	bool is_using_hdr() const;
+
+	void set_use_color(bool p_enable);
+	bool is_using_color() const;
 
 	bool is_interior() const;
 	float get_baked_exposure() const;
@@ -147,6 +157,8 @@ private:
 	bool use_denoiser = true;
 	float denoiser_strength = 0.1f;
 	int bounces = 3;
+	bool use_hdr = true;
+	bool use_color = true;
 	float bias = 0.0005;
 	int max_texture_size = 16384;
 	bool interior = false;
@@ -242,6 +254,12 @@ public:
 
 	void set_denoiser_strength(float p_denoiser_strength);
 	float get_denoiser_strength() const;
+
+	void set_use_hdr(bool p_enable);
+	bool is_using_hdr() const;
+
+	void set_use_color(bool p_enable);
+	bool is_using_color() const;
 
 	void set_directional(bool p_enable);
 	bool is_directional() const;
