@@ -90,6 +90,8 @@
 #include "tests/scene/test_curve.h"
 #include "tests/scene/test_gradient.h"
 #include "tests/scene/test_path_3d.h"
+#include "tests/scene/test_path_follow_2d.h"
+#include "tests/scene/test_path_follow_3d.h"
 #include "tests/scene/test_sprite_frames.h"
 #include "tests/scene/test_text_edit.h"
 #include "tests/scene/test_theme.h"
