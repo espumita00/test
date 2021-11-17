@@ -113,6 +113,9 @@ String GDScriptWarning::get_message() const {
 		case INTEGER_DIVISION: {
 			return "Integer division, decimal part will be discarded.";
 		} break;
+		case FLOAT_COMPARISON: {
+			return "Direct floating-point comparison (this may not evaluate to `true` as you expect). Instead, use `is_equal_approx()` or `is_zero_approx()`.";
+		} break;
 		case UNSAFE_PROPERTY_ACCESS: {
 			CHECK_SYMBOLS(2);
 			return "The property '" + symbols[0] + "' is not present on the inferred type '" + symbols[1] + "' (but may be present on a subtype).";
@@ -184,6 +187,7 @@ String GDScriptWarning::get_name_from_code(Code p_code) {
 		"CONSTANT_USED_AS_FUNCTION",
 		"FUNCTION_USED_AS_PROPERTY",
 		"INTEGER_DIVISION",
+		"FLOAT_COMPARISON",
 		"UNSAFE_PROPERTY_ACCESS",
 		"UNSAFE_METHOD_ACCESS",
 		"UNSAFE_CAST",

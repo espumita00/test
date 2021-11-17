@@ -348,6 +348,9 @@
 		<member name="debug/gdscript/warnings/exclude_addons" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], scripts in the [code]res://addons[/code] folder will not generate warnings.
 		</member>
+		<member name="debug/gdscript/warnings/float_comparison" type="bool" setter="" getter="" default="true">
+			If [code]true[/code], enables warnings when comparing a floating-point value with another floating-point value or an integer value. Due to the limitations of floating-point math, such comparisons may not always evaluate to [code]true[/code] as you expect. Instead, [method @GlobalScope.is_equal_approx] or [method @GlobalScope.is_zero_approx] should be used to perform reliable floating-point number comparisons.
+		</member>
 		<member name="debug/gdscript/warnings/function_used_as_property" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], enables warnings when using a function as if it was a property.
 		</member>
