@@ -59,6 +59,7 @@ public:
 		CONSTANT_USED_AS_FUNCTION, // Function not found, but there's a constant with the same name.
 		FUNCTION_USED_AS_PROPERTY, // Property not found, but there's a function with the same name.
 		INTEGER_DIVISION, // Integer divide by integer, decimal part is discarded.
+		FLOAT_COMPARISON, // Floating-point number is compared with another number using `==` or `!=`, leading to inconsistent results.
 		UNSAFE_PROPERTY_ACCESS, // Property not found in the detected type (but can be in subtypes).
 		UNSAFE_METHOD_ACCESS, // Function not found in the detected type (but can be in subtypes).
 		UNSAFE_CAST, // Cast used in an unknown type.
