@@ -141,6 +141,7 @@ void ShaderEditorPlugin::edit(Object *p_object) {
 		}
 		es.shader_inc = Ref<ShaderInclude>(si);
 		es.shader_editor = memnew(TextShaderEditor);
+		es.shader_editor->get_shader_text_editor()->set_toggle_list_control(shader_list);
 		es.shader_editor->edit(si);
 		shader_tabs->add_child(es.shader_editor);
 		es.shader_editor->connect("validation_changed", callable_mp(this, &ShaderEditorPlugin::_update_shader_list));
@@ -161,6 +162,7 @@ void ShaderEditorPlugin::edit(Object *p_object) {
 			es.visual_shader_editor->edit(vs.ptr());
 		} else {
 			es.shader_editor = memnew(TextShaderEditor);
+			es.shader_editor->get_shader_text_editor()->set_toggle_list_control(shader_list);
 			shader_tabs->add_child(es.shader_editor);
 			es.shader_editor->edit(s);
 			es.shader_editor->connect("validation_changed", callable_mp(this, &ShaderEditorPlugin::_update_shader_list));
