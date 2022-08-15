@@ -38,7 +38,11 @@ class ItemList;
 class ShaderCreateDialog;
 class TabContainer;
 class TextShaderEditor;
+
+#include "modules/modules_enabled.gen.h" // For visual shader.
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 class VisualShaderEditor;
+#endif // MODULE_VISUAL_SHADER_ENABLED
 
 class ShaderEditorPlugin : public EditorPlugin {
 	GDCLASS(ShaderEditorPlugin, EditorPlugin);
@@ -47,7 +51,9 @@ class ShaderEditorPlugin : public EditorPlugin {
 		Ref<Shader> shader;
 		Ref<ShaderInclude> shader_inc;
 		TextShaderEditor *shader_editor = nullptr;
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 		VisualShaderEditor *visual_shader_editor = nullptr;
+#endif // MODULE_VISUAL_SHADER_ENABLED
 	};
 
 	LocalVector<EditedShader> edited_shaders;
@@ -99,7 +105,9 @@ public:
 	virtual void selected_notify() override;
 
 	TextShaderEditor *get_shader_editor(const Ref<Shader> &p_for_shader);
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 	VisualShaderEditor *get_visual_shader_editor(const Ref<Shader> &p_for_shader);
+#endif // MODULE_VISUAL_SHADER_ENABLED
 
 	virtual void save_external_data() override;
 	virtual void apply_changes() override;

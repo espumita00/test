@@ -201,7 +201,6 @@
 #include "editor/plugins/theme_editor_plugin.h"
 #include "editor/plugins/tiles/tiles_editor_plugin.h"
 #include "editor/plugins/version_control_editor_plugin.h"
-#include "editor/plugins/visual_shader_editor_plugin.h"
 #include "editor/plugins/voxel_gi_editor_plugin.h"
 #include "editor/progress_dialog.h"
 #include "editor/project_settings_editor.h"
@@ -6276,10 +6275,6 @@ EditorNode::EditorNode() {
 		Ref<EditorInspectorRootMotionPlugin> rmp;
 		rmp.instantiate();
 		EditorInspector::add_inspector_plugin(rmp);
-
-		Ref<EditorInspectorVisualShaderModePlugin> smp;
-		smp.instantiate();
-		EditorInspector::add_inspector_plugin(smp);
 	}
 
 	editor_selection = memnew(EditorSelection);
@@ -7424,10 +7419,6 @@ EditorNode::EditorNode() {
 		Ref<FogMaterialConversionPlugin> fog_mat_convert;
 		fog_mat_convert.instantiate();
 		resource_conversion_plugins.push_back(fog_mat_convert);
-
-		Ref<VisualShaderConversionPlugin> vshader_convert;
-		vshader_convert.instantiate();
-		resource_conversion_plugins.push_back(vshader_convert);
 	}
 
 	update_spinner_step_msec = OS::get_singleton()->get_ticks_msec();

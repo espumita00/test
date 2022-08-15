@@ -34,8 +34,12 @@
 #include "editor/editor_scale.h"
 #include "editor/filesystem_dock.h"
 #include "editor/plugins/text_shader_editor.h"
-#include "editor/plugins/visual_shader_editor_plugin.h"
 #include "editor/shader_create_dialog.h"
+
+#include "modules/modules_enabled.gen.h" // For visual shader.
+#ifdef MODULE_VISUAL_SHADER_ENABLED
+#include "modules/visual_shader/editor/visual_shader_editor_plugin.h"
+#endif // MODULE_VISUAL_SHADER_ENABLED
 
 void ShaderEditorPlugin::_update_shader_list() {
 	shader_list->clear();
@@ -139,12 +143,15 @@ void ShaderEditorPlugin::edit(Object *p_object) {
 			}
 		}
 		es.shader = Ref<Shader>(s);
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 		Ref<VisualShader> vs = es.shader;
 		if (vs.is_valid()) {
 			es.visual_shader_editor = memnew(VisualShaderEditor);
 			shader_tabs->add_child(es.visual_shader_editor);
 			es.visual_shader_editor->edit(vs.ptr());
-		} else {
+		} else
+#endif // MODULE_VISUAL_SHADER_ENABLED
+		{
 			es.shader_editor = memnew(TextShaderEditor);
 			shader_tabs->add_child(es.shader_editor);
 			es.shader_editor->edit(s);
@@ -179,6 +186,7 @@ TextShaderEditor *ShaderEditorPlugin::get_shader_editor(const Ref<Shader> &p_for
 	return nullptr;
 }
 
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 VisualShaderEditor *ShaderEditorPlugin::get_visual_shader_editor(const Ref<Shader> &p_for_shader) {
 	for (uint32_t i = 0; i < edited_shaders.size(); i++) {
 		if (edited_shaders[i].shader == p_for_shader) {
@@ -187,6 +195,7 @@ VisualShaderEditor *ShaderEditorPlugin::get_visual_shader_editor(const Ref<Shade
 	}
 	return nullptr;
 }
+#endif // MODULE_VISUAL_SHADER_ENABLED
 
 void ShaderEditorPlugin::save_external_data() {
 	for (uint32_t i = 0; i < edited_shaders.size(); i++) {
