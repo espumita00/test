@@ -31,15 +31,22 @@
 #include "shader_create_dialog.h"
 
 #include "core/config/project_settings.h"
+#include "core/string/string_builder.h"
 #include "editor/editor_file_dialog.h"
 #include "editor/editor_scale.h"
 #include "scene/resources/shader_include.h"
-#include "scene/resources/visual_shader.h"
 #include "servers/rendering/shader_types.h"
+
+#include "modules/modules_enabled.gen.h" // For visual shader.
+#ifdef MODULE_VISUAL_SHADER_ENABLED
+#include "modules/visual_shader/visual_shader.h"
+#endif // MODULE_VISUAL_SHADER_ENABLED
 
 enum ShaderType {
 	SHADER_TYPE_TEXT,
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 	SHADER_TYPE_VISUAL,
+#endif // MODULE_VISUAL_SHADER_ENABLED
 	SHADER_TYPE_INC,
 	SHADER_TYPE_MAX,
 };
@@ -199,12 +206,14 @@ void ShaderCreateDialog::_create_new() {
 			}
 			text_shader->set_code(code.as_string());
 		} break;
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 		case SHADER_TYPE_VISUAL: {
 			Ref<VisualShader> visual_shader;
 			visual_shader.instantiate();
 			shader = visual_shader;
 			visual_shader->set_mode(Shader::Mode(current_mode));
 		} break;
+#endif // MODULE_VISUAL_SHADER_ENABLED
 		case SHADER_TYPE_INC: {
 			Ref<ShaderInclude> include;
 			include.instantiate();
@@ -610,9 +619,11 @@ ShaderCreateDialog::ShaderCreateDialog() {
 				type = "Shader";
 				default_type = i;
 				break;
+#ifdef MODULE_VISUAL_SHADER_ENABLED
 			case SHADER_TYPE_VISUAL:
 				type = "VisualShader";
 				break;
+#endif // MODULE_VISUAL_SHADER_ENABLED
 			case SHADER_TYPE_INC:
 				type = "ShaderInclude";
 				break;
