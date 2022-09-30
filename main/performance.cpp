@@ -53,6 +53,7 @@ void Performance::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_custom_monitor_names"), &Performance::get_custom_monitor_names);
 
 	BIND_ENUM_CONSTANT(TIME_FPS);
+	BIND_ENUM_CONSTANT(TIME_FPS_1_PERCENT_LOW);
 	BIND_ENUM_CONSTANT(TIME_PROCESS);
 	BIND_ENUM_CONSTANT(TIME_PHYSICS_PROCESS);
 	BIND_ENUM_CONSTANT(TIME_NAVIGATION_PROCESS);
@@ -101,6 +102,7 @@ String Performance::get_monitor_name(Monitor p_monitor) const {
 	ERR_FAIL_INDEX_V(p_monitor, MONITOR_MAX, String());
 	static const char *names[MONITOR_MAX] = {
 		"time/fps",
+		"time/fps_1_percent_low",
 		"time/process",
 		"time/physics_process",
 		"time/navigation_process",
@@ -143,6 +145,8 @@ double Performance::get_monitor(Monitor p_monitor) const {
 	switch (p_monitor) {
 		case TIME_FPS:
 			return Engine::get_singleton()->get_frames_per_second();
+		case TIME_FPS_1_PERCENT_LOW:
+			return Math::round(Engine::get_singleton()->get_frames_per_second_1_percent_low());
 		case TIME_PROCESS:
 			return _process_time;
 		case TIME_PHYSICS_PROCESS:
@@ -219,6 +223,7 @@ Performance::MonitorType Performance::get_monitor_type(Monitor p_monitor) const 
 	ERR_FAIL_INDEX_V(p_monitor, MONITOR_MAX, MONITOR_TYPE_QUANTITY);
 	// ugly
 	static const MonitorType types[MONITOR_MAX] = {
+		MONITOR_TYPE_QUANTITY,
 		MONITOR_TYPE_QUANTITY,
 		MONITOR_TYPE_TIME,
 		MONITOR_TYPE_TIME,

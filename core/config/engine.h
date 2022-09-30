@@ -60,6 +60,7 @@ private:
 	int ips = 60;
 	double physics_jitter_fix = 0.5;
 	double _fps = 1;
+	double _fps_1_percent_low = 1;
 	int _max_fps = 0;
 	double _time_scale = 1.0;
 	uint64_t _physics_frames = 0;
@@ -104,6 +105,7 @@ public:
 	virtual int get_max_fps() const;
 
 	virtual double get_frames_per_second() const { return _fps; }
+	virtual double get_frames_per_second_1_percent_low() const { return _fps_1_percent_low; }
 
 	uint64_t get_frames_drawn();
 

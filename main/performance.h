@@ -68,6 +68,7 @@ class Performance : public Object {
 public:
 	enum Monitor {
 		TIME_FPS,
+		TIME_FPS_1_PERCENT_LOW,
 		TIME_PROCESS,
 		TIME_PHYSICS_PROCESS,
 		TIME_NAVIGATION_PROCESS,
