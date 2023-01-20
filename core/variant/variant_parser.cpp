@@ -1800,7 +1800,10 @@ Error VariantWriter::write(const Variant &p_variant, StoreStringFunc p_store_str
 					}
 
 					p_store_string_func(p_store_string_ud, "\"" + E.name + "\":");
-					write(obj->get(E.name), p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud);
+					Error err = write(obj->get(E.name), p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud);
+					if (err != OK) {
+						return err;
+					}
 				}
 			}
 
@@ -1827,9 +1830,11 @@ Error VariantWriter::write(const Variant &p_variant, StoreStringFunc p_store_str
 
 				p_store_string_func(p_store_string_ud, "{\n");
 				for (List<Variant>::Element *E = keys.front(); E; E = E->next()) {
-					write(E->get(), p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					Error err = write(E->get(), p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					ERR_CONTINUE_MSG(err != OK, vformat("Error serializing key \"%s\": %s", E->get(), err));
 					p_store_string_func(p_store_string_ud, ": ");
-					write(dict[E->get()], p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					err = write(dict[E->get()], p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Error serializing value of key \"%s\": %s", dict[E->get()], E->get(), err));
 					if (E->next()) {
 						p_store_string_func(p_store_string_ud, ",\n");
 					} else {
@@ -1856,7 +1861,10 @@ Error VariantWriter::write(const Variant &p_variant, StoreStringFunc p_store_str
 					if (i > 0) {
 						p_store_string_func(p_store_string_ud, ", ");
 					}
-					write(array[i], p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					Error err = write(array[i], p_store_string_func, p_store_string_ud, p_encode_res_func, p_encode_res_ud, recursion_count);
+					if (err != OK) {
+						return err;
+					}
 				}
 
 				p_store_string_func(p_store_string_ud, "]");
@@ -2017,6 +2025,8 @@ Error VariantWriter::write(const Variant &p_variant, StoreStringFunc p_store_str
 
 		} break;
 		default: {
+			ERR_PRINT(vformat("Couldn't serialize variant %s", p_variant));
+			return ERR_INVALID_DATA;
 		}
 	}
 
