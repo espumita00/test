@@ -84,6 +84,7 @@ class RenderForwardClustered : public RendererSceneRenderRD {
 
 	enum RenderListType {
 		RENDER_LIST_OPAQUE, //used for opaque objects
+		RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS, // Used for opaque objects which cannot use depth prepass.
 		RENDER_LIST_ALPHA, //used for transparent objects
 		RENDER_LIST_SECONDARY, //used for shadows and other objects
 		RENDER_LIST_MAX
@@ -322,6 +323,7 @@ class RenderForwardClustered : public RendererSceneRenderRD {
 		bool used_depth_texture = false;
 		bool used_sss = false;
 		bool used_lightmap = false;
+		bool used_opaque_no_depth_prepass = false;
 
 		struct ShadowPass {
 			uint32_t element_from;
@@ -398,6 +400,7 @@ class RenderForwardClustered : public RendererSceneRenderRD {
 			FLAG_USES_NORMAL_TEXTURE = 16384,
 			FLAG_USES_DOUBLE_SIDED_SHADOWS = 32768,
 			FLAG_USES_PARTICLE_TRAILS = 65536,
+			FLAG_NO_DEPTH_PREPASS = 131072,
 		};
 
 		union {
