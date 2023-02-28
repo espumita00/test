@@ -2419,17 +2419,20 @@ void ProjectManager::_scan_dir(const String &path) {
 	Error error = da->change_dir(path);
 	ERR_FAIL_COND_MSG(error != OK, "Could not scan directory at: " + path);
 	da->list_dir_begin();
-	String n = da->get_next();
-	while (!n.is_empty()) {
-		if (da->current_is_dir() && !n.begins_with(".")) {
-			_scan_dir(da->get_current_dir().path_join(n));
-		} else if (n == "project.godot") {
-			_project_list->add_project(da->get_current_dir(), false);
+	if (da->file_exists("project.godot")) {
+		_project_list->add_project(da->get_current_dir(), false);
+	} else if (!da->file_exists(".gdignore")) {
+		String n = da->get_next();
+		while (!n.is_empty()) {
+			if (da->current_is_dir() && !n.begins_with(".")) {
+				_scan_dir(da->get_current_dir().path_join(n));
+			}
+			n = da->get_next();
 		}
-		n = da->get_next();
 	}
 	da->list_dir_end();
 }
+
 void ProjectManager::_scan_begin(const String &p_base) {
 	print_line("Scanning projects at: " + p_base);
 	_scan_dir(p_base);
