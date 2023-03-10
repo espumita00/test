@@ -166,6 +166,8 @@ struct CanvasShaderData : public ShaderData {
 
 	bool uses_screen_texture;
 	bool uses_screen_texture_mipmaps;
+	bool uses_mask_texture;
+	bool uses_mask_texture_mipmaps;
 	bool uses_sdf;
 	bool uses_time;
 	bool uses_custom0;
