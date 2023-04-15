@@ -644,6 +644,7 @@ private:
 	void _save_editor_layout();
 	void _load_editor_layout();
 	void _save_docks_to_config(Ref<ConfigFile> p_layout, const String &p_section);
+	void _save_window_settings_to_config(Ref<ConfigFile> p_layout, const String &p_section);
 	void _restore_floating_dock(const Dictionary &p_dock_dump, Control *p_wrapper, int p_slot_index);
 	void _load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section);
 	void _update_dock_slots_visibility(bool p_keep_selected_tabs = false);

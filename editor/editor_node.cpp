@@ -4890,6 +4890,7 @@ void EditorNode::_save_editor_layout() {
 	_save_docks_to_config(config, "docks");
 	_save_open_scenes_to_config(config);
 	_save_central_editor_layout_to_config(config);
+	_save_window_settings_to_config(config, "EditorWindow");
 	editor_data.get_plugin_window_layout(config);
 
 	config->save(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg"));
@@ -5128,6 +5129,30 @@ void EditorNode::_restore_floating_dock(const Dictionary &p_dock_dump, Control *
 			p_dock_dump.get("window_rect", Rect2i()),
 			p_dock_dump.get("window_screen", -1),
 			p_dock_dump.get("window_screen_rect", Rect2i()));
+}
+
+void EditorNode::_save_window_settings_to_config(Ref<ConfigFile> p_layout, const String &p_section) {
+	Window *w = get_window();
+	if (w) {
+		p_layout->set_value(p_section, "screen", w->get_current_screen());
+
+		Window::Mode mode = w->get_mode();
+		switch (mode) {
+			case Window::MODE_WINDOWED:
+				p_layout->set_value(p_section, "mode", "windowed");
+				p_layout->set_value(p_section, "size", w->get_size());
+				break;
+			case Window::MODE_FULLSCREEN:
+			case Window::MODE_EXCLUSIVE_FULLSCREEN:
+				p_layout->set_value(p_section, "mode", "fullscreen");
+				break;
+			default:
+				p_layout->set_value(p_section, "mode", "maximized");
+				break;
+		}
+
+		p_layout->set_value(p_section, "position", w->get_position());
+	}
 }
 
 void EditorNode::_load_docks_from_config(Ref<ConfigFile> p_layout, const String &p_section) {
