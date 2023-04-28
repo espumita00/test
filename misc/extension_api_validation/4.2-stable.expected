@@ -272,3 +272,10 @@ Validate extension JSON: API was removed: classes/SkeletonIK3D/methods/set_inter
 Validate extension JSON: API was removed: classes/SkeletonIK3D/properties/interpolation
 
 These base class is changed to SkeletonModifier3D which is processed by Skeleton3D with the assumption that it is Skeleton3D's child.
+
+
+GH-76560
+--------
+Validate extension JSON: Error: Field 'classes/Node/methods/set_name/arguments/0': type changed value in new API, from "String" to "StringName".
+
+Change Node `set_name` to use StringName to improve performance.
