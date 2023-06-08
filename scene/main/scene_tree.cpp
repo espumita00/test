@@ -459,6 +459,10 @@ bool SceneTree::physics_process(double p_time) {
 	MainLoop::physics_process(p_time);
 	physics_process_time = p_time;
 
+	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
+		ScriptServer::get_language(i)->set_physics_process_delta_time(p_time);
+	}
+
 	emit_signal(SNAME("physics_frame"));
 
 	call_group(SNAME("_picking_viewports"), SNAME("_process_picking"));
@@ -487,6 +491,10 @@ bool SceneTree::process(double p_time) {
 	MainLoop::process(p_time);
 
 	process_time = p_time;
+
+	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
+		ScriptServer::get_language(i)->set_process_delta_time(p_time);
+	}
 
 	if (multiplayer_poll) {
 		multiplayer->poll();
