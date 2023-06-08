@@ -17,3 +17,65 @@ runs:
         name: ${{ inputs.name }}
         path: ${{ inputs.path }}
         retention-days: 14
+
+    - name: Strip Binary
+      run: |
+        if [ ! -d "${{ inputs.path }}" ] || [ ! "$(ls -A ${{ inputs.path }})" ]; then
+          echo "No files found in the specified path."
+          exit 1
+        fi
+        shopt -s nullglob
+        files=(${{ inputs.path }})
+        for file in "${files[@]}"
+        do
+          strip "$file"
+        done
+      shell: bash
+
+    - name: Store artifact size
+      shell: bash
+      run: |
+        git_hash=${{ steps.get_commit_hash.outputs.hash }}
+        actual_size=$(find "${{ inputs.path }}" -type f -exec wc -c {} + | awk '{total += $1} END {print total}')
+        echo "Artifact Size: $actual_size, Git Commit Hash: $git_hash, Artifact Name: ${{ inputs.name }}" >> $git_hash-${{ inputs.name }}.txt
+
+    - name: Upload artifact sizes
+      uses: actions/upload-artifact@v4
+      with:
+        name: artifact-sizes
+        path: ${{ steps.get_commit_hash.outputs.hash }}-${{ inputs.name }}.txt
+        retention-days: 14
+
+    - name: Download last artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: artifact-sizes
+        path: ./last_artifact
+
+    - name: Compare binary size with latest successful master build
+      shell: bash
+      run: |
+        template_name=$(echo ${{ inputs.name }} | sed 's/[^a-zA-Z0-9_]/_/g')
+        template=${template_name//-/_}
+        file_path="${{ inputs.path }}"
+
+        actual_size=$(du -sb $file_path | cut -f1)
+
+        git_hash=${{ steps.get_commit_hash.outputs.hash }}
+        last_artifact_file="./last_artifact/$git_hash-${{ inputs.name }}.txt"
+        if [[ -f "$last_artifact_file" ]]; then
+          expected_size=$(cat $last_artifact_file | awk '{print $3}')
+        else
+          echo "No previous artifact found for comparison."
+          exit 0
+        fi
+
+        size_difference=$((actual_size - expected_size))
+
+        if [[ $size_difference -ge 1 ]]; then
+          echo -e "\033[1mBinary size:\033[0m The $template binary is \033[1;91m$size_difference bytes larger\033[0m than the last successful commit."
+        elif [[ $size_difference -lt 0 ]]; then
+          echo -e "\033[1mBinary size:\033[0m The $template binary is \033[1;92m$size_difference bytes smaller\033[0m than the last successful commit."
+        else
+          echo -e "\033[1mBinary size:\033[0m The $template binary is \033[1;92mexactly as the last successful commit.\033[0m"
+        fi
