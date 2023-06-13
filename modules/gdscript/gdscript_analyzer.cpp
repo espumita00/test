@@ -394,6 +394,22 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 
 		int extends_index = 0;
 
+#ifdef DEBUG_ENABLED
+		// In case of an error the previously ignored warnings will not be restored due to `return`.
+		// TODO: Rework warning ignoring system?
+		HashSet<GDScriptWarning::Code> previously_ignored_warnings = parser->ignored_warnings;
+		// Apply `@warning_ignore` annotations before resolving class.
+		for (GDScriptParser::AnnotationNode *&E : p_class->annotations) {
+			if (E->name == SNAME("@warning_ignore")) {
+				resolve_annotation(E);
+				E->apply(parser, p_class);
+			}
+		}
+		for (GDScriptWarning::Code ignored_warning : p_class->ignored_warnings) {
+			parser->ignored_warnings.insert(ignored_warning);
+		}
+#endif
+
 		if (!p_class->extends_path.is_empty()) {
 			if (p_class->extends_path.is_relative_path()) {
 				p_class->extends_path = class_type.script_path.get_base_dir().path_join(p_class->extends_path).simplify_path();
@@ -409,6 +425,12 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 				push_error(vformat(R"(Could not resolve super class inheritance from "%s".)", p_class->extends_path), p_class);
 				return err;
 			}
+
+#ifdef DEBUG_ENABLED
+			if (!parser->_is_tool && ext_parser->get_parser()->_is_tool) {
+				parser->push_warning(p_class, GDScriptWarning::MISSING_TOOL);
+			}
+#endif
 
 			base = ext_parser->get_parser()->head->get_datatype();
 		} else {
@@ -437,6 +459,13 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 						push_error(vformat(R"(Could not resolve super class inheritance from "%s".)", name), id);
 						return err;
 					}
+
+#ifdef DEBUG_ENABLED
+					if (!parser->_is_tool && base_parser->get_parser()->_is_tool) {
+						parser->push_warning(p_class, GDScriptWarning::MISSING_TOOL);
+					}
+#endif
+
 					base = base_parser->get_parser()->head->get_datatype();
 				}
 			} else if (ProjectSettings::get_singleton()->has_autoload(name) && ProjectSettings::get_singleton()->get_autoload(name).is_singleton) {
@@ -457,6 +486,13 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 					push_error(vformat(R"(Could not resolve super class inheritance from "%s".)", name), id);
 					return err;
 				}
+
+#ifdef DEBUG_ENABLED
+				if (!parser->_is_tool && info_parser->get_parser()->_is_tool) {
+					parser->push_warning(p_class, GDScriptWarning::MISSING_TOOL);
+				}
+#endif
+
 				base = info_parser->get_parser()->head->get_datatype();
 			} else if (class_exists(name)) {
 				if (Engine::get_singleton()->has_singleton(name)) {
@@ -513,6 +549,10 @@ Error GDScriptAnalyzer::resolve_class_inheritance(GDScriptParser::ClassNode *p_c
 				}
 			}
 		}
+
+#ifdef DEBUG_ENABLED
+		parser->ignored_warnings = previously_ignored_warnings;
+#endif
 
 		for (int index = extends_index; index < p_class->extends.size(); index++) {
 			GDScriptParser::IdentifierNode *id = p_class->extends[index];
@@ -1140,11 +1180,18 @@ void GDScriptAnalyzer::resolve_class_interface(GDScriptParser::ClassNode *p_clas
 		p_source = p_class;
 	}
 
+	if (!p_class->resolved_interface) {
 #ifdef DEBUG_ENABLED
-	bool has_static_data = p_class->has_static_data;
+		bool has_static_data = p_class->has_static_data;
+
+		// In case of an error the previously ignored warnings will not be restored due to `return`.
+		// TODO: Rework warning ignoring system?
+		HashSet<GDScriptWarning::Code> previously_ignored_warnings = parser->ignored_warnings;
+		for (GDScriptWarning::Code ignored_warning : p_class->ignored_warnings) {
+			parser->ignored_warnings.insert(ignored_warning);
+		}
 #endif
 
-	if (!p_class->resolved_interface) {
 		if (!parser->has_class(p_class)) {
 			String script_path = p_class->get_datatype().script_path;
 			Ref<GDScriptParserRef> parser_ref = get_parser_for(script_path);
@@ -1172,6 +1219,7 @@ void GDScriptAnalyzer::resolve_class_interface(GDScriptParser::ClassNode *p_clas
 
 			return;
 		}
+
 		p_class->resolved_interface = true;
 
 		if (resolve_class_inheritance(p_class) != OK) {
@@ -1208,6 +1256,8 @@ void GDScriptAnalyzer::resolve_class_interface(GDScriptParser::ClassNode *p_clas
 			}
 			parser->push_warning(static_unload ? static_unload : p_class, GDScriptWarning::REDUNDANT_STATIC_UNLOAD);
 		}
+
+		parser->ignored_warnings = previously_ignored_warnings;
 #endif
 	}
 }
