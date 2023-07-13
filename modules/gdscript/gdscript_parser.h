@@ -337,6 +337,9 @@ public:
 #ifdef DEBUG_ENABLED
 		Vector<GDScriptWarning::Code> ignored_warnings;
 #endif
+#ifdef TOOLS_ENABLED
+		Vector<Node *> incomplete_fragments;
+#endif
 
 		DataType datatype;
 
@@ -1335,6 +1338,9 @@ private:
 	HashSet<GDScriptWarning::Code> ignored_warnings;
 	HashSet<int> unsafe_lines;
 #endif
+#ifdef TOOLS_ENABLED
+	Vector<GDScriptParser::Node *> incomplete_fragments;
+#endif
 
 	GDScriptTokenizer tokenizer;
 	GDScriptTokenizer::Token previous;
@@ -1435,6 +1441,8 @@ private:
 		push_warning(p_source, p_code, Vector<String>{ p_symbols... });
 	}
 #endif
+	inline void push_incomplete(GDScriptParser::Node *p_incomplete);
+	inline void apply_incomplete(GDScriptParser::Node *p_apply_to);
 
 	void make_completion_context(CompletionType p_type, Node *p_node, int p_argument = -1, bool p_force = false);
 	void make_completion_context(CompletionType p_type, Variant::Type p_builtin_type, bool p_force = false);
