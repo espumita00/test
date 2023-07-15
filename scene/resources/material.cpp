@@ -1367,8 +1367,16 @@ void BaseMaterial3D::_update_shader() {
 				// Use interleaved gradient noise, which is fast but still looks good.
 				code += "		const vec3 magic = vec3(0.06711056f, 0.00583715f, 52.9829189f);";
 				code += "		float fade = clamp(smoothstep(distance_fade_min, distance_fade_max, fade_distance), 0.0, 1.0);\n";
+
+				const RS::BaseMaterial3DDitheringJitter use_jitter = RS::BaseMaterial3DDitheringJitter(int(GLOBAL_GET("rendering/shading/base_material_3d/dithering_use_jitter")));
+				if (use_jitter == RS::BASE_MATERIAL_3D_DITHERING_JITTER_ALWAYS || (use_jitter == RS::BASE_MATERIAL_3D_DITHERING_JITTER_AUTO && GLOBAL_GET("rendering/anti_aliasing/quality/use_taa"))) {
+					code += "		float jitter = fract(sin(dot(vec2(TIME), vec2(12.9898, 78.233))) * 43758.5453);\n";
+				} else {
+					code += "		float jitter = 0.0;\n";
+				}
+
 				// Use a hard cap to prevent a few stray pixels from remaining when past the fade-out distance.
-				code += "		if (fade < 0.001 || fade < fract(magic.z * fract(dot(FRAGCOORD.xy, magic.xy)))) {\n";
+				code += "		if (fade < 0.001 || fade < fract(magic.z * fract(dot(FRAGCOORD.xy + vec2(jitter), magic.xy)))) {\n";
 				code += "			discard;\n";
 				code += "		}\n";
 

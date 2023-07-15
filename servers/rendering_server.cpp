@@ -1747,6 +1747,10 @@ void RenderingServer::_bind_methods() {
 	BIND_CONSTANT(MATERIAL_RENDER_PRIORITY_MIN);
 	BIND_CONSTANT(MATERIAL_RENDER_PRIORITY_MAX);
 
+	BIND_ENUM_CONSTANT(BASE_MATERIAL_3D_DITHERING_JITTER_AUTO);
+	BIND_ENUM_CONSTANT(BASE_MATERIAL_3D_DITHERING_JITTER_NEVER);
+	BIND_ENUM_CONSTANT(BASE_MATERIAL_3D_DITHERING_JITTER_ALWAYS);
+
 	/* MESH API */
 
 	ClassDB::bind_method(D_METHOD("mesh_create_from_surfaces", "surfaces", "blend_shape_count"), &RenderingServer::_mesh_create_from_surfaces, DEFVAL(0));
@@ -2930,6 +2934,7 @@ void RenderingServer::init() {
 	GLOBAL_DEF("rendering/shading/overrides/force_vertex_shading.mobile", true);
 	GLOBAL_DEF("rendering/shading/overrides/force_lambert_over_burley", false);
 	GLOBAL_DEF("rendering/shading/overrides/force_lambert_over_burley.mobile", true);
+	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/shading/base_material_3d/dithering_use_jitter", PROPERTY_HINT_ENUM, "Auto (Jitter when TAA Enabled),Never,Always"), 0);
 
 	GLOBAL_DEF("rendering/driver/depth_prepass/enable", true);
 	GLOBAL_DEF("rendering/driver/depth_prepass/disable_for_vendors", "PowerVR,Mali,Adreno,Apple");
