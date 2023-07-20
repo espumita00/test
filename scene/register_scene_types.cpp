@@ -460,6 +460,7 @@ void register_scene_types() {
 	GDREGISTER_CLASS(IntervalTweener);
 	GDREGISTER_CLASS(CallbackTweener);
 	GDREGISTER_CLASS(MethodTweener);
+	GDREGISTER_CLASS(AwaitTweener);
 
 	GDREGISTER_CLASS(AnimationTree);
 	GDREGISTER_CLASS(AnimationNode);
