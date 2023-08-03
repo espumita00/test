@@ -65,7 +65,13 @@
 		<method name="get_frames_per_second" qualifiers="const">
 			<return type="float" />
 			<description>
-				Returns the frames per second of the running game.
+				Returns the rendered frames per second of the running project.
+			</description>
+		</method>
+		<method name="get_frames_per_second_1_percent_low" qualifiers="const">
+			<return type="float" />
+			<description>
+				Returns the lowest 1 percentile of the running project, as a rolling value. In other words, this returns the FPS equivalent to the [i]worst[/i] (highest) frametime in the last 100 rendered frames. This value is generally a better indicator of overall smoothness compared to [method get_frames_per_second]. The value of [method get_frames_per_second_1_percent_low] should ideally always be above the target framerate to ensure a smooth experience (typically 60 FPS).
 			</description>
 		</method>
 		<method name="get_license_info" qualifiers="const">

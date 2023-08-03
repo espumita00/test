@@ -44,6 +44,7 @@ class Main {
 	static uint32_t hide_print_fps_attempts;
 	static uint32_t frames;
 	static uint32_t frame;
+	static int recent_frametimes[100];
 	static bool force_redraw_requested;
 	static int iterating;
 	static bool agile_input_event_flushing;
