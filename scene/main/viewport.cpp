@@ -1772,8 +1772,10 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 					Control *control = Object::cast_to<Control>(ci);
 					if (control) {
 						if (control->get_focus_mode() != Control::FOCUS_NONE) {
-							if (control != gui.key_focus) {
-								control->grab_focus();
+							if (control != _gui_get_active_focus_control()) {
+								if (control->grab_focus()) {
+									gui_set_active_focus_layer(control->get_focus_layer());
+								}
 							}
 							break;
 						}
@@ -2184,14 +2186,16 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			return;
 		}
 
-		if (gui.key_focus && !gui.key_focus->is_visible_in_tree()) {
-			gui.key_focus->release_focus();
+		Control *from = _gui_get_active_focus_control();
+		if (from && !from->is_visible_in_tree()) {
+			from->release_focus();
+			from = nullptr;
 		}
 
-		if (gui.key_focus) {
+		if (from) {
 			gui.key_event_accepted = false;
-			if (gui.key_focus->can_process()) {
-				gui.key_focus->_call_gui_input(p_event);
+			if (from->can_process()) {
+				from->_call_gui_input(p_event);
 			}
 
 			if (gui.key_event_accepted) {
@@ -2199,8 +2203,6 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				return;
 			}
 		}
-
-		Control *from = gui.key_focus ? gui.key_focus : nullptr;
 
 		if (from && p_event->is_pressed()) {
 			Control *next = nullptr;
@@ -2356,8 +2358,8 @@ void Viewport::_gui_remove_root_control(List<Control *>::Element *RI) {
 }
 
 void Viewport::_gui_unfocus_control(Control *p_control) {
-	if (gui.key_focus == p_control) {
-		gui.key_focus->release_focus();
+	if (_gui_control_has_focus(p_control)) {
+		p_control->release_focus();
 	}
 }
 
@@ -2365,9 +2367,8 @@ void Viewport::_gui_hide_control(Control *p_control) {
 	if (gui.mouse_focus == p_control) {
 		_drop_mouse_focus();
 	}
-
-	if (gui.key_focus == p_control) {
-		gui_release_focus();
+	if (_gui_control_has_focus(p_control)) {
+		gui_release_focus(p_control->get_focus_layer());
 	}
 	if (gui.mouse_over == p_control) {
 		_drop_mouse_over();
@@ -2381,6 +2382,9 @@ void Viewport::_gui_hide_control(Control *p_control) {
 }
 
 void Viewport::_gui_remove_control(Control *p_control) {
+	if (!p_control) {
+		return;
+	}
 	if (gui.mouse_focus == p_control) {
 		gui.mouse_focus = nullptr;
 		gui.forced_mouse_focus = false;
@@ -2389,8 +2393,8 @@ void Viewport::_gui_remove_control(Control *p_control) {
 	if (gui.last_mouse_focus == p_control) {
 		gui.last_mouse_focus = nullptr;
 	}
-	if (gui.key_focus == p_control) {
-		gui.key_focus = nullptr;
+	if (_gui_control_has_focus(p_control)) {
+		gui_release_focus(p_control->get_focus_layer());
 	}
 	if (gui.mouse_over == p_control) {
 		_drop_mouse_over();
@@ -2416,24 +2420,47 @@ Window *Viewport::get_base_window() const {
 
 	return w;
 }
-void Viewport::_gui_remove_focus_for_window(Node *p_window) {
+void Viewport::_gui_remove_focus_for_window(Node *p_window, int p_focus_layer) {
 	if (get_base_window() == p_window) {
-		gui_release_focus();
+		gui_release_focus(p_focus_layer);
 	}
 }
 
-bool Viewport::_gui_control_has_focus(const Control *p_control) {
-	return gui.key_focus == p_control;
+bool Viewport::_gui_control_has_focus(const Control *p_control) const {
+	if (p_control && gui.focused_controls.has(p_control->get_focus_layer())) {
+		return gui.focused_controls.get(p_control->get_focus_layer()) == p_control;
+	}
+	return false;
+}
+
+Control *Viewport::_gui_get_active_focus_control() const {
+	if (gui.focused_controls.has(gui.active_focus_layer)) {
+		return gui.focused_controls.get(gui.active_focus_layer);
+	}
+	return nullptr;
+}
+
+void Viewport::_gui_set_focus_control(Control *p_control) {
+	if (!p_control) {
+		return;
+	}
+
+	HashMap<int, Control *>::Iterator F = gui.focused_controls.find(p_control->get_focus_layer());
+	if (F) {
+		F->value = p_control;
+	} else {
+		gui.focused_controls.insert(p_control->get_focus_layer(), p_control);
+	}
 }
 
 void Viewport::_gui_control_grab_focus(Control *p_control) {
-	if (gui.key_focus && gui.key_focus == p_control) {
+	if (_gui_control_has_focus(p_control)) {
 		// No need for change.
 		return;
 	}
-	get_tree()->call_group("_viewports", "_gui_remove_focus_for_window", (Node *)get_base_window());
+	get_tree()->call_group("_viewports", "_gui_remove_focus_for_window", (Node *)get_base_window(), p_control->get_focus_layer());
 	if (p_control->is_inside_tree() && p_control->get_viewport() == this) {
-		gui.key_focus = p_control;
+		_gui_set_focus_control(p_control);
 		emit_signal(SNAME("gui_focus_changed"), p_control);
 		p_control->notification(Control::NOTIFICATION_FOCUS_ENTER);
 		p_control->queue_redraw();
@@ -2606,8 +2633,9 @@ void Viewport::push_text_input(const String &p_text) {
 		return;
 	}
 
-	if (gui.key_focus) {
-		gui.key_focus->call("set_text", p_text);
+	Control *focused_control = _gui_get_active_focus_control();
+	if (focused_control) {
+		focused_control->call("set_text", p_text);
 	}
 }
 
@@ -3280,19 +3308,33 @@ int Viewport::gui_get_canvas_sort_index() {
 	return gui.canvas_sort_index++;
 }
 
-void Viewport::gui_release_focus() {
+int Viewport::gui_get_active_focus_layer() const {
+	ERR_MAIN_THREAD_GUARD_V(0);
+	return gui.active_focus_layer;
+}
+void Viewport::gui_set_active_focus_layer(int p_focus_layer) {
 	ERR_MAIN_THREAD_GUARD;
-	if (gui.key_focus) {
-		Control *f = gui.key_focus;
-		gui.key_focus = nullptr;
-		f->notification(Control::NOTIFICATION_FOCUS_EXIT, true);
-		f->queue_redraw();
+	gui.active_focus_layer = p_focus_layer;
+}
+
+void Viewport::gui_release_focus(int p_focus_layer) {
+	ERR_MAIN_THREAD_GUARD;
+	HashMap<int, Control *>::Iterator F = gui.focused_controls.find(p_focus_layer);
+	if (F) {
+		Control *c = F->value;
+		gui.focused_controls.erase(p_focus_layer);
+
+		c->notification(Control::NOTIFICATION_FOCUS_EXIT, true);
+		c->queue_redraw();
 	}
 }
 
-Control *Viewport::gui_get_focus_owner() const {
+Control *Viewport::gui_get_focus_owner(int p_focus_layer) const {
 	ERR_READ_THREAD_GUARD_V(nullptr);
-	return gui.key_focus;
+	if (gui.focused_controls.has(p_focus_layer)) {
+		return gui.focused_controls.get(p_focus_layer);
+	}
+	return nullptr;
 }
 
 void Viewport::set_msaa_2d(MSAA p_msaa) {
@@ -3660,7 +3702,8 @@ void Viewport::pass_mouse_focus_to(Viewport *p_viewport, Control *p_control) {
 	if (gui.mouse_focus) {
 		p_viewport->gui.mouse_focus = p_control;
 		p_viewport->gui.mouse_focus_mask = gui.mouse_focus_mask;
-		p_viewport->gui.key_focus = p_control;
+		gui_set_active_focus_layer(p_control->get_focus_layer());
+		_gui_set_focus_control(p_control);
 		p_viewport->gui.forced_mouse_focus = true;
 
 		gui.mouse_focus = nullptr;
@@ -4321,13 +4364,16 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("gui_is_dragging"), &Viewport::gui_is_dragging);
 	ClassDB::bind_method(D_METHOD("gui_is_drag_successful"), &Viewport::gui_is_drag_successful);
 
-	ClassDB::bind_method(D_METHOD("gui_release_focus"), &Viewport::gui_release_focus);
-	ClassDB::bind_method(D_METHOD("gui_get_focus_owner"), &Viewport::gui_get_focus_owner);
+	ClassDB::bind_method(D_METHOD("gui_get_active_focus_layer"), &Viewport::gui_get_active_focus_layer);
+	ClassDB::bind_method(D_METHOD("gui_set_active_focus_layer", "focus_layer"), &Viewport::gui_set_active_focus_layer);
+
+	ClassDB::bind_method(D_METHOD("gui_release_focus", "focus_layer"), &Viewport::gui_release_focus, DEFVAL(0));
+	ClassDB::bind_method(D_METHOD("gui_get_focus_owner", "focus_layer"), &Viewport::gui_get_focus_owner, DEFVAL(0));
 
 	ClassDB::bind_method(D_METHOD("set_disable_input", "disable"), &Viewport::set_disable_input);
 	ClassDB::bind_method(D_METHOD("is_input_disabled"), &Viewport::is_input_disabled);
 
-	ClassDB::bind_method(D_METHOD("_gui_remove_focus_for_window"), &Viewport::_gui_remove_focus_for_window);
+	ClassDB::bind_method(D_METHOD("_gui_remove_focus_for_window", "focus_layer"), &Viewport::_gui_remove_focus_for_window);
 	ClassDB::bind_method(D_METHOD("_post_gui_grab_click_focus"), &Viewport::_post_gui_grab_click_focus);
 
 	ClassDB::bind_method(D_METHOD("set_positional_shadow_atlas_size", "size"), &Viewport::set_positional_shadow_atlas_size);

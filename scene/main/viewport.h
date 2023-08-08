@@ -353,8 +353,9 @@ private:
 		Control *mouse_focus = nullptr;
 		Control *last_mouse_focus = nullptr;
 		Control *mouse_click_grabber = nullptr;
+		HashMap<int, Control *> focused_controls;
+		int active_focus_layer = 0;
 		BitField<MouseButtonMask> mouse_focus_mask;
-		Control *key_focus = nullptr;
 		Control *mouse_over = nullptr;
 		Window *subwindow_over = nullptr; // mouse_over and subwindow_over are mutually exclusive. At all times at least one of them is nullptr.
 		Window *windowmanager_window_over = nullptr; // Only used in root Viewport.
@@ -428,9 +429,11 @@ private:
 	void _gui_set_drag_preview(Control *p_base, Control *p_control);
 	Control *_gui_get_drag_preview();
 
-	void _gui_remove_focus_for_window(Node *p_window);
+	void _gui_remove_focus_for_window(Node *p_window, int p_focus_layer);
+	Control *_gui_get_active_focus_control() const;
 	void _gui_unfocus_control(Control *p_control);
-	bool _gui_control_has_focus(const Control *p_control);
+	void _gui_set_focus_control(Control *p_control);
+	bool _gui_control_has_focus(const Control *p_control) const;
 	void _gui_control_grab_focus(Control *p_control);
 	void _gui_grab_click_focus(Control *p_control);
 	void _post_gui_grab_click_focus();
@@ -596,8 +599,11 @@ public:
 	void gui_reset_canvas_sort_index();
 	int gui_get_canvas_sort_index();
 
-	void gui_release_focus();
-	Control *gui_get_focus_owner() const;
+	int gui_get_active_focus_layer() const;
+	void gui_set_active_focus_layer(int p_focus_layer);
+
+	void gui_release_focus(int p_focus_layer = 0);
+	Control *gui_get_focus_owner(int p_focus_layer = 0) const;
 
 	PackedStringArray get_configuration_warnings() const override;
 

@@ -1985,21 +1985,38 @@ Control::FocusMode Control::get_focus_mode() const {
 	return data.focus_mode;
 }
 
+void Control::set_focus_layer(int p_layer_id) {
+	if (has_focus()) {
+		release_focus();
+	}
+
+	data.focus_layer = p_layer_id;
+}
+
+int Control::get_focus_layer() const {
+	return data.focus_layer;
+}
+
 bool Control::has_focus() const {
 	ERR_READ_THREAD_GUARD_V(false);
 	return is_inside_tree() && get_viewport()->_gui_control_has_focus(this);
 }
 
-void Control::grab_focus() {
-	ERR_MAIN_THREAD_GUARD;
-	ERR_FAIL_COND(!is_inside_tree());
+bool Control::grab_focus(bool p_auto_set_viewport_active_focus_layer) {
+	ERR_READ_THREAD_GUARD_V(false);
+	ERR_FAIL_COND_V(!is_inside_tree(), false);
 
 	if (data.focus_mode == FOCUS_NONE) {
 		WARN_PRINT("This control can't grab focus. Use set_focus_mode() to allow a control to get focus.");
-		return;
+		return false;
+	}
+
+	if (p_auto_set_viewport_active_focus_layer) {
+		get_viewport()->gui_set_active_focus_layer(get_focus_layer());
 	}
 
 	get_viewport()->_gui_control_grab_focus(this);
+	return true;
 }
 
 void Control::grab_click_focus() {
@@ -2017,7 +2034,7 @@ void Control::release_focus() {
 		return;
 	}
 
-	get_viewport()->gui_release_focus();
+	get_viewport()->gui_release_focus(get_focus_layer());
 }
 
 static Control *_next_control(Control *p_from) {
@@ -2058,7 +2075,7 @@ Control *Control::find_next_valid_focus() const {
 			ERR_FAIL_NULL_V_MSG(n, nullptr, "Next focus node path is invalid: '" + data.focus_next + "'.");
 			Control *c = Object::cast_to<Control>(n);
 			ERR_FAIL_NULL_V_MSG(c, nullptr, "Next focus node is not a control: '" + n->get_name() + "'.");
-			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE) {
+			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE && c->get_focus_layer() == get_focus_layer()) {
 				return c;
 			}
 		}
@@ -2069,7 +2086,7 @@ Control *Control::find_next_valid_focus() const {
 
 		for (int i = 0; i < from->get_child_count(); i++) {
 			Control *c = Object::cast_to<Control>(from->get_child(i));
-			if (!c || !c->is_visible_in_tree() || c->is_set_as_top_level()) {
+			if (!c || !c->is_visible_in_tree() || c->is_set_as_top_level() || (c->get_focus_mode() == FOCUS_ALL && c->get_focus_layer() != get_focus_layer())) {
 				continue;
 			}
 
@@ -2113,11 +2130,21 @@ Control *Control::find_next_valid_focus() const {
 	return nullptr;
 }
 
-static Control *_prev_control(Control *p_from) {
+static Control *_prev_focusable_control(Control *p_from, int p_focus_layer) {
 	Control *child = nullptr;
 	for (int i = p_from->get_child_count() - 1; i >= 0; i--) {
 		Control *c = Object::cast_to<Control>(p_from->get_child(i));
 		if (!c || !c->is_visible_in_tree() || c->is_set_as_top_level()) {
+			continue;
+		}
+
+		// If the control isn't focusable or isn't the correct layer, then let's check under it before we rule it out.
+		if (c->get_focus_mode() != Control::FocusMode::FOCUS_ALL || c->get_focus_layer() != p_focus_layer) {
+			// _prev_focusable_control will return p_from if it didn't find anything. So in this case, it's only a valid result if it's NOT c.
+			Control *nested_control = _prev_focusable_control(c, p_focus_layer);
+			if (nested_control != c) {
+				return nested_control;
+			}
 			continue;
 		}
 
@@ -2130,7 +2157,7 @@ static Control *_prev_control(Control *p_from) {
 	}
 
 	// No prev in parent, try the same in parent.
-	return _prev_control(child);
+	return _prev_focusable_control(child, p_focus_layer);
 }
 
 Control *Control::find_prev_valid_focus() const {
@@ -2145,7 +2172,7 @@ Control *Control::find_prev_valid_focus() const {
 			ERR_FAIL_NULL_V_MSG(n, nullptr, "Previous focus node path is invalid: '" + data.focus_prev + "'.");
 			Control *c = Object::cast_to<Control>(n);
 			ERR_FAIL_NULL_V_MSG(c, nullptr, "Previous focus node is not a control: '" + n->get_name() + "'.");
-			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE) {
+			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE && c->get_focus_layer() == get_focus_layer()) {
 				return c;
 			}
 		}
@@ -2157,7 +2184,7 @@ Control *Control::find_prev_valid_focus() const {
 		if (from->is_set_as_top_level() || !Object::cast_to<Control>(from->get_parent())) {
 			// Find last of the children.
 
-			prev_child = _prev_control(from);
+			prev_child = _prev_focusable_control(from, get_focus_layer());
 
 		} else {
 			for (int i = (from->get_index() - 1); i >= 0; i--) {
@@ -2174,7 +2201,7 @@ Control *Control::find_prev_valid_focus() const {
 			if (!prev_child) {
 				prev_child = Object::cast_to<Control>(from->get_parent());
 			} else {
-				prev_child = _prev_control(prev_child);
+				prev_child = _prev_focusable_control(prev_child, get_focus_layer());
 			}
 		}
 
@@ -2244,6 +2271,9 @@ Control *Control::_get_focus_neighbor(Side p_side, int p_count) {
 		if (c->get_focus_mode() == FOCUS_NONE) {
 			valid = false;
 		}
+		if (c->get_focus_layer() != get_focus_layer()) {
+			valid = false;
+		}
 		if (valid) {
 			return c;
 		}
@@ -2310,7 +2340,7 @@ void Control::_window_find_focus_neighbor(const Vector2 &p_dir, Node *p_at, cons
 
 	Control *c = Object::cast_to<Control>(p_at);
 
-	if (c && c != this && c->get_focus_mode() == FOCUS_ALL && c->is_visible_in_tree()) {
+	if (c && c != this && c->get_focus_mode() == FOCUS_ALL && c->is_visible_in_tree() && c->get_focus_layer() == get_focus_layer()) {
 		Point2 points[4];
 
 		Transform2D xform = c->get_global_transform();
@@ -3321,8 +3351,10 @@ void Control::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_global_rect"), &Control::get_global_rect);
 	ClassDB::bind_method(D_METHOD("set_focus_mode", "mode"), &Control::set_focus_mode);
 	ClassDB::bind_method(D_METHOD("get_focus_mode"), &Control::get_focus_mode);
+	ClassDB::bind_method(D_METHOD("set_focus_layer", "layer_id"), &Control::set_focus_layer);
+	ClassDB::bind_method(D_METHOD("get_focus_layer"), &Control::get_focus_layer);
 	ClassDB::bind_method(D_METHOD("has_focus"), &Control::has_focus);
-	ClassDB::bind_method(D_METHOD("grab_focus"), &Control::grab_focus);
+	ClassDB::bind_method(D_METHOD("grab_focus", "auto_set_viewport_active_focus_layer"), &Control::grab_focus, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("release_focus"), &Control::release_focus);
 	ClassDB::bind_method(D_METHOD("find_prev_valid_focus"), &Control::find_prev_valid_focus);
 	ClassDB::bind_method(D_METHOD("find_next_valid_focus"), &Control::find_next_valid_focus);
@@ -3503,6 +3535,7 @@ void Control::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "focus_next", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "Control"), "set_focus_next", "get_focus_next");
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "focus_previous", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "Control"), "set_focus_previous", "get_focus_previous");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "focus_mode", PROPERTY_HINT_ENUM, "None,Click,All"), "set_focus_mode", "get_focus_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "focus_layer"), "set_focus_layer", "get_focus_layer");
 
 	ADD_GROUP("Mouse", "mouse_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "mouse_filter", PROPERTY_HINT_ENUM, "Stop,Pass,Ignore"), "set_mouse_filter", "get_mouse_filter");
