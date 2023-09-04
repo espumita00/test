@@ -92,8 +92,8 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 				ur->add_do_method(node, "add_child", body, true);
 				ur->add_do_method(body, "set_owner", owner);
 				ur->add_do_method(cshape, "set_owner", owner);
-				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, body);
-				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, cshape);
+				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), body);
+				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), cshape);
 				ur->add_do_reference(body);
 				ur->add_undo_method(node, "remove_child", body);
 				ur->commit_action();
@@ -128,8 +128,8 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 				ur->add_do_method(instance, "add_child", body, true);
 				ur->add_do_method(body, "set_owner", owner);
 				ur->add_do_method(cshape, "set_owner", owner);
-				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, body);
-				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, cshape);
+				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), body);
+				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), cshape);
 				ur->add_do_reference(body);
 				ur->add_undo_method(instance, "remove_child", body);
 			}
@@ -163,7 +163,7 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 			ur->add_do_method(node->get_parent(), "add_child", cshape, true);
 			ur->add_do_method(node->get_parent(), "move_child", cshape, node->get_index() + 1);
 			ur->add_do_method(cshape, "set_owner", owner);
-			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, cshape);
+			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), cshape);
 			ur->add_do_reference(cshape);
 			ur->add_undo_method(node->get_parent(), "remove_child", cshape);
 			ur->commit_action();
@@ -203,7 +203,7 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 			ur->add_do_method(node->get_parent(), "add_child", cshape, true);
 			ur->add_do_method(node->get_parent(), "move_child", cshape, node->get_index() + 1);
 			ur->add_do_method(cshape, "set_owner", owner);
-			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, cshape);
+			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), cshape);
 			ur->add_do_reference(cshape);
 			ur->add_undo_method(node->get_parent(), "remove_child", cshape);
 
@@ -246,7 +246,7 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 				ur->add_do_method(node->get_parent(), "add_child", cshape);
 				ur->add_do_method(node->get_parent(), "move_child", cshape, node->get_index() + 1);
 				ur->add_do_method(cshape, "set_owner", owner);
-				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, cshape);
+				ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), cshape);
 				ur->add_do_reference(cshape);
 				ur->add_undo_method(node->get_parent(), "remove_child", cshape);
 			}
@@ -272,7 +272,7 @@ void MeshInstance3DEditor::_menu_option(int p_option) {
 
 			ur->add_do_method(node, "add_child", nmi, true);
 			ur->add_do_method(nmi, "set_owner", owner);
-			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, nmi);
+			ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), nmi);
 
 			ur->add_do_reference(nmi);
 			ur->add_undo_method(node, "remove_child", nmi);
@@ -549,7 +549,7 @@ void MeshInstance3DEditor::_create_outline_mesh() {
 
 	ur->add_do_method(node, "add_child", mi, true);
 	ur->add_do_method(mi, "set_owner", owner);
-	ur->add_do_method(Node3DEditor::get_singleton(), SceneStringNames::get_singleton()->_request_gizmo, mi);
+	ur->add_do_method(Node3DEditor::get_singleton(), SceneStringName(_request_gizmo), mi);
 
 	ur->add_do_reference(mi);
 	ur->add_undo_method(node, "remove_child", mi);

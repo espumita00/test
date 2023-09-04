@@ -1596,7 +1596,7 @@ RBSet<TerrainConstraint> TileMapLayer::_get_terrain_constraints_from_painted_cel
 }
 
 void TileMapLayer::_renamed() {
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 void TileMapLayer::_update_notify_local_transform() {
@@ -1711,7 +1711,7 @@ void TileMapLayer::_notification(int p_what) {
 void TileMapLayer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_cell", "coords", "source_id", "atlas_coords", "alternative_tile"), &TileMapLayer::set_cell, DEFVAL(TileSet::INVALID_SOURCE), DEFVAL(TileSetSource::INVALID_ATLAS_COORDS), DEFVAL(0));
 
-	ADD_SIGNAL(MethodInfo(CoreStringNames::get_singleton()->changed));
+	ADD_SIGNAL(MethodInfo(CoreStringName(changed)));
 }
 
 void TileMapLayer::set_layer_index_in_tile_map_node(int p_index) {
@@ -2164,7 +2164,7 @@ void TileMapLayer::notify_tile_map_change(DirtyFlags p_what) {
 	if (p_what == DIRTY_FLAGS_LAYER_GROUP_SELECTED_LAYERS ||
 			p_what == DIRTY_FLAGS_LAYER_GROUP_HIGHLIGHT_SELECTED ||
 			p_what == DIRTY_FLAGS_LAYER_GROUP_TILE_SET) {
-		emit_signal(CoreStringNames::get_singleton()->changed);
+		emit_signal(CoreStringName(changed));
 	}
 
 	dirty.flags[p_what] = true;
@@ -2514,7 +2514,7 @@ void TileMapLayer::set_enabled(bool p_enabled) {
 	enabled = p_enabled;
 	dirty.flags[DIRTY_FLAGS_LAYER_ENABLED] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 
 	TileMap *tile_map_node = _fetch_tilemap();
 	tile_map_node->update_configuration_warnings();
@@ -2531,7 +2531,7 @@ void TileMapLayer::set_self_modulate(const Color &p_self_modulate) {
 	CanvasItem::set_self_modulate(p_self_modulate);
 	dirty.flags[DIRTY_FLAGS_LAYER_SELF_MODULATE] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 void TileMapLayer::set_y_sort_enabled(bool p_y_sort_enabled) {
@@ -2541,7 +2541,7 @@ void TileMapLayer::set_y_sort_enabled(bool p_y_sort_enabled) {
 	CanvasItem::set_y_sort_enabled(p_y_sort_enabled);
 	dirty.flags[DIRTY_FLAGS_LAYER_Y_SORT_ENABLED] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 
 	TileMap *tile_map_node = _fetch_tilemap();
 	tile_map_node->update_configuration_warnings();
@@ -2555,7 +2555,7 @@ void TileMapLayer::set_y_sort_origin(int p_y_sort_origin) {
 	y_sort_origin = p_y_sort_origin;
 	dirty.flags[DIRTY_FLAGS_LAYER_Y_SORT_ORIGIN] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 int TileMapLayer::get_y_sort_origin() const {
@@ -2569,7 +2569,7 @@ void TileMapLayer::set_z_index(int p_z_index) {
 	CanvasItem::set_z_index(p_z_index);
 	dirty.flags[DIRTY_FLAGS_LAYER_Z_INDEX] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 
 	TileMap *tile_map_node = _fetch_tilemap();
 	tile_map_node->update_configuration_warnings();
@@ -2579,7 +2579,7 @@ void TileMapLayer::set_use_kinematic_bodies(bool p_use_kinematic_bodies) {
 	use_kinematic_bodies = p_use_kinematic_bodies;
 	dirty.flags[DIRTY_FLAGS_LAYER_USE_KINEMATIC_BODIES] = p_use_kinematic_bodies;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 bool TileMapLayer::is_using_kinematic_bodies() const {
@@ -2593,7 +2593,7 @@ void TileMapLayer::set_navigation_enabled(bool p_enabled) {
 	navigation_enabled = p_enabled;
 	dirty.flags[DIRTY_FLAGS_LAYER_NAVIGATION_ENABLED] = true;
 	_queue_internal_update();
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 bool TileMapLayer::is_navigation_enabled() const {
