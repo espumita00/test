@@ -66,6 +66,7 @@ class TextureProgressBar;
 class Tree;
 class VBoxContainer;
 class VSplitContainer;
+class SplitContainer;
 class Window;
 
 class AudioStreamImportSettings;
@@ -314,7 +315,7 @@ private:
 	HSplitContainer *right_hsplit = nullptr;
 	VSplitContainer *right_l_vsplit = nullptr;
 	VSplitContainer *right_r_vsplit = nullptr;
-	VSplitContainer *center_split = nullptr;
+	SplitContainer *center_split = nullptr;
 	// To access those easily by index.
 	Vector<VSplitContainer *> vsplits;
 	Vector<HSplitContainer *> hsplits;
@@ -447,6 +448,7 @@ private:
 	EditorToaster *editor_toaster = nullptr;
 	LinkButton *version_btn = nullptr;
 	Button *bottom_panel_raise = nullptr;
+	Button *bottom_panel_move = nullptr;
 	bool bottom_panel_updating = false;
 
 	Tree *disk_changed_list = nullptr;
@@ -685,6 +687,7 @@ private:
 
 	void _bottom_panel_switch(bool p_enable, int p_idx);
 	void _bottom_panel_raise_toggled(bool);
+	void _bottom_panel_move_pressed();
 
 	void _begin_first_scan();
 
