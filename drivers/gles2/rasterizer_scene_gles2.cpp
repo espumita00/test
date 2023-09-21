@@ -1951,7 +1951,7 @@ void RasterizerSceneGLES2::_setup_light_type(LightInstance *p_light, ShadowAtlas
 					glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
 				}
 				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_5, shadow_filter_mode == SHADOW_FILTER_PCF5);
-				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13);
+				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13 || shadow_filter_mode == SHADOW_FILTER_PCF25);
 			}
 
 		} break;
@@ -1966,7 +1966,7 @@ void RasterizerSceneGLES2::_setup_light_type(LightInstance *p_light, ShadowAtlas
 					glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
 				}
 				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_5, shadow_filter_mode == SHADOW_FILTER_PCF5);
-				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13);
+				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13 || shadow_filter_mode == SHADOW_FILTER_PCF25);
 			}
 		} break;
 		case VS::LIGHT_SPOT: {
@@ -1980,7 +1980,7 @@ void RasterizerSceneGLES2::_setup_light_type(LightInstance *p_light, ShadowAtlas
 					glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
 				}
 				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_5, shadow_filter_mode == SHADOW_FILTER_PCF5);
-				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13);
+				state.scene_shader.set_conditional(SceneShaderGLES2::SHADOW_MODE_PCF_13, shadow_filter_mode == SHADOW_FILTER_PCF13 || shadow_filter_mode == SHADOW_FILTER_PCF25);
 			}
 		} break;
 	}
