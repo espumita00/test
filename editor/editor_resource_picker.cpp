@@ -186,6 +186,8 @@ void EditorResourcePicker::_update_menu() {
 }
 
 void EditorResourcePicker::_update_menu_items() {
+	bool can_clear = true;
+
 	_ensure_resource_menu();
 	edit_menu->clear();
 
@@ -216,7 +218,13 @@ void EditorResourcePicker::_update_menu_items() {
 		}
 
 		if (is_editable()) {
-			edit_menu->add_icon_item(get_editor_theme_icon(SNAME("Clear")), TTR("Clear"), OBJ_MENU_CLEAR);
+			if (_owner && _owner->has_meta("__custom_type_script")) {
+				can_clear = false;
+			}
+
+			if (can_clear) {
+				edit_menu->add_icon_item(get_editor_theme_icon(SNAME("Clear")), TTR("Clear"), OBJ_MENU_CLEAR);
+			}
 			edit_menu->add_icon_item(get_editor_theme_icon(SNAME("Duplicate")), TTR("Make Unique"), OBJ_MENU_MAKE_UNIQUE);
 
 			// Check whether the resource has subresources.
@@ -924,6 +932,10 @@ void EditorResourcePicker::set_toggle_pressed(bool p_pressed) {
 	assign_button->set_pressed(p_pressed);
 }
 
+void EditorResourcePicker::set_resource_owner(Object *p_object) {
+	_owner = p_object;
+}
+
 void EditorResourcePicker::set_editable(bool p_editable) {
 	editable = p_editable;
 	assign_button->set_disabled(!editable && !edited_resource.is_valid());
@@ -1070,7 +1082,16 @@ void EditorScriptPicker::set_create_options(Object *p_menu_node) {
 		return;
 	}
 
-	menu_node->add_icon_item(get_editor_theme_icon(SNAME("ScriptCreate")), TTR("New Script..."), OBJ_MENU_NEW_SCRIPT);
+	bool allow_new_script = true;
+	if (script_owner) {
+		if (script_owner->has_meta("__custom_type_script")) {
+			allow_new_script = false;
+		}
+	}
+	if (allow_new_script) {
+		menu_node->add_icon_item(get_editor_theme_icon(SNAME("ScriptCreate")), TTR("New Script..."), OBJ_MENU_NEW_SCRIPT);
+	}
+
 	if (script_owner) {
 		Ref<Script> scr = script_owner->get_script();
 		if (scr.is_valid()) {
