@@ -1,5 +1,3 @@
-extends RefCounted # TODO: Fix standalone annotations parsing.
-
 # GH-73843
 @export_group("Resource")
 

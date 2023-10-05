@@ -1,3 +1,6 @@
+@warning_ignore("redundant_static_unload")
+@static_unload
+
 @warning_ignore("unused_private_class_variable")
 var _unused = 2
 

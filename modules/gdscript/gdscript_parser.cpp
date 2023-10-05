@@ -125,7 +125,7 @@ GDScriptParser::GDScriptParser() {
 	register_annotation(MethodInfo("@export_group", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::STRING, "prefix")), AnnotationInfo::STANDALONE, &GDScriptParser::export_group_annotations<PROPERTY_USAGE_GROUP>, varray(""));
 	register_annotation(MethodInfo("@export_subgroup", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::STRING, "prefix")), AnnotationInfo::STANDALONE, &GDScriptParser::export_group_annotations<PROPERTY_USAGE_SUBGROUP>, varray(""));
 	// Warning annotations.
-	register_annotation(MethodInfo("@warning_ignore", PropertyInfo(Variant::STRING, "warning")), AnnotationInfo::CLASS | AnnotationInfo::VARIABLE | AnnotationInfo::SIGNAL | AnnotationInfo::CONSTANT | AnnotationInfo::FUNCTION | AnnotationInfo::STATEMENT, &GDScriptParser::warning_annotations, varray(), true);
+	register_annotation(MethodInfo("@warning_ignore", PropertyInfo(Variant::STRING, "warning")), AnnotationInfo::SCRIPT | AnnotationInfo::CLASS_LEVEL | AnnotationInfo::STATEMENT, &GDScriptParser::warning_annotations, varray(), true);
 	// Networking.
 	register_annotation(MethodInfo("@rpc", PropertyInfo(Variant::STRING, "mode"), PropertyInfo(Variant::STRING, "sync"), PropertyInfo(Variant::STRING, "transfer_mode"), PropertyInfo(Variant::INT, "transfer_channel")), AnnotationInfo::FUNCTION, &GDScriptParser::rpc_annotation, varray("authority", "call_remote", "unreliable", 0));
 
@@ -508,25 +508,58 @@ void GDScriptParser::end_statement(const String &p_context) {
 
 void GDScriptParser::parse_program() {
 	head = alloc_node<ClassNode>();
+	head->start_line = 1;
+	head->end_line = 1;
 	head->fqcn = script_path;
 	current_class = head;
 	bool can_have_class_or_extends = true;
 
+	/* clang-format off */
+#define PUSH_PENDING_ANNOTATIONS_TO_HEAD                 \
+	if (!annotation_stack.is_empty()) {                  \
+		for (AnnotationNode *annot : annotation_stack) { \
+			head->annotations.push_back(annot);          \
+		}                                                \
+		annotation_stack.clear();                        \
+	}
+	/* clang-format on */
+
 	while (!check(GDScriptTokenizer::Token::TK_EOF)) {
 		if (match(GDScriptTokenizer::Token::ANNOTATION)) {
-			AnnotationNode *annotation = parse_annotation(AnnotationInfo::SCRIPT | AnnotationInfo::STANDALONE | AnnotationInfo::CLASS_LEVEL);
+			AnnotationNode *annotation = parse_annotation(AnnotationInfo::SCRIPT | AnnotationInfo::CLASS_LEVEL | AnnotationInfo::STANDALONE);
 			if (annotation != nullptr) {
 				if (annotation->applies_to(AnnotationInfo::SCRIPT)) {
-					// `@icon` needs to be applied in the parser. See GH-72444.
-					if (annotation->name == SNAME("@icon")) {
+					if (annotation->name == SNAME("@tool") || annotation->name == SNAME("@icon")) {
+						PUSH_PENDING_ANNOTATIONS_TO_HEAD;
+						// Some annotations need to be resolved in the parser.
 						annotation->apply(this, head);
+					} else if (annotation->applies_to(AnnotationInfo::CLASS_LEVEL)) {
+						// `@warning_ignore` can be applied to both `SCRIPT` and `CLASS_LEVEL`.
+						// We don't know what's next in advance, so we add the annotation to the stack.
+						// If we encounter `class_name`, `extends` or pure `SCRIPT` annotation,
+						// then it's `SCRIPT`, otherwise it's `CLASS_LEVEL`.
+						annotation_stack.push_back(annotation);
 					} else {
+						PUSH_PENDING_ANNOTATIONS_TO_HEAD;
 						head->annotations.push_back(annotation);
 					}
-				} else {
+				} else if (annotation->applies_to(AnnotationInfo::STANDALONE)) {
+					if (previous.type != GDScriptTokenizer::Token::NEWLINE) {
+						push_error(R"(Expected newline after a standalone annotation.)");
+					}
+					if (annotation->name == SNAME("@export_category") || annotation->name == SNAME("@export_group") || annotation->name == SNAME("@export_subgroup")) {
+						head->add_member_group(annotation);
+						// This annotation must appear after script-level annotations and `class_name`/`extends`,
+						// so we stop looking for script-level stuff.
+						can_have_class_or_extends = false;
+						break;
+					} else {
+						// For potential non-group standalone annotations.
+						push_error(R"(Unexpected standalone annotation.)");
+					}
+				} else { // `AnnotationInfo::CLASS_LEVEL`.
 					annotation_stack.push_back(annotation);
-					// This annotation must appear after script-level annotations
-					// and class_name/extends (ex: could be @onready or @export),
+					// This annotation must appear after script-level annotations and `class_name`/`extends`,
 					// so we stop looking for script-level stuff.
 					can_have_class_or_extends = false;
 					break;
@@ -543,10 +576,18 @@ void GDScriptParser::parse_program() {
 		}
 	}
 
+	if (check(GDScriptTokenizer::Token::TK_EOF)) {
+		PUSH_PENDING_ANNOTATIONS_TO_HEAD;
+	}
+
 	while (can_have_class_or_extends) {
 		// Order here doesn't matter, but there should be only one of each at most.
 		switch (current.type) {
 			case GDScriptTokenizer::Token::CLASS_NAME:
+				PUSH_PENDING_ANNOTATIONS_TO_HEAD;
+				if (head->start_line == 1) {
+					reset_extents(head, current);
+				}
 				advance();
 				if (head->identifier != nullptr) {
 					push_error(R"("class_name" can only be used once.)");
@@ -555,6 +596,10 @@ void GDScriptParser::parse_program() {
 				}
 				break;
 			case GDScriptTokenizer::Token::EXTENDS:
+				PUSH_PENDING_ANNOTATIONS_TO_HEAD;
+				if (head->start_line == 1) {
+					reset_extents(head, current);
+				}
 				advance();
 				if (head->extends_used) {
 					push_error(R"("extends" can only be used once.)");
@@ -583,6 +628,8 @@ void GDScriptParser::parse_program() {
 			synchronize();
 		}
 	}
+
+#undef PUSH_PENDING_ANNOTATIONS_TO_HEAD
 
 	parse_class_body(true);
 	complete_extents(head);
@@ -861,8 +908,8 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 			case GDScriptTokenizer::Token::ANNOTATION: {
 				advance();
 
-				// Check for standalone and class-level annotations.
-				AnnotationNode *annotation = parse_annotation(AnnotationInfo::STANDALONE | AnnotationInfo::CLASS_LEVEL);
+				// Check for class-level and standalone annotations.
+				AnnotationNode *annotation = parse_annotation(AnnotationInfo::CLASS_LEVEL | AnnotationInfo::STANDALONE);
 				if (annotation != nullptr) {
 					if (annotation->applies_to(AnnotationInfo::STANDALONE)) {
 						if (previous.type != GDScriptTokenizer::Token::NEWLINE) {
@@ -872,9 +919,9 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 							current_class->add_member_group(annotation);
 						} else {
 							// For potential non-group standalone annotations.
-							push_error(R"(Unexpected standalone annotation in class body.)");
+							push_error(R"(Unexpected standalone annotation.)");
 						}
-					} else {
+					} else { // `AnnotationInfo::CLASS_LEVEL`.
 						annotation_stack.push_back(annotation);
 					}
 				}
@@ -3822,7 +3869,7 @@ bool GDScriptParser::validate_annotation_arguments(AnnotationNode *p_annotation)
 		return false;
 	}
 
-	// `@icon`'s argument needs to be resolved in the parser. See GH-72444.
+	// Some annotations need to be resolved in the parser.
 	if (p_annotation->name == SNAME("@icon")) {
 		ExpressionNode *argument = p_annotation->arguments[0];
 
