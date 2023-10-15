@@ -1183,7 +1183,6 @@ MaterialStorage::MaterialStorage() {
 
 		actions.render_mode_defines["skip_vertex_transform"] = "#define SKIP_TRANSFORM_USED\n";
 		actions.render_mode_defines["unshaded"] = "#define MODE_UNSHADED\n";
-		actions.render_mode_defines["vertex_lighting"] = "#define USE_VERTEX_LIGHTING\n";
 		actions.render_mode_defines["light_only"] = "#define MODE_LIGHT_ONLY\n";
 		actions.render_mode_defines["world_vertex_coords"] = "#define USE_WORLD_VERTEX_COORDS\n";
 
@@ -2852,6 +2851,7 @@ void SceneShaderData::set_code(const String &p_code) {
 	wireframe = false;
 
 	unshaded = false;
+	vertex_lighting = false;
 	uses_vertex = false;
 	uses_position = false;
 	uses_sss = false;
@@ -2913,6 +2913,7 @@ void SceneShaderData::set_code(const String &p_code) {
 	actions.render_mode_values["cull_back"] = Pair<int *, int>(&cull_modei, CULL_BACK);
 
 	actions.render_mode_flags["unshaded"] = &unshaded;
+	actions.render_mode_flags["vertex_lighting"] = &vertex_lighting;
 	actions.render_mode_flags["wireframe"] = &wireframe;
 	actions.render_mode_flags["particle_trails"] = &uses_particle_trails;
 	actions.render_mode_flags["world_vertex_coords"] = &uses_world_coordinates;
