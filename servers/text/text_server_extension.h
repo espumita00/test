@@ -32,7 +32,6 @@
 #define TEXT_SERVER_EXTENSION_H
 
 #include "core/object/gdvirtual.gen.inc"
-#include "core/object/script_language.h"
 #include "core/os/thread_safe.h"
 #include "core/variant/native_ptr.h"
 #include "core/variant/typed_array.h"
@@ -81,6 +80,9 @@ public:
 	virtual RID create_font() override;
 	GDVIRTUAL0R(RID, _create_font);
 
+	virtual RID create_font_linked_variation(const RID &p_font_rid) override;
+	GDVIRTUAL1R(RID, _create_font_linked_variation, RID);
+
 	virtual void font_set_data(const RID &p_font_rid, const PackedByteArray &p_data) override;
 	virtual void font_set_data_ptr(const RID &p_font_rid, const uint8_t *p_data_ptr, int64_t p_data_size) override;
 	GDVIRTUAL2(_font_set_data, RID, const PackedByteArray &);
@@ -101,8 +103,10 @@ public:
 
 	virtual void font_set_name(const RID &p_font_rid, const String &p_name) override;
 	virtual String font_get_name(const RID &p_font_rid) const override;
+	virtual Dictionary font_get_ot_name_strings(const RID &p_font_rid) const override;
 	GDVIRTUAL2(_font_set_name, RID, const String &);
 	GDVIRTUAL1RC(String, _font_get_name, RID);
+	GDVIRTUAL1RC(Dictionary, _font_get_ot_name_strings, RID);
 
 	virtual void font_set_style_name(const RID &p_font_rid, const String &p_name) override;
 	virtual String font_get_style_name(const RID &p_font_rid) const override;
@@ -111,12 +115,12 @@ public:
 
 	virtual void font_set_weight(const RID &p_font_rid, int64_t p_weight) override;
 	virtual int64_t font_get_weight(const RID &p_font_rid) const override;
-	GDVIRTUAL2(_font_set_weight, RID, int);
+	GDVIRTUAL2(_font_set_weight, RID, int64_t);
 	GDVIRTUAL1RC(int64_t, _font_get_weight, RID);
 
 	virtual void font_set_stretch(const RID &p_font_rid, int64_t p_stretch) override;
 	virtual int64_t font_get_stretch(const RID &p_font_rid) const override;
-	GDVIRTUAL2(_font_set_stretch, RID, int);
+	GDVIRTUAL2(_font_set_stretch, RID, int64_t);
 	GDVIRTUAL1RC(int64_t, _font_get_stretch, RID);
 
 	virtual void font_set_antialiasing(const RID &p_font_rid, TextServer::FontAntialiasing p_antialiasing) override;
@@ -149,6 +153,11 @@ public:
 	GDVIRTUAL2(_font_set_fixed_size, RID, int64_t);
 	GDVIRTUAL1RC(int64_t, _font_get_fixed_size, RID);
 
+	virtual void font_set_fixed_size_scale_mode(const RID &p_font_rid, FixedSizeScaleMode p_fixed_size_scale) override;
+	virtual FixedSizeScaleMode font_get_fixed_size_scale_mode(const RID &p_font_rid) const override;
+	GDVIRTUAL2(_font_set_fixed_size_scale_mode, RID, FixedSizeScaleMode);
+	GDVIRTUAL1RC(FixedSizeScaleMode, _font_get_fixed_size_scale_mode, RID);
+
 	virtual void font_set_subpixel_positioning(const RID &p_font_rid, SubpixelPositioning p_subpixel) override;
 	virtual SubpixelPositioning font_get_subpixel_positioning(const RID &p_font_rid) const override;
 	GDVIRTUAL2(_font_set_subpixel_positioning, RID, SubpixelPositioning);
@@ -158,6 +167,11 @@ public:
 	virtual double font_get_embolden(const RID &p_font_rid) const override;
 	GDVIRTUAL2(_font_set_embolden, RID, double);
 	GDVIRTUAL1RC(double, _font_get_embolden, RID);
+
+	virtual void font_set_spacing(const RID &p_font_rid, SpacingType p_spacing, int64_t p_value) override;
+	virtual int64_t font_get_spacing(const RID &p_font_rid, SpacingType p_spacing) const override;
+	GDVIRTUAL3(_font_set_spacing, const RID &, SpacingType, int64_t);
+	GDVIRTUAL2RC(int64_t, _font_get_spacing, const RID &, SpacingType);
 
 	virtual void font_set_transform(const RID &p_font_rid, const Transform2D &p_transform) override;
 	virtual Transform2D font_get_transform(const RID &p_font_rid) const override;
@@ -294,6 +308,9 @@ public:
 	virtual int64_t font_get_glyph_index(const RID &p_font_rid, int64_t p_size, int64_t p_char, int64_t p_variation_selector = 0) const override;
 	GDVIRTUAL4RC(int64_t, _font_get_glyph_index, RID, int64_t, int64_t, int64_t);
 
+	virtual int64_t font_get_char_from_glyph_index(const RID &p_font_rid, int64_t p_size, int64_t p_glyph_index) const override;
+	GDVIRTUAL3RC(int64_t, _font_get_char_from_glyph_index, RID, int64_t, int64_t);
+
 	virtual bool font_has_char(const RID &p_font_rid, int64_t p_char) const override;
 	virtual String font_get_supported_chars(const RID &p_font_rid) const override;
 	GDVIRTUAL2RC(bool, _font_has_char, RID, int64_t);
@@ -395,11 +412,11 @@ public:
 	GDVIRTUAL2RC(int64_t, _shaped_text_get_spacing, RID, SpacingType);
 
 	virtual bool shaped_text_add_string(const RID &p_shaped, const String &p_text, const TypedArray<RID> &p_fonts, int64_t p_size, const Dictionary &p_opentype_features = Dictionary(), const String &p_language = "", const Variant &p_meta = Variant()) override;
-	virtual bool shaped_text_add_object(const RID &p_shaped, const Variant &p_key, const Size2 &p_size, InlineAlignment p_inline_align = INLINE_ALIGNMENT_CENTER, int64_t p_length = 1, float p_baseline = 0.0) override;
-	virtual bool shaped_text_resize_object(const RID &p_shaped, const Variant &p_key, const Size2 &p_size, InlineAlignment p_inline_align = INLINE_ALIGNMENT_CENTER, float p_baseline = 0.0) override;
+	virtual bool shaped_text_add_object(const RID &p_shaped, const Variant &p_key, const Size2 &p_size, InlineAlignment p_inline_align = INLINE_ALIGNMENT_CENTER, int64_t p_length = 1, double p_baseline = 0.0) override;
+	virtual bool shaped_text_resize_object(const RID &p_shaped, const Variant &p_key, const Size2 &p_size, InlineAlignment p_inline_align = INLINE_ALIGNMENT_CENTER, double p_baseline = 0.0) override;
 	GDVIRTUAL7R(bool, _shaped_text_add_string, RID, const String &, const TypedArray<RID> &, int64_t, const Dictionary &, const String &, const Variant &);
-	GDVIRTUAL6R(bool, _shaped_text_add_object, RID, const Variant &, const Size2 &, InlineAlignment, int64_t, float);
-	GDVIRTUAL5R(bool, _shaped_text_resize_object, RID, const Variant &, const Size2 &, InlineAlignment, float);
+	GDVIRTUAL6R(bool, _shaped_text_add_object, RID, const Variant &, const Size2 &, InlineAlignment, int64_t, double);
+	GDVIRTUAL5R(bool, _shaped_text_resize_object, RID, const Variant &, const Size2 &, InlineAlignment, double);
 
 	virtual int64_t shaped_get_span_count(const RID &p_shaped) const override;
 	virtual Variant shaped_get_span_meta(const RID &p_shaped, int64_t p_index) const override;
@@ -500,6 +517,15 @@ public:
 	GDVIRTUAL2RC(int64_t, _shaped_text_next_grapheme_pos, RID, int64_t);
 	GDVIRTUAL2RC(int64_t, _shaped_text_prev_grapheme_pos, RID, int64_t);
 
+	virtual PackedInt32Array shaped_text_get_character_breaks(const RID &p_shaped) const override;
+	virtual int64_t shaped_text_next_character_pos(const RID &p_shaped, int64_t p_pos) const override;
+	virtual int64_t shaped_text_prev_character_pos(const RID &p_shaped, int64_t p_pos) const override;
+	virtual int64_t shaped_text_closest_character_pos(const RID &p_shaped, int64_t p_pos) const override;
+	GDVIRTUAL1RC(PackedInt32Array, _shaped_text_get_character_breaks, RID);
+	GDVIRTUAL2RC(int64_t, _shaped_text_next_character_pos, RID, int64_t);
+	GDVIRTUAL2RC(int64_t, _shaped_text_prev_character_pos, RID, int64_t);
+	GDVIRTUAL2RC(int64_t, _shaped_text_closest_character_pos, RID, int64_t);
+
 	virtual String format_number(const String &p_string, const String &p_language = "") const override;
 	virtual String parse_number(const String &p_string, const String &p_language = "") const override;
 	virtual String percent_sign(const String &p_language = "") const override;
@@ -510,8 +536,11 @@ public:
 	virtual String strip_diacritics(const String &p_string) const override;
 	GDVIRTUAL1RC(String, _strip_diacritics, const String &);
 
-	virtual PackedInt32Array string_get_word_breaks(const String &p_string, const String &p_language = "", int p_chars_per_line = 0) const override;
-	GDVIRTUAL3RC(PackedInt32Array, _string_get_word_breaks, const String &, const String &, int);
+	virtual PackedInt32Array string_get_word_breaks(const String &p_string, const String &p_language = "", int64_t p_chars_per_line = 0) const override;
+	GDVIRTUAL3RC(PackedInt32Array, _string_get_word_breaks, const String &, const String &, int64_t);
+
+	virtual PackedInt32Array string_get_character_breaks(const String &p_string, const String &p_language = "") const override;
+	GDVIRTUAL2RC(PackedInt32Array, _string_get_character_breaks, const String &, const String &);
 
 	virtual bool is_valid_identifier(const String &p_string) const override;
 	GDVIRTUAL1RC(bool, _is_valid_identifier, const String &);

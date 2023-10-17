@@ -45,12 +45,14 @@ name is available.
     Anutrix
     Aren Villanueva (kurikaesu)
     Ariel Manzur (punto-)
+    AThousandShips
     Bartłomiej T. Listwon (Listwon)
     Bastiaan Olij (BastiaanOlij)
     Ben Brookshire (sheepandshepherd)
     Benjamin Larsson (Nallebeorn)
     Bernhard Liebl (poke1024)
     Bhuvan Vemula (Bhu1-V)
+    bitsawer
     Błażej Szczygieł (zaps166)
     Bojidar Marinov (bojidar-bg)
     Brian Semrau (briansemrau)
@@ -74,6 +76,7 @@ name is available.
     David Snopek (dsnopek)
     Dharkael (lupoDharkael)
     Dmitry Koteroff (Krakean)
+    Dmitry Maganov (vonagam)
     Dominik Jasiński (dreamsComeTrue)
     Douglas Leão (DeeJayLSP)
     DualMatrix
@@ -103,6 +106,7 @@ name is available.
     Gilles Roudiere (groud)
     Gordon MacPherson (RevoluPowered)
     Guilherme Felipe de C. G. da Silva (guilhermefelipecgs)
+    Hakim Rouatbi (hakro)
     Hanif Bin Ariffin (hbina)
     Haoyu Qiu (timothyqiu)
     Hein-Pieter van Braam-Stewart (hpvb)
@@ -122,6 +126,7 @@ name is available.
     Jake Young (Duroxxigar)
     Jakub Grzesik (kubecz3k)
     James Buck (jbuck3)
+    Jan Haller (Bromeon)
     Jason Knight (jasonwinterpixel)
     Jean-Michel Bernard (jmb462)
     Jérôme Gully (Nutriz)
@@ -160,6 +165,7 @@ name is available.
     Mariano Javier Suligoy (MarianoGnu)
     Mario Schlack (hurikhan)
     Marios Staikopoulos (marstaik)
+    Marius Hanl (Maran23)
     Mark Riedesel (klowner)
     Markus Sauermann (Sauermann)
     Martin Capitanio (capnm)
@@ -178,6 +184,7 @@ name is available.
     Michał Iwańczuk (iwek7)
     MichiRecRoom (LikeLakers2)
     Micky (Mickeon)
+    Mikael Hermansson (mihe)
     MinusKube
     Morris "Tabor" Arroad (mortarroad)
     mrezai
@@ -190,7 +197,9 @@ name is available.
     Nikita Lita (nikitalita)
     Nils André-Chang (NilsIrl)
     Noah Beard (TwistedTwigleg)
+    Nông Văn Tình (nongvantinh)
     Nuno Donato (nunodonato)
+    ocean (they/them) (anvilfolk)
     Omar El Sheikh (The-O-King)
     Ovnuniarchos
     Pascal Richter (ShyRed)
@@ -214,6 +223,7 @@ name is available.
     Raul Santos (raulsntos)
     Ray Koopa (RayKoopa)
     RedMser
+    RedworkDE
     Rémi Verschelde (akien-mga)
     Rhody Lugo (rraallvv)
     Ricardo Buring (rburing)
@@ -234,6 +244,7 @@ name is available.
     Silc 'Tokage' Renew (TokageItLab)
     Simon Wenner (swenner)
     smix8
+    snailrhymer
     Stijn Hinlopen (hinlopen)
     Swarnim Arun (minraws)
     TC (floppyhammer)
@@ -242,6 +253,7 @@ name is available.
     thebestnom
     Theo Hallenius (TheoXD)
     Timo Schwarzer (timoschwarzer)
+    Timothé Bonhoure (ajreckof)
     Timo (toger5)
     Tomasz Chabora (KoBeWi)
     trollodel

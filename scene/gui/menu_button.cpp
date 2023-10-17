@@ -40,7 +40,7 @@ void MenuButton::shortcut_input(const Ref<InputEvent> &p_event) {
 		return;
 	}
 
-	if (p_event->is_pressed() && !p_event->is_echo() && !is_disabled() && is_visible_in_tree() && popup->activate_item_by_event(p_event, false)) {
+	if (p_event->is_pressed() && !is_disabled() && is_visible_in_tree() && popup->activate_item_by_event(p_event, false)) {
 		accept_event();
 		return;
 	}
@@ -97,16 +97,14 @@ void MenuButton::show_popup() {
 	}
 
 	emit_signal(SNAME("about_to_popup"));
-	Size2 size = get_size() * get_viewport()->get_canvas_transform().get_scale();
-
-	popup->set_size(Size2(size.width, 0));
-	Point2 gp = get_screen_position();
-	gp.y += size.y;
+	Rect2 rect = get_screen_rect();
+	rect.position.y += rect.size.height;
+	rect.size.height = 0;
+	popup->set_size(rect.size);
 	if (is_layout_rtl()) {
-		gp.x += size.width - popup->get_size().width;
+		rect.position.x += rect.size.width - popup->get_size().width;
 	}
-	popup->set_position(gp);
-	popup->set_parent_rect(Rect2(Point2(gp - popup->get_position()), size));
+	popup->set_position(rect.position);
 
 	// If not triggered by the mouse, start the popup with its first enabled item focused.
 	if (!_was_pressed_by_mouse()) {
@@ -168,6 +166,10 @@ void MenuButton::_notification(int p_what) {
 				// As the popup wasn't triggered by a mouse click, the item focus needs to be removed manually.
 				menu_btn_other->get_popup()->set_focused_item(-1);
 			}
+		} break;
+
+		case NOTIFICATION_TRANSLATION_CHANGED: {
+			popup->set_auto_translate(is_auto_translating());
 		} break;
 	}
 }

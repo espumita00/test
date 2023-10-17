@@ -112,7 +112,7 @@ public:
 	}
 
 	void configure(uint32_t p_page_size) {
-		ERR_FAIL_COND(page_pool != nullptr); //sanity check
+		ERR_FAIL_COND(page_pool != nullptr); // Safety check.
 		ERR_FAIL_COND(p_page_size == 0);
 		page_size = nearest_power_of_2_templated(p_page_size);
 	}
@@ -185,7 +185,7 @@ public:
 			uint32_t new_page_count = page_count + 1;
 
 			if (unlikely(new_page_count > max_pages_used)) {
-				ERR_FAIL_COND(page_pool == nullptr); //sanity check
+				ERR_FAIL_NULL(page_pool); // Safety check.
 
 				_grow_page_array(); //keep out of inline
 			}
@@ -278,10 +278,10 @@ public:
 
 		count -= remainder;
 
-		uint32_t src_pages = p_array._get_pages_in_use();
+		uint32_t src_page_index = 0;
 		uint32_t page_size = page_size_mask + 1;
 
-		for (uint32_t i = 0; i < src_pages; i++) {
+		while (p_array.count > 0) {
 			uint32_t page_count = _get_pages_in_use();
 			uint32_t new_page_count = page_count + 1;
 
@@ -289,16 +289,14 @@ public:
 				_grow_page_array(); //keep out of inline
 			}
 
-			page_data[page_count] = p_array.page_data[i];
-			page_ids[page_count] = p_array.page_ids[i];
-			if (i == src_pages - 1) {
-				//last page, only increment with remainder
-				count += p_array.count & page_size_mask;
-			} else {
-				count += page_size;
-			}
+			page_data[page_count] = p_array.page_data[src_page_index];
+			page_ids[page_count] = p_array.page_ids[src_page_index];
+
+			uint32_t take = MIN(p_array.count, page_size); //pages to take away
+			p_array.count -= take;
+			count += take;
+			src_page_index++;
 		}
-		p_array.count = 0; //take away the other array pages
 
 		//handle the remainder page if exists
 		if (remainder_page) {
@@ -354,7 +352,7 @@ public:
 	}
 
 	void set_page_pool(PagedArrayPool<T> *p_page_pool) {
-		ERR_FAIL_COND(max_pages_used > 0); //sanity check
+		ERR_FAIL_COND(max_pages_used > 0); // Safety check.
 
 		page_pool = p_page_pool;
 		page_size_mask = page_pool->get_page_size_mask();

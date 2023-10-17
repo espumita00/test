@@ -31,12 +31,13 @@
 #include "scene_import_settings.h"
 
 #include "core/config/project_settings.h"
-#include "editor/editor_file_dialog.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_inspector.h"
 #include "editor/editor_node.h"
 #include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
+#include "editor/gui/editor_file_dialog.h"
 #include "scene/3d/importer_mesh_instance_3d.h"
 #include "scene/animation/animation_player.h"
 #include "scene/resources/importer_mesh.h"
@@ -63,6 +64,11 @@ class SceneImportSettingsData : public Object {
 			}
 
 			current[p_name] = p_value;
+
+			// SceneImportSettings must decide if a new collider should be generated or not.
+			if (category == ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_MESH_3D_NODE) {
+				SceneImportSettings::get_singleton()->request_generate_collider();
+			}
 
 			if (SceneImportSettings::get_singleton()->is_editing_animation()) {
 				if (category == ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_MAX) {
@@ -137,24 +143,23 @@ void SceneImportSettings::_fill_material(Tree *p_tree, const Ref<Material> &p_ma
 	String import_id;
 	bool has_import_id = false;
 
-	bool created = false;
-	if (!material_set.has(p_material)) {
-		material_set.insert(p_material);
-		created = true;
-	}
-
 	if (p_material->has_meta("import_id")) {
 		import_id = p_material->get_meta("import_id");
 		has_import_id = true;
 	} else if (!p_material->get_name().is_empty()) {
 		import_id = p_material->get_name();
 		has_import_id = true;
+	} else if (unnamed_material_name_map.has(p_material)) {
+		import_id = unnamed_material_name_map[p_material];
 	} else {
-		import_id = "@MATERIAL:" + itos(material_set.size() - 1);
+		import_id = "@MATERIAL:" + itos(material_map.size());
+		unnamed_material_name_map[p_material] = import_id;
 	}
 
+	bool created = false;
 	if (!material_map.has(import_id)) {
 		MaterialData md;
+		created = true;
 		md.has_import_id = has_import_id;
 		md.material = p_material;
 
@@ -164,8 +169,9 @@ void SceneImportSettings::_fill_material(Tree *p_tree, const Ref<Material> &p_ma
 	}
 
 	MaterialData &material_data = material_map[import_id];
+	ERR_FAIL_COND(p_material != material_data.material);
 
-	Ref<Texture2D> icon = get_theme_icon(SNAME("StandardMaterial3D"), SNAME("EditorIcons"));
+	Ref<Texture2D> icon = get_editor_theme_icon(SNAME("StandardMaterial3D"));
 
 	TreeItem *item = p_tree->create_item(p_parent);
 	if (p_material->get_name().is_empty()) {
@@ -219,7 +225,7 @@ void SceneImportSettings::_fill_mesh(Tree *p_tree, const Ref<Mesh> &p_mesh, Tree
 
 	MeshData &mesh_data = mesh_map[import_id];
 
-	Ref<Texture2D> icon = get_theme_icon(SNAME("Mesh"), SNAME("EditorIcons"));
+	Ref<Texture2D> icon = get_editor_theme_icon(SNAME("MeshItem"));
 
 	TreeItem *item = p_tree->create_item(p_parent);
 	item->set_text(0, p_mesh->get_name());
@@ -269,7 +275,7 @@ void SceneImportSettings::_fill_animation(Tree *p_tree, const Ref<Animation> &p_
 
 	AnimationData &animation_data = animation_map[p_name];
 
-	Ref<Texture2D> icon = get_theme_icon(SNAME("Animation"), SNAME("EditorIcons"));
+	Ref<Texture2D> icon = get_editor_theme_icon(SNAME("Animation"));
 
 	TreeItem *item = p_tree->create_item(p_parent);
 	item->set_text(0, p_name);
@@ -313,18 +319,18 @@ void SceneImportSettings::_fill_scene(Node *p_node, TreeItem *p_parent_item) {
 
 	String type = p_node->get_class();
 
-	if (!has_theme_icon(type, SNAME("EditorIcons"))) {
+	if (!has_theme_icon(type, EditorStringName(EditorIcons))) {
 		type = "Node3D";
 	}
 
-	Ref<Texture2D> icon = get_theme_icon(type, SNAME("EditorIcons"));
+	Ref<Texture2D> icon = get_editor_theme_icon(type);
 
 	TreeItem *item = scene_tree->create_item(p_parent_item);
 	item->set_text(0, p_node->get_name());
 
 	if (p_node == scene) {
-		icon = get_theme_icon(SNAME("PackedScene"), SNAME("EditorIcons"));
-		item->set_text(0, "Scene");
+		icon = get_editor_theme_icon(SNAME("PackedScene"));
+		item->set_text(0, TTR("Scene"));
 	}
 
 	item->set_icon(0, icon);
@@ -345,8 +351,12 @@ void SceneImportSettings::_fill_scene(Node *p_node, TreeItem *p_parent_item) {
 				category = ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_MESH_3D_NODE;
 			} else if (Object::cast_to<AnimationPlayer>(p_node)) {
 				category = ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_ANIMATION_NODE;
+
+				animation_player = Object::cast_to<AnimationPlayer>(p_node);
+				animation_player->connect(SNAME("animation_finished"), callable_mp(this, &SceneImportSettings::_animation_finished));
 			} else if (Object::cast_to<Skeleton3D>(p_node)) {
 				category = ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_SKELETON_3D_NODE;
+				skeletons.push_back(Object::cast_to<Skeleton3D>(p_node));
 			} else {
 				category = ResourceImporterScene::INTERNAL_IMPORT_CATEGORY_NODE;
 			}
@@ -408,7 +418,7 @@ void SceneImportSettings::_update_scene() {
 	material_tree->clear();
 	mesh_tree->clear();
 
-	//hidden roots
+	// Hidden roots.
 	material_tree->create_item();
 	mesh_tree->create_item();
 
@@ -420,14 +430,14 @@ void SceneImportSettings::_update_view_gizmos() {
 		return;
 	}
 	for (const KeyValue<String, NodeData> &e : node_map) {
-		bool generate_collider = false;
+		bool show_collider_view = false;
 		if (e.value.settings.has(SNAME("generate/physics"))) {
-			generate_collider = e.value.settings[SNAME("generate/physics")];
+			show_collider_view = e.value.settings[SNAME("generate/physics")];
 		}
 
 		MeshInstance3D *mesh_node = Object::cast_to<MeshInstance3D>(e.value.node);
 		if (mesh_node == nullptr || mesh_node->get_mesh().is_null()) {
-			// Nothing to do
+			// Nothing to do.
 			continue;
 		}
 
@@ -436,12 +446,48 @@ void SceneImportSettings::_update_view_gizmos() {
 		CRASH_COND_MSG(descendants.is_empty(), "This is unreachable, since the collider view is always created even when the collision is not used! If this is triggered there is a bug on the function `_fill_scene`.");
 
 		MeshInstance3D *collider_view = static_cast<MeshInstance3D *>(descendants[0].operator Object *());
-		collider_view->set_visible(generate_collider);
+		collider_view->set_visible(show_collider_view);
 		if (generate_collider) {
 			// This collider_view doesn't have a mesh so we need to generate a new one.
+			Ref<ImporterMesh> mesh;
+			mesh.instantiate();
+			// ResourceImporterScene::get_collision_shapes() expects ImporterMesh, not Mesh.
+			// TODO: Duplicate code with EditorSceneFormatImporterESCN::import_scene()
+			// Consider making a utility function to convert from Mesh to ImporterMesh.
+			Ref<Mesh> mesh_3d_mesh = mesh_node->get_mesh();
+			Ref<ArrayMesh> array_mesh_3d_mesh = mesh_3d_mesh;
+			if (array_mesh_3d_mesh.is_valid()) {
+				// For the MeshInstance3D nodes, we need to convert the ArrayMesh to an ImporterMesh specially.
+				mesh->set_name(array_mesh_3d_mesh->get_name());
+				for (int32_t blend_i = 0; blend_i < array_mesh_3d_mesh->get_blend_shape_count(); blend_i++) {
+					mesh->add_blend_shape(array_mesh_3d_mesh->get_blend_shape_name(blend_i));
+				}
+				for (int32_t surface_i = 0; surface_i < array_mesh_3d_mesh->get_surface_count(); surface_i++) {
+					mesh->add_surface(array_mesh_3d_mesh->surface_get_primitive_type(surface_i),
+							array_mesh_3d_mesh->surface_get_arrays(surface_i),
+							array_mesh_3d_mesh->surface_get_blend_shape_arrays(surface_i),
+							array_mesh_3d_mesh->surface_get_lods(surface_i),
+							array_mesh_3d_mesh->surface_get_material(surface_i),
+							array_mesh_3d_mesh->surface_get_name(surface_i),
+							array_mesh_3d_mesh->surface_get_format(surface_i));
+				}
+				mesh->set_blend_shape_mode(array_mesh_3d_mesh->get_blend_shape_mode());
+			} else if (mesh_3d_mesh.is_valid()) {
+				// For the MeshInstance3D nodes, we need to convert the Mesh to an ImporterMesh specially.
+				mesh->set_name(mesh_3d_mesh->get_name());
+				for (int32_t surface_i = 0; surface_i < mesh_3d_mesh->get_surface_count(); surface_i++) {
+					mesh->add_surface(mesh_3d_mesh->surface_get_primitive_type(surface_i),
+							mesh_3d_mesh->surface_get_arrays(surface_i),
+							Array(),
+							mesh_3d_mesh->surface_get_lods(surface_i),
+							mesh_3d_mesh->surface_get_material(surface_i),
+							mesh_3d_mesh->surface_get_material(surface_i).is_valid() ? mesh_3d_mesh->surface_get_material(surface_i)->get_name() : String(),
+							mesh_3d_mesh->surface_get_format(surface_i));
+				}
+			}
 
 			// Generate the mesh collider.
-			Vector<Ref<Shape3D>> shapes = ResourceImporterScene::get_collision_shapes(mesh_node->get_mesh(), e.value.settings);
+			Vector<Ref<Shape3D>> shapes = ResourceImporterScene::get_collision_shapes(mesh, e.value.settings, 1.0);
 			const Transform3D transform = ResourceImporterScene::get_collision_shapes_transform(e.value.settings);
 
 			Ref<ArrayMesh> collider_view_mesh;
@@ -466,6 +512,8 @@ void SceneImportSettings::_update_view_gizmos() {
 			collider_view->set_transform(transform);
 		}
 	}
+
+	generate_collider = false;
 }
 
 void SceneImportSettings::_update_camera() {
@@ -502,7 +550,7 @@ void SceneImportSettings::_update_camera() {
 	camera->set_orthogonal(camera_size * zoom, 0.0001, camera_size * 2);
 
 	Transform3D xf;
-	xf.basis = Basis(Vector3(1, 0, 0), rot_x) * Basis(Vector3(0, 1, 0), rot_y);
+	xf.basis = Basis(Vector3(0, 1, 0), rot_y) * Basis(Vector3(1, 0, 0), rot_x);
 	xf.origin = center;
 	xf.translate_local(0, 0, camera_size);
 
@@ -530,6 +578,10 @@ void SceneImportSettings::_load_default_subresource_settings(HashMap<StringName,
 	}
 }
 
+void SceneImportSettings::request_generate_collider() {
+	generate_collider = true;
+}
+
 void SceneImportSettings::update_view() {
 	update_view_timer->start();
 }
@@ -544,19 +596,22 @@ void SceneImportSettings::open_settings(const String &p_path, bool p_for_animati
 	scene_import_settings_data->settings = nullptr;
 	scene_import_settings_data->path = p_path;
 
-	// Visibility
+	// Visibility.
 	data_mode->set_tab_hidden(1, p_for_animation);
 	data_mode->set_tab_hidden(2, p_for_animation);
+	if (p_for_animation) {
+		data_mode->set_current_tab(0);
+	}
 
 	action_menu->get_popup()->set_item_disabled(action_menu->get_popup()->get_item_id(ACTION_EXTRACT_MATERIALS), p_for_animation);
 	action_menu->get_popup()->set_item_disabled(action_menu->get_popup()->get_item_id(ACTION_CHOOSE_MESH_SAVE_PATHS), p_for_animation);
 
 	base_path = p_path;
 
-	material_set.clear();
 	mesh_set.clear();
 	animation_map.clear();
 	material_map.clear();
+	unnamed_material_name_map.clear();
 	mesh_map.clear();
 	node_map.clear();
 	defaults.clear();
@@ -641,12 +696,13 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 	scene_import_settings_data->hide_options = false;
 
 	if (p_type == "Node") {
-		node_selected->hide(); //always hide just in case
+		node_selected->hide(); // Always hide just in case.
 		mesh_preview->hide();
+		_reset_animation();
+
 		if (Object::cast_to<Node3D>(scene)) {
 			Object::cast_to<Node3D>(scene)->show();
 		}
-		//NodeData &nd=node_map[p_id];
 		material_tree->deselect_all();
 		mesh_tree->deselect_all();
 		NodeData &nd = node_map[p_id];
@@ -684,12 +740,13 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 			}
 		}
 	} else if (p_type == "Animation") {
-		node_selected->hide(); //always hide just in case
+		node_selected->hide(); // Always hide just in case.
 		mesh_preview->hide();
+		_reset_animation(p_id);
+
 		if (Object::cast_to<Node3D>(scene)) {
 			Object::cast_to<Node3D>(scene)->show();
 		}
-		//NodeData &nd=node_map[p_id];
 		material_tree->deselect_all();
 		mesh_tree->deselect_all();
 		AnimationData &ad = animation_map[p_id];
@@ -718,6 +775,7 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 
 		mesh_preview->set_mesh(md.mesh);
 		mesh_preview->show();
+		_reset_animation();
 
 		material_tree->deselect_all();
 
@@ -730,6 +788,7 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 		}
 
 		mesh_preview->show();
+		_reset_animation();
 
 		MaterialData &md = material_map[p_id];
 
@@ -786,7 +845,7 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 	if (scene_import_settings_data->settings) {
 		for (const ResourceImporter::ImportOption &E : options) {
 			scene_import_settings_data->defaults[E.option.name] = E.default_value;
-			//needed for visibility toggling (fails if something is missing)
+			// Needed for visibility toggling (fails if something is missing).
 			if (scene_import_settings_data->settings->has(E.option.name)) {
 				scene_import_settings_data->current[E.option.name] = (*scene_import_settings_data->settings)[E.option.name];
 			} else {
@@ -798,6 +857,127 @@ void SceneImportSettings::_select(Tree *p_from, String p_type, String p_id) {
 	scene_import_settings_data->options = options;
 	inspector->edit(scene_import_settings_data);
 	scene_import_settings_data->notify_property_list_changed();
+}
+
+void SceneImportSettings::_inspector_property_edited(const String &p_name) {
+	if (p_name == "settings/loop_mode") {
+		if (!animation_map.has(selected_id)) {
+			return;
+		}
+		HashMap<StringName, Variant> settings = animation_map[selected_id].settings;
+		if (settings.has(p_name)) {
+			animation_loop_mode = static_cast<Animation::LoopMode>((int)settings[p_name]);
+		} else {
+			animation_loop_mode = Animation::LoopMode::LOOP_NONE;
+		}
+	}
+}
+
+void SceneImportSettings::_reset_bone_transforms() {
+	for (Skeleton3D *skeleton : skeletons) {
+		skeleton->reset_bone_poses();
+	}
+}
+
+void SceneImportSettings::_play_animation() {
+	if (animation_player == nullptr) {
+		return;
+	}
+	StringName id = StringName(selected_id);
+	if (animation_player->has_animation(id)) {
+		if (animation_player->is_playing()) {
+			animation_player->pause();
+			animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+			set_process(false);
+		} else {
+			animation_player->play(id);
+			animation_play_button->set_icon(get_editor_theme_icon(SNAME("Pause")));
+			set_process(true);
+		}
+	}
+}
+
+void SceneImportSettings::_stop_current_animation() {
+	animation_pingpong = false;
+	animation_player->stop();
+	animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+	animation_slider->set_value_no_signal(0.0);
+	set_process(false);
+}
+
+void SceneImportSettings::_reset_animation(const String &p_animation_name) {
+	if (p_animation_name.is_empty()) {
+		animation_preview->hide();
+
+		if (animation_player != nullptr && animation_player->is_playing()) {
+			animation_player->stop();
+		}
+		animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+
+		_reset_bone_transforms();
+		set_process(false);
+	} else {
+		_reset_bone_transforms();
+		animation_preview->show();
+
+		animation_loop_mode = Animation::LoopMode::LOOP_NONE;
+		animation_pingpong = false;
+
+		if (animation_map.has(p_animation_name)) {
+			HashMap<StringName, Variant> settings = animation_map[p_animation_name].settings;
+			if (settings.has("settings/loop_mode")) {
+				animation_loop_mode = static_cast<Animation::LoopMode>((int)settings["settings/loop_mode"]);
+			}
+		}
+
+		if (animation_player->is_playing() && animation_loop_mode != Animation::LoopMode::LOOP_NONE) {
+			animation_player->play(p_animation_name);
+		} else {
+			animation_player->stop(true);
+			animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+			animation_player->set_assigned_animation(p_animation_name);
+			animation_player->seek(0.0, true);
+			animation_slider->set_value_no_signal(0.0);
+			set_process(false);
+		}
+	}
+}
+
+void SceneImportSettings::_animation_slider_value_changed(double p_value) {
+	if (animation_player == nullptr || !animation_map.has(selected_id) || animation_map[selected_id].animation.is_null()) {
+		return;
+	}
+	if (animation_player->is_playing()) {
+		animation_player->stop();
+		animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+		set_process(false);
+	}
+	animation_player->seek(p_value * animation_map[selected_id].animation->get_length(), true);
+}
+
+void SceneImportSettings::_animation_finished(const StringName &p_name) {
+	Animation::LoopMode loop_mode = animation_loop_mode;
+
+	switch (loop_mode) {
+		case Animation::LOOP_NONE: {
+			animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+			animation_slider->set_value_no_signal(1.0);
+			set_process(false);
+		} break;
+		case Animation::LOOP_LINEAR: {
+			animation_player->play(p_name);
+		} break;
+		case Animation::LOOP_PINGPONG: {
+			if (animation_pingpong) {
+				animation_player->play(p_name);
+			} else {
+				animation_player->play_backwards(p_name);
+			}
+			animation_pingpong = !animation_pingpong;
+		} break;
+		default: {
+		} break;
+	}
 }
 
 void SceneImportSettings::_material_tree_selected() {
@@ -832,6 +1012,15 @@ void SceneImportSettings::_scene_tree_selected() {
 	String import_id = item->get_meta("import_id");
 
 	_select(scene_tree, type, import_id);
+}
+
+void SceneImportSettings::_cleanup() {
+	skeletons.clear();
+	if (animation_player != nullptr) {
+		animation_player->disconnect(SNAME("animation_finished"), callable_mp(this, &SceneImportSettings::_animation_finished));
+		animation_player = nullptr;
+	}
+	set_process(false);
 }
 
 void SceneImportSettings::_viewport_input(const Ref<InputEvent> &p_input) {
@@ -877,7 +1066,7 @@ void SceneImportSettings::_viewport_input(const Ref<InputEvent> &p_input) {
 void SceneImportSettings::_re_import() {
 	HashMap<StringName, Variant> main_settings;
 
-	main_settings = defaults;
+	main_settings = scene_import_settings_data->current;
 	main_settings.erase("_subresources");
 	Dictionary nodes;
 	Dictionary materials;
@@ -951,8 +1140,29 @@ void SceneImportSettings::_notification(int p_what) {
 			connect("confirmed", callable_mp(this, &SceneImportSettings::_re_import));
 		} break;
 
-		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
-			inspector->set_property_name_style(EditorPropertyNameProcessor::get_settings_style());
+		case NOTIFICATION_THEME_CHANGED: {
+			action_menu->add_theme_style_override("normal", get_theme_stylebox("normal", "Button"));
+			action_menu->add_theme_style_override("hover", get_theme_stylebox("hover", "Button"));
+			action_menu->add_theme_style_override("pressed", get_theme_stylebox("pressed", "Button"));
+
+			if (animation_player != nullptr && animation_player->is_playing()) {
+				animation_play_button->set_icon(get_editor_theme_icon(SNAME("Pause")));
+			} else {
+				animation_play_button->set_icon(get_editor_theme_icon(SNAME("MainPlay")));
+			}
+			animation_stop_button->set_icon(get_editor_theme_icon(SNAME("Stop")));
+		} break;
+
+		case NOTIFICATION_PROCESS: {
+			if (animation_player != nullptr) {
+				animation_slider->set_value_no_signal(animation_player->get_current_animation_position() / animation_player->get_current_animation_length());
+			}
+		} break;
+
+		case NOTIFICATION_VISIBILITY_CHANGED: {
+			if (!is_visible()) {
+				_cleanup();
+			}
 		} break;
 	}
 }
@@ -982,13 +1192,13 @@ void SceneImportSettings::_save_path_changed(const String &p_path) {
 	save_path_item->set_text(1, p_path);
 
 	if (FileAccess::exists(p_path)) {
-		save_path_item->set_text(2, "Warning: File exists");
+		save_path_item->set_text(2, TTR("Warning: File exists"));
 		save_path_item->set_tooltip_text(2, TTR("Existing file with the same name will be replaced."));
-		save_path_item->set_icon(2, get_theme_icon(SNAME("StatusWarning"), SNAME("EditorIcons")));
+		save_path_item->set_icon(2, get_editor_theme_icon(SNAME("StatusWarning")));
 
 	} else {
-		save_path_item->set_text(2, "Will create new File");
-		save_path_item->set_icon(2, get_theme_icon(SNAME("StatusSuccess"), SNAME("EditorIcons")));
+		save_path_item->set_text(2, TTR("Will create new file"));
+		save_path_item->set_icon(2, get_editor_theme_icon(SNAME("StatusSuccess")));
 	}
 }
 
@@ -1022,12 +1232,12 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 				String name = md.material_node->get_text(0);
 
 				item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
-				item->set_icon(0, get_theme_icon(SNAME("StandardMaterial3D"), SNAME("EditorIcons")));
+				item->set_icon(0, get_editor_theme_icon(SNAME("StandardMaterial3D")));
 				item->set_text(0, name);
 
 				if (md.has_import_id) {
 					if (md.settings.has("use_external/enabled") && bool(md.settings["use_external/enabled"])) {
-						item->set_text(2, "Already External");
+						item->set_text(2, TTR("Already External"));
 						item->set_tooltip_text(2, TTR("This material already references an external file, no action will be taken.\nDisable the external property for it to be extracted again."));
 					} else {
 						item->set_metadata(0, E.key);
@@ -1042,22 +1252,22 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 
 						item->set_text(1, path);
 						if (FileAccess::exists(path)) {
-							item->set_text(2, "Warning: File exists");
+							item->set_text(2, TTR("Warning: File exists"));
 							item->set_tooltip_text(2, TTR("Existing file with the same name will be replaced."));
-							item->set_icon(2, get_theme_icon(SNAME("StatusWarning"), SNAME("EditorIcons")));
+							item->set_icon(2, get_editor_theme_icon(SNAME("StatusWarning")));
 
 						} else {
-							item->set_text(2, "Will create new File");
-							item->set_icon(2, get_theme_icon(SNAME("StatusSuccess"), SNAME("EditorIcons")));
+							item->set_text(2, TTR("Will create new file"));
+							item->set_icon(2, get_editor_theme_icon(SNAME("StatusSuccess")));
 						}
 
-						item->add_button(1, get_theme_icon(SNAME("Folder"), SNAME("EditorIcons")));
+						item->add_button(1, get_editor_theme_icon(SNAME("Folder")));
 					}
 
 				} else {
-					item->set_text(2, "No import ID");
+					item->set_text(2, TTR("No import ID"));
 					item->set_tooltip_text(2, TTR("Material has no name nor any other way to identify on re-import.\nPlease name it or ensure it is exported with an unique ID."));
-					item->set_icon(2, get_theme_icon(SNAME("StatusError"), SNAME("EditorIcons")));
+					item->set_icon(2, get_editor_theme_icon(SNAME("StatusError")));
 				}
 
 				save_path_items.push_back(item);
@@ -1075,12 +1285,12 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 				String name = md.mesh_node->get_text(0);
 
 				item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
-				item->set_icon(0, get_theme_icon(SNAME("Mesh"), SNAME("EditorIcons")));
+				item->set_icon(0, get_editor_theme_icon(SNAME("MeshItem")));
 				item->set_text(0, name);
 
 				if (md.has_import_id) {
 					if (md.settings.has("save_to_file/enabled") && bool(md.settings["save_to_file/enabled"])) {
-						item->set_text(2, "Already Saving");
+						item->set_text(2, TTR("Already Saving"));
 						item->set_tooltip_text(2, TTR("This mesh already saves to an external resource, no action will be taken."));
 					} else {
 						item->set_metadata(0, E.key);
@@ -1095,22 +1305,22 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 
 						item->set_text(1, path);
 						if (FileAccess::exists(path)) {
-							item->set_text(2, "Warning: File exists");
+							item->set_text(2, TTR("Warning: File exists"));
 							item->set_tooltip_text(2, TTR("Existing file with the same name will be replaced on import."));
-							item->set_icon(2, get_theme_icon(SNAME("StatusWarning"), SNAME("EditorIcons")));
+							item->set_icon(2, get_editor_theme_icon(SNAME("StatusWarning")));
 
 						} else {
-							item->set_text(2, "Will save to new File");
-							item->set_icon(2, get_theme_icon(SNAME("StatusSuccess"), SNAME("EditorIcons")));
+							item->set_text(2, TTR("Will save to new file"));
+							item->set_icon(2, get_editor_theme_icon(SNAME("StatusSuccess")));
 						}
 
-						item->add_button(1, get_theme_icon(SNAME("Folder"), SNAME("EditorIcons")));
+						item->add_button(1, get_editor_theme_icon(SNAME("Folder")));
 					}
 
 				} else {
-					item->set_text(2, "No import ID");
+					item->set_text(2, TTR("No import ID"));
 					item->set_tooltip_text(2, TTR("Mesh has no name nor any other way to identify on re-import.\nPlease name it or ensure it is exported with an unique ID."));
-					item->set_icon(2, get_theme_icon(SNAME("StatusError"), SNAME("EditorIcons")));
+					item->set_icon(2, get_editor_theme_icon(SNAME("StatusError")));
 				}
 
 				save_path_items.push_back(item);
@@ -1128,11 +1338,11 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 				String name = ad.scene_node->get_text(0);
 
 				item->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
-				item->set_icon(0, get_theme_icon(SNAME("Animation"), SNAME("EditorIcons")));
+				item->set_icon(0, get_editor_theme_icon(SNAME("Animation")));
 				item->set_text(0, name);
 
 				if (ad.settings.has("save_to_file/enabled") && bool(ad.settings["save_to_file/enabled"])) {
-					item->set_text(2, "Already Saving");
+					item->set_text(2, TTR("Already Saving"));
 					item->set_tooltip_text(2, TTR("This animation already saves to an external resource, no action will be taken."));
 				} else {
 					item->set_metadata(0, E.key);
@@ -1147,16 +1357,16 @@ void SceneImportSettings::_save_dir_callback(const String &p_path) {
 
 					item->set_text(1, path);
 					if (FileAccess::exists(path)) {
-						item->set_text(2, "Warning: File exists");
+						item->set_text(2, TTR("Warning: File exists"));
 						item->set_tooltip_text(2, TTR("Existing file with the same name will be replaced on import."));
-						item->set_icon(2, get_theme_icon(SNAME("StatusWarning"), SNAME("EditorIcons")));
+						item->set_icon(2, get_editor_theme_icon(SNAME("StatusWarning")));
 
 					} else {
-						item->set_text(2, "Will save to new File");
-						item->set_icon(2, get_theme_icon(SNAME("StatusSuccess"), SNAME("EditorIcons")));
+						item->set_text(2, TTR("Will save to new file"));
+						item->set_icon(2, get_editor_theme_icon(SNAME("StatusSuccess")));
 					}
 
-					item->add_button(1, get_theme_icon(SNAME("Folder"), SNAME("EditorIcons")));
+					item->add_button(1, get_editor_theme_icon(SNAME("Folder")));
 				}
 
 				save_path_items.push_back(item);
@@ -1238,9 +1448,6 @@ SceneImportSettings::SceneImportSettings() {
 	action_menu->set_text(TTR("Actions..."));
 	// Style the MenuButton like a regular Button to make it more noticeable.
 	action_menu->set_flat(false);
-	action_menu->add_theme_style_override("normal", get_theme_stylebox("normal", "Button"));
-	action_menu->add_theme_style_override("hover", get_theme_stylebox("hover", "Button"));
-	action_menu->add_theme_style_override("pressed", get_theme_stylebox("pressed", "Button"));
 	action_menu->set_focus_mode(Control::FOCUS_ALL);
 	menu_hb->add_child(action_menu);
 
@@ -1282,15 +1489,52 @@ SceneImportSettings::SceneImportSettings() {
 
 	material_tree->set_hide_root(true);
 
+	VBoxContainer *vp_vb = memnew(VBoxContainer);
+	vp_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	vp_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	vp_vb->set_anchors_and_offsets_preset(Control::LayoutPreset::PRESET_FULL_RECT);
+	property_split->add_child(vp_vb);
+
 	SubViewportContainer *vp_container = memnew(SubViewportContainer);
-	vp_container->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	vp_container->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	vp_container->set_custom_minimum_size(Size2(10, 10));
 	vp_container->set_stretch(true);
 	vp_container->connect("gui_input", callable_mp(this, &SceneImportSettings::_viewport_input));
-	property_split->add_child(vp_container);
+	vp_vb->add_child(vp_container);
 
 	base_viewport = memnew(SubViewport);
 	vp_container->add_child(base_viewport);
+
+	animation_preview = memnew(PanelContainer);
+	animation_preview->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	vp_vb->add_child(animation_preview);
+	animation_preview->hide();
+
+	HBoxContainer *animation_hbox = memnew(HBoxContainer);
+	animation_preview->add_child(animation_hbox);
+
+	animation_play_button = memnew(Button);
+	animation_hbox->add_child(animation_play_button);
+	animation_play_button->set_flat(true);
+	animation_play_button->set_focus_mode(Control::FOCUS_NONE);
+	animation_play_button->set_shortcut(ED_SHORTCUT("scene_import_settings/play_selected_animation", TTR("Selected Animation Play/Pause"), Key::SPACE));
+	animation_play_button->connect(SNAME("pressed"), callable_mp(this, &SceneImportSettings::_play_animation));
+
+	animation_stop_button = memnew(Button);
+	animation_hbox->add_child(animation_stop_button);
+	animation_stop_button->set_flat(true);
+	animation_stop_button->set_focus_mode(Control::FOCUS_NONE);
+	animation_stop_button->connect(SNAME("pressed"), callable_mp(this, &SceneImportSettings::_stop_current_animation));
+
+	animation_slider = memnew(HSlider);
+	animation_hbox->add_child(animation_slider);
+	animation_slider->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	animation_slider->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	animation_slider->set_max(1.0);
+	animation_slider->set_step(1.0 / 100.0);
+	animation_slider->set_value_no_signal(0.0);
+	animation_slider->set_focus_mode(Control::FOCUS_NONE);
+	animation_slider->connect(SNAME("value_changed"), callable_mp(this, &SceneImportSettings::_animation_slider_value_changed));
 
 	base_viewport->set_use_own_world_3d(true);
 
@@ -1312,6 +1556,7 @@ SceneImportSettings::SceneImportSettings() {
 		Ref<StandardMaterial3D> selection_mat;
 		selection_mat.instantiate();
 		selection_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+		selection_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		selection_mat->set_albedo(Color(1, 0.8, 1.0));
 
 		Ref<SurfaceTool> st;
@@ -1337,6 +1582,7 @@ SceneImportSettings::SceneImportSettings() {
 
 		node_selected = memnew(MeshInstance3D);
 		node_selected->set_mesh(selection_mesh);
+		node_selected->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
 		base_viewport->add_child(node_selected);
 		node_selected->hide();
 	}
@@ -1352,12 +1598,13 @@ SceneImportSettings::SceneImportSettings() {
 	{
 		collider_mat.instantiate();
 		collider_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
+		collider_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		collider_mat->set_albedo(Color(0.5, 0.5, 1.0));
 	}
 
 	inspector = memnew(EditorInspector);
 	inspector->set_custom_minimum_size(Size2(300 * EDSCALE, 0));
-	inspector->set_property_name_style(EditorPropertyNameProcessor::get_settings_style());
+	inspector->connect(SNAME("property_edited"), callable_mp(this, &SceneImportSettings::_inspector_property_edited));
 
 	property_split->add_child(inspector);
 

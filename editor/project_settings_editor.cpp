@@ -35,7 +35,9 @@
 #include "editor/editor_node.h"
 #include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
 #include "editor/editor_undo_redo_manager.h"
+#include "editor/export/editor_export.h"
 #include "scene/gui/check_button.h"
 #include "servers/movie_writer/movie_writer.h"
 
@@ -45,7 +47,7 @@ void ProjectSettingsEditor::connect_filesystem_dock_signals(FileSystemDock *p_fs
 	localization_editor->connect_filesystem_dock_signals(p_fs_dock);
 }
 
-void ProjectSettingsEditor::popup_project_settings() {
+void ProjectSettingsEditor::popup_project_settings(bool p_clear_filter) {
 	// Restore valid window bounds or pop up at default size.
 	Rect2 saved_size = EditorSettings::get_singleton()->get_project_metadata("dialog_bounds", "project_settings", Rect2());
 	if (saved_size != Rect2()) {
@@ -62,10 +64,13 @@ void ProjectSettingsEditor::popup_project_settings() {
 	autoload_settings->update_autoload();
 	plugin_settings->update_plugins();
 	import_defaults_editor->clear();
+
+	if (p_clear_filter) {
+		search_box->clear();
+	}
 }
 
 void ProjectSettingsEditor::queue_save() {
-	EditorNode::get_singleton()->notify_settings_changed();
 	timer->start();
 }
 
@@ -232,7 +237,7 @@ void ProjectSettingsEditor::shortcut_input(const Ref<InputEvent> &p_event) {
 		if (ED_IS_SHORTCUT("ui_undo", p_event)) {
 			String action = undo_redo->get_current_action_name();
 			if (!action.is_empty()) {
-				EditorNode::get_log()->add_message("Undo: " + action, EditorLog::MSG_TYPE_EDITOR);
+				EditorNode::get_log()->add_message(vformat(TTR("Undo: %s"), action), EditorLog::MSG_TYPE_EDITOR);
 			}
 			undo_redo->undo();
 			handled = true;
@@ -242,7 +247,7 @@ void ProjectSettingsEditor::shortcut_input(const Ref<InputEvent> &p_event) {
 			undo_redo->redo();
 			String action = undo_redo->get_current_action_name();
 			if (!action.is_empty()) {
-				EditorNode::get_log()->add_message("Redo: " + action, EditorLog::MSG_TYPE_EDITOR);
+				EditorNode::get_log()->add_message(vformat(TTR("Redo: %s"), action), EditorLog::MSG_TYPE_EDITOR);
 			}
 			handled = true;
 		}
@@ -370,17 +375,7 @@ void ProjectSettingsEditor::_action_edited(const String &p_name, const Dictionar
 
 	} else {
 		// Events changed
-		int act_event_count = ((Array)p_action["events"]).size();
-		int old_event_count = ((Array)old_val["events"]).size();
-
-		if (act_event_count == old_event_count) {
-			undo_redo->create_action(TTR("Edit Input Action Event"));
-		} else if (act_event_count > old_event_count) {
-			undo_redo->create_action(TTR("Add Input Action Event"));
-		} else {
-			undo_redo->create_action(TTR("Remove Input Action Event"));
-		}
-
+		undo_redo->create_action(TTR("Change Input Action Event(s)"));
 		undo_redo->add_do_method(ProjectSettings::get_singleton(), "set", property_name, p_action);
 		undo_redo->add_undo_method(ProjectSettings::get_singleton(), "set", property_name, old_val);
 	}
@@ -422,7 +417,7 @@ void ProjectSettingsEditor::_action_renamed(const String &p_old_name, const Stri
 	Dictionary action = GLOBAL_GET(old_property_name);
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
-	undo_redo->create_action(TTR("Rename Input Action Event"));
+	undo_redo->create_action(TTR("Rename Input Action"));
 	// Do: clear old, set new
 	undo_redo->add_do_method(ProjectSettings::get_singleton(), "clear", old_property_name);
 	undo_redo->add_do_method(ProjectSettings::get_singleton(), "set", new_property_name, action);
@@ -456,7 +451,8 @@ void ProjectSettingsEditor::_action_reordered(const String &p_action_name, const
 
 	for (const PropertyInfo &prop : props) {
 		// Skip builtins and non-inputs
-		if (ProjectSettings::get_singleton()->is_builtin_setting(prop.name) || !prop.name.begins_with("input/")) {
+		// Order matters here, checking for "input/" filters out properties that aren't settings and produce errors in is_builtin_setting().
+		if (!prop.name.begins_with("input/") || ProjectSettings::get_singleton()->is_builtin_setting(prop.name)) {
 			continue;
 		}
 
@@ -506,7 +502,7 @@ void ProjectSettingsEditor::_update_action_map_editor() {
 	List<PropertyInfo> props;
 	ProjectSettings::get_singleton()->get_property_list(&props);
 
-	const Ref<Texture2D> builtin_icon = get_theme_icon(SNAME("PinPressed"), SNAME("EditorIcons"));
+	const Ref<Texture2D> builtin_icon = get_editor_theme_icon(SNAME("PinPressed"));
 	for (const PropertyInfo &E : props) {
 		const String property_name = E.name;
 
@@ -527,6 +523,8 @@ void ProjectSettingsEditor::_update_action_map_editor() {
 		if (is_builtin_input) {
 			action_info.editable = false;
 			action_info.icon = builtin_icon;
+			action_info.has_initial = true;
+			action_info.action_initial = ProjectSettings::get_singleton()->property_get_revert(property_name);
 		}
 
 		actions.push_back(action_info);
@@ -536,11 +534,11 @@ void ProjectSettingsEditor::_update_action_map_editor() {
 }
 
 void ProjectSettingsEditor::_update_theme() {
-	search_box->set_right_icon(get_theme_icon(SNAME("Search"), SNAME("EditorIcons")));
-	restart_close_button->set_icon(get_theme_icon(SNAME("Close"), SNAME("EditorIcons")));
+	search_box->set_right_icon(get_editor_theme_icon(SNAME("Search")));
+	restart_close_button->set_icon(get_editor_theme_icon(SNAME("Close")));
 	restart_container->add_theme_style_override("panel", get_theme_stylebox(SNAME("panel"), SNAME("Tree")));
-	restart_icon->set_texture(get_theme_icon(SNAME("StatusWarning"), SNAME("EditorIcons")));
-	restart_label->add_theme_color_override("font_color", get_theme_color(SNAME("warning_color"), SNAME("Editor")));
+	restart_icon->set_texture(get_editor_theme_icon(SNAME("StatusWarning")));
+	restart_label->add_theme_color_override("font_color", get_theme_color(SNAME("warning_color"), EditorStringName(Editor)));
 
 	type_box->clear();
 	for (int i = 0; i < Variant::VARIANT_MAX; i++) {
@@ -549,7 +547,7 @@ void ProjectSettingsEditor::_update_theme() {
 			continue;
 		}
 		String type = Variant::get_type_name(Variant::Type(i));
-		type_box->add_icon_item(get_theme_icon(type, SNAME("EditorIcons")), type, i);
+		type_box->add_icon_item(get_editor_theme_icon(type), type, i);
 	}
 }
 
@@ -590,6 +588,7 @@ void ProjectSettingsEditor::_bind_methods() {
 ProjectSettingsEditor::ProjectSettingsEditor(EditorData *p_data) {
 	singleton = this;
 	set_title(TTR("Project Settings (project.godot)"));
+	set_clamp_to_embedder(true);
 
 	ps = ProjectSettings::get_singleton();
 	data = p_data;
@@ -735,7 +734,6 @@ ProjectSettingsEditor::ProjectSettingsEditor(EditorData *p_data) {
 	import_defaults_editor = memnew(ImportDefaultsEditor);
 	import_defaults_editor->set_name(TTR("Import Defaults"));
 	tab_container->add_child(import_defaults_editor);
-	import_defaults_editor->connect("project_settings_changed", callable_mp(this, &ProjectSettingsEditor::queue_save));
 
 	MovieWriter::set_extensions_hint(); // ensure extensions are properly displayed.
 }

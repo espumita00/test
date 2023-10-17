@@ -124,12 +124,15 @@ public:
 
 	enum BakeError {
 		BAKE_ERROR_OK,
+		BAKE_ERROR_NO_SCENE_ROOT,
+		BAKE_ERROR_FOREIGN_DATA,
 		BAKE_ERROR_NO_LIGHTMAPPER,
 		BAKE_ERROR_NO_SAVE_PATH,
 		BAKE_ERROR_NO_MESHES,
 		BAKE_ERROR_MESHES_INVALID,
 		BAKE_ERROR_CANT_CREATE_IMAGE,
 		BAKE_ERROR_USER_ABORTED,
+		BAKE_ERROR_TEXTURE_SIZE_TOO_SMALL,
 	};
 
 	enum EnvironmentMode {
@@ -142,7 +145,9 @@ public:
 private:
 	BakeQuality bake_quality = BAKE_QUALITY_MEDIUM;
 	bool use_denoiser = true;
+	float denoiser_strength = 0.1f;
 	int bounces = 3;
+	float bounce_indirect_energy = 1.0;
 	float bias = 0.0005;
 	int max_texture_size = 16384;
 	bool interior = false;
@@ -151,6 +156,7 @@ private:
 	Color environment_custom_color = Color(1, 1, 1);
 	float environment_custom_energy = 1.0;
 	bool directional = false;
+	bool use_texture_for_bounces = true;
 	GenerateProbes gen_probes = GENERATE_PROBES_SUBDIV_8;
 	Ref<CameraAttributes> camera_attributes;
 
@@ -236,8 +242,14 @@ public:
 	void set_use_denoiser(bool p_enable);
 	bool is_using_denoiser() const;
 
+	void set_denoiser_strength(float p_denoiser_strength);
+	float get_denoiser_strength() const;
+
 	void set_directional(bool p_enable);
 	bool is_directional() const;
+
+	void set_use_texture_for_bounces(bool p_enable);
+	bool is_using_texture_for_bounces() const;
 
 	void set_interior(bool p_interior);
 	bool is_interior() const;
@@ -257,6 +269,9 @@ public:
 	void set_bounces(int p_bounces);
 	int get_bounces() const;
 
+	void set_bounce_indirect_energy(float p_indirect_energy);
+	float get_bounce_indirect_energy() const;
+
 	void set_bias(float p_bias);
 	float get_bias() const;
 
@@ -272,6 +287,9 @@ public:
 	AABB get_aabb() const override;
 
 	BakeError bake(Node *p_from_node, String p_image_data_path = "", Lightmapper::BakeStepFunc p_bake_step = nullptr, void *p_bake_userdata = nullptr);
+
+	virtual PackedStringArray get_configuration_warnings() const override;
+
 	LightmapGI();
 };
 

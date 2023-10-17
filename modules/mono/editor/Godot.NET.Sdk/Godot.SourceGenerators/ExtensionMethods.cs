@@ -26,12 +26,18 @@ namespace Godot.SourceGenerators
                toggle != null &&
                toggle.Equals("true", StringComparison.OrdinalIgnoreCase);
 
+        public static bool IsGodotSourceGeneratorDisabled(this GeneratorExecutionContext context, string generatorName) =>
+            AreGodotSourceGeneratorsDisabled(context) ||
+            (context.TryGetGlobalAnalyzerProperty("GodotDisabledSourceGenerators", out string? disabledGenerators) &&
+            disabledGenerators != null &&
+            disabledGenerators.Split(';').Contains(generatorName));
+
         public static bool InheritsFrom(this INamedTypeSymbol? symbol, string assemblyName, string typeFullName)
         {
             while (symbol != null)
             {
                 if (symbol.ContainingAssembly?.Name == assemblyName &&
-                    symbol.ToString() == typeFullName)
+                    symbol.FullQualifiedNameOmitGlobal() == typeFullName)
                 {
                     return true;
                 }
@@ -75,7 +81,7 @@ namespace Godot.SourceGenerators
             return godotClassName ?? nativeType.Name;
         }
 
-        private static bool IsGodotScriptClass(
+        private static bool TryGetGodotScriptClass(
             this ClassDeclarationSyntax cds, Compilation compilation,
             out INamedTypeSymbol? symbol
         )
@@ -85,7 +91,7 @@ namespace Godot.SourceGenerators
             var classTypeSymbol = sm.GetDeclaredSymbol(cds);
 
             if (classTypeSymbol?.BaseType == null
-                || !classTypeSymbol.BaseType.InheritsFrom("GodotSharp", GodotClasses.Object))
+                || !classTypeSymbol.BaseType.InheritsFrom("GodotSharp", GodotClasses.GodotObject))
             {
                 symbol = null;
                 return false;
@@ -102,7 +108,7 @@ namespace Godot.SourceGenerators
         {
             foreach (var cds in source)
             {
-                if (cds.IsGodotScriptClass(compilation, out var symbol))
+                if (cds.TryGetGodotScriptClass(compilation, out var symbol))
                     yield return (cds, symbol!);
             }
         }
@@ -224,19 +230,22 @@ namespace Godot.SourceGenerators
                 .Replace(">", ")");
 
         public static bool IsGodotExportAttribute(this INamedTypeSymbol symbol)
-            => symbol.ToString() == GodotClasses.ExportAttr;
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.ExportAttr;
 
         public static bool IsGodotSignalAttribute(this INamedTypeSymbol symbol)
-            => symbol.ToString() == GodotClasses.SignalAttr;
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.SignalAttr;
 
         public static bool IsGodotMustBeVariantAttribute(this INamedTypeSymbol symbol)
-            => symbol.ToString() == GodotClasses.MustBeVariantAttr;
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.MustBeVariantAttr;
 
         public static bool IsGodotClassNameAttribute(this INamedTypeSymbol symbol)
-            => symbol.ToString() == GodotClasses.GodotClassNameAttr;
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.GodotClassNameAttr;
+
+        public static bool IsGodotGlobalClassAttribute(this INamedTypeSymbol symbol)
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.GlobalClassAttr;
 
         public static bool IsSystemFlagsAttribute(this INamedTypeSymbol symbol)
-            => symbol.ToString() == GodotClasses.SystemFlagsAttr;
+            => symbol.FullQualifiedNameOmitGlobal() == GodotClasses.SystemFlagsAttr;
 
         public static GodotMethodData? HasGodotCompatibleSignature(
             this IMethodSymbol method,
@@ -294,11 +303,6 @@ namespace Godot.SourceGenerators
         {
             foreach (var property in properties)
             {
-                // TODO: We should still restore read-only properties after reloading assembly. Two possible ways: reflection or turn RestoreGodotObjectData into a constructor overload.
-                // Ignore properties without a getter, without a setter or with an init-only setter. Godot properties must be both readable and writable.
-                if (property.IsWriteOnly || property.IsReadOnly || property.SetMethod!.IsInitOnly)
-                    continue;
-
                 var marshalType = MarshalUtils.ConvertManagedTypeToMarshalType(property.Type, typeCache);
 
                 if (marshalType == null)
@@ -316,10 +320,6 @@ namespace Godot.SourceGenerators
             foreach (var field in fields)
             {
                 // TODO: We should still restore read-only fields after reloading assembly. Two possible ways: reflection or turn RestoreGodotObjectData into a constructor overload.
-                // Ignore properties without a getter or without a setter. Godot properties must be both readable and writable.
-                if (field.IsReadOnly)
-                    continue;
-
                 var marshalType = MarshalUtils.ConvertManagedTypeToMarshalType(field.Type, typeCache);
 
                 if (marshalType == null)

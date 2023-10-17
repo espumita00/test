@@ -59,11 +59,7 @@ public:
 
 	_FORCE_INLINE_ void push_back(T p_elem) {
 		if (unlikely(count == capacity)) {
-			if (capacity == 0) {
-				capacity = 1;
-			} else {
-				capacity <<= 1;
-			}
+			capacity = tight ? (capacity + 1) : MAX((U)1, capacity << 1);
 			data = (T *)memrealloc(data, capacity * sizeof(T));
 			CRASH_COND_MSG(!data, "Out of memory");
 		}
@@ -87,7 +83,7 @@ public:
 	}
 
 	/// Removes the item copying the last value into the position of the one to
-	/// remove. It's generally faster than `remove`.
+	/// remove. It's generally faster than `remove_at`.
 	void remove_at_unordered(U p_index) {
 		ERR_FAIL_INDEX(p_index, count);
 		count--;
@@ -99,11 +95,13 @@ public:
 		}
 	}
 
-	void erase(const T &p_val) {
+	_FORCE_INLINE_ bool erase(const T &p_val) {
 		int64_t idx = find(p_val);
 		if (idx >= 0) {
 			remove_at(idx);
+			return true;
 		}
+		return false;
 	}
 
 	void invert() {
@@ -143,12 +141,7 @@ public:
 			count = p_size;
 		} else if (p_size > count) {
 			if (unlikely(p_size > capacity)) {
-				if (capacity == 0) {
-					capacity = 1;
-				}
-				while (capacity < p_size) {
-					capacity <<= 1;
-				}
+				capacity = tight ? p_size : nearest_power_of_2_templated(p_size);
 				data = (T *)memrealloc(data, capacity * sizeof(T));
 				CRASH_COND_MSG(!data, "Out of memory");
 			}
@@ -167,6 +160,70 @@ public:
 	_FORCE_INLINE_ T &operator[](U p_index) {
 		CRASH_BAD_UNSIGNED_INDEX(p_index, count);
 		return data[p_index];
+	}
+
+	struct Iterator {
+		_FORCE_INLINE_ T &operator*() const {
+			return *elem_ptr;
+		}
+		_FORCE_INLINE_ T *operator->() const { return elem_ptr; }
+		_FORCE_INLINE_ Iterator &operator++() {
+			elem_ptr++;
+			return *this;
+		}
+		_FORCE_INLINE_ Iterator &operator--() {
+			elem_ptr--;
+			return *this;
+		}
+
+		_FORCE_INLINE_ bool operator==(const Iterator &b) const { return elem_ptr == b.elem_ptr; }
+		_FORCE_INLINE_ bool operator!=(const Iterator &b) const { return elem_ptr != b.elem_ptr; }
+
+		Iterator(T *p_ptr) { elem_ptr = p_ptr; }
+		Iterator() {}
+		Iterator(const Iterator &p_it) { elem_ptr = p_it.elem_ptr; }
+
+	private:
+		T *elem_ptr = nullptr;
+	};
+
+	struct ConstIterator {
+		_FORCE_INLINE_ const T &operator*() const {
+			return *elem_ptr;
+		}
+		_FORCE_INLINE_ const T *operator->() const { return elem_ptr; }
+		_FORCE_INLINE_ ConstIterator &operator++() {
+			elem_ptr++;
+			return *this;
+		}
+		_FORCE_INLINE_ ConstIterator &operator--() {
+			elem_ptr--;
+			return *this;
+		}
+
+		_FORCE_INLINE_ bool operator==(const ConstIterator &b) const { return elem_ptr == b.elem_ptr; }
+		_FORCE_INLINE_ bool operator!=(const ConstIterator &b) const { return elem_ptr != b.elem_ptr; }
+
+		ConstIterator(const T *p_ptr) { elem_ptr = p_ptr; }
+		ConstIterator() {}
+		ConstIterator(const ConstIterator &p_it) { elem_ptr = p_it.elem_ptr; }
+
+	private:
+		const T *elem_ptr = nullptr;
+	};
+
+	_FORCE_INLINE_ Iterator begin() {
+		return Iterator(data);
+	}
+	_FORCE_INLINE_ Iterator end() {
+		return Iterator(data + size());
+	}
+
+	_FORCE_INLINE_ ConstIterator begin() const {
+		return ConstIterator(ptr());
+	}
+	_FORCE_INLINE_ ConstIterator end() const {
+		return ConstIterator(ptr() + size());
 	}
 
 	void insert(U p_pos, T p_val) {

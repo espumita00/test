@@ -321,6 +321,7 @@ public:
 		};
 
 		CanvasGroup *canvas_group = nullptr;
+		bool use_canvas_group = false;
 		int light_mask;
 		int z_final;
 
@@ -357,6 +358,9 @@ public:
 		Command *last_command = nullptr;
 		Vector<CommandBlock> blocks;
 		uint32_t current_block;
+#ifdef DEBUG_ENABLED
+		mutable double debug_redraw_time = 0;
+#endif
 
 		template <class T>
 		T *alloc_command() {
@@ -515,6 +519,8 @@ public:
 
 	virtual bool free(RID p_rid) = 0;
 	virtual void update() = 0;
+
+	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) = 0;
 
 	RendererCanvasRender() { singleton = this; }
 	virtual ~RendererCanvasRender() {}

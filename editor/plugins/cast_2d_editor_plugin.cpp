@@ -78,7 +78,7 @@ bool Cast2DEditor::forward_canvas_gui_input(const Ref<InputEvent> &p_event) {
 			}
 		} else if (pressed) {
 			EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
-			undo_redo->create_action(TTR("Set target_position"));
+			undo_redo->create_action(TTR("Set Target Position"));
 			undo_redo->add_do_property(node, "target_position", target_position);
 			undo_redo->add_do_method(canvas_item_editor, "update_viewport");
 			undo_redo->add_undo_property(node, "target_position", original_target_position);
@@ -113,7 +113,7 @@ void Cast2DEditor::forward_canvas_draw_over_viewport(Control *p_overlay) {
 
 	Transform2D gt = canvas_item_editor->get_canvas_transform() * node->get_global_transform();
 
-	const Ref<Texture2D> handle = get_theme_icon(SNAME("EditorHandle"), SNAME("EditorIcons"));
+	const Ref<Texture2D> handle = get_editor_theme_icon(SNAME("EditorHandle"));
 	p_overlay->draw_texture(handle, gt.xform((Vector2)node->get("target_position")) - handle->get_size() / 2);
 }
 

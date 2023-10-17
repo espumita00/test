@@ -31,22 +31,41 @@
 #ifndef PROJECT_EXPORT_H
 #define PROJECT_EXPORT_H
 
+#include "editor/export/editor_export_preset.h"
 #include "scene/gui/dialogs.h"
 
 class CheckBox;
 class CheckButton;
-class EditorExportPreset;
 class EditorFileDialog;
 class EditorFileSystemDirectory;
 class EditorInspector;
 class EditorPropertyPath;
 class ItemList;
+class LinkButton;
 class MenuButton;
 class OptionButton;
+class PopupMenu;
 class RichTextLabel;
 class TabContainer;
 class Tree;
 class TreeItem;
+
+class ProjectExportTextureFormatError : public HBoxContainer {
+	GDCLASS(ProjectExportTextureFormatError, HBoxContainer);
+
+	Label *texture_format_error_label = nullptr;
+	LinkButton *fix_texture_format_button = nullptr;
+	String setting_identifier;
+	void _on_fix_texture_format_pressed();
+
+protected:
+	static void _bind_methods();
+	void _notification(int p_what);
+
+public:
+	void show_for_texture_format(const String &p_friendly_name, const String &p_setting_identifier);
+	ProjectExportTextureFormatError();
+};
 
 class ProjectExportDialog : public ConfirmationDialog {
 	GDCLASS(ProjectExportDialog, ConfirmationDialog);
@@ -75,6 +94,8 @@ private:
 	LineEdit *include_filters = nullptr;
 	LineEdit *exclude_filters = nullptr;
 	Tree *include_files = nullptr;
+	Label *server_strip_message = nullptr;
+	PopupMenu *file_mode_popup = nullptr;
 
 	Label *include_label = nullptr;
 	MarginContainer *include_margin = nullptr;
@@ -83,13 +104,14 @@ private:
 	Button *export_all_button = nullptr;
 	AcceptDialog *export_all_dialog = nullptr;
 
+	RBSet<String> feature_set;
 	LineEdit *custom_features = nullptr;
 	RichTextLabel *custom_feature_display = nullptr;
 
-	OptionButton *script_mode = nullptr;
 	LineEdit *script_key = nullptr;
 	Label *script_key_error = nullptr;
 
+	ProjectExportTextureFormatError *export_texture_format_error = nullptr;
 	Label *export_error = nullptr;
 	Label *export_warning = nullptr;
 	HBoxContainer *export_templates_error = nullptr;
@@ -114,9 +136,13 @@ private:
 	void _export_type_changed(int p_which);
 	void _filter_changed(const String &p_filter);
 	void _fill_resource_tree();
-	bool _fill_tree(EditorFileSystemDirectory *p_dir, TreeItem *p_item, Ref<EditorExportPreset> &current, bool p_only_scenes);
+	void _setup_item_for_file_mode(TreeItem *p_item, EditorExportPreset::FileExportMode p_mode);
+	bool _fill_tree(EditorFileSystemDirectory *p_dir, TreeItem *p_item, Ref<EditorExportPreset> &current, EditorExportPreset::ExportFilter p_export_filter);
+	void _propagate_file_export_mode(TreeItem *p_item, EditorExportPreset::FileExportMode p_inherited_export_mode);
 	void _tree_changed();
 	void _check_propagated_to_item(Object *p_obj, int column);
+	void _tree_popup_edited(bool p_arrow_clicked);
+	void _set_file_export_mode(int p_id);
 
 	Variant get_drag_data_fw(const Point2 &p_point, Control *p_from);
 	bool can_drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from) const;
@@ -152,7 +178,6 @@ private:
 	void _enc_pck_changed(bool p_pressed);
 	void _enc_directory_changed(bool p_pressed);
 	void _enc_filters_changed(const String &p_text);
-	void _script_export_mode_changed(int p_mode);
 	void _script_encryption_key_changed(const String &p_key);
 	bool _validate_script_encryption_key(const String &p_key);
 

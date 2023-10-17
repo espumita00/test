@@ -39,13 +39,16 @@ class AcceptDialog;
 class CanvasItemEditorViewport;
 class ConfirmationDialog;
 class EditorData;
+class EditorSelection;
 class EditorZoomWidget;
 class HScrollBar;
 class HSplitContainer;
 class MenuButton;
 class PanelContainer;
+class StyleBoxTexture;
 class ViewPanner;
 class VScrollBar;
+class VSeparator;
 class VSplitContainer;
 
 class CanvasItemEditorSelectedItem : public Object {
@@ -190,10 +193,14 @@ private:
 
 	HScrollBar *h_scroll = nullptr;
 	VScrollBar *v_scroll = nullptr;
+
 	// Used for secondary menu items which are displayed depending on the currently selected node
 	// (such as MeshInstance's "Mesh" menu).
-	PanelContainer *context_menu_panel = nullptr;
-	HBoxContainer *context_menu_hbox = nullptr;
+	PanelContainer *context_toolbar_panel = nullptr;
+	HBoxContainer *context_toolbar_hbox = nullptr;
+	HashMap<Control *, VSeparator *> context_toolbar_separators;
+
+	void _update_context_toolbar();
 
 	Transform2D transform;
 	GridVisibility grid_visibility = GRID_VISIBILITY_SHOW_WHEN_SNAPPING;
@@ -211,14 +218,15 @@ private:
 
 	bool selected_from_canvas = false;
 
+	// Defaults are defined in clear().
 	Point2 grid_offset;
-	Point2 grid_step = Point2(8, 8); // A power-of-two value works better as a default.
-	int primary_grid_steps = 8;
+	Point2 grid_step;
+	Vector2i primary_grid_step;
 	int grid_step_multiplier = 0;
 
-	real_t snap_rotation_step = Math::deg_to_rad(15.0);
+	real_t snap_rotation_step = 0.0;
 	real_t snap_rotation_offset = 0.0;
-	real_t snap_scale_step = 0.1f;
+	real_t snap_scale_step = 0.0;
 	bool smart_snap_active = false;
 	bool grid_snap_active = false;
 
@@ -256,6 +264,7 @@ private:
 		}
 	};
 	Vector<_SelectResult> selection_results;
+	Vector<_SelectResult> selection_results_menu;
 
 	struct _HoverResult {
 		Point2 position;
@@ -321,6 +330,7 @@ private:
 	Button *override_camera_button = nullptr;
 	MenuButton *view_menu = nullptr;
 	PopupMenu *grid_menu = nullptr;
+	PopupMenu *theme_menu = nullptr;
 	HBoxContainer *animation_hb = nullptr;
 	MenuButton *animation_menu = nullptr;
 
@@ -363,12 +373,10 @@ private:
 
 	Ref<ViewPanner> panner;
 	bool warped_panning = true;
-	int pan_speed = 20;
-	void _scroll_callback(Vector2 p_scroll_vec, bool p_alt);
-	void _pan_callback(Vector2 p_scroll_vec);
-	void _zoom_callback(Vector2 p_scroll_vec, Vector2 p_origin, bool p_alt);
+	void _pan_callback(Vector2 p_scroll_vec, Ref<InputEvent> p_event);
+	void _zoom_callback(float p_zoom_factor, Vector2 p_origin, Ref<InputEvent> p_event);
 
-	bool _is_node_locked(const Node *p_node);
+	bool _is_node_locked(const Node *p_node) const;
 	bool _is_node_movable(const Node *p_node, bool p_popup_warning = false);
 	void _find_canvas_items_at_pos(const Point2 &p_pos, Node *p_node, Vector<_SelectResult> &r_items, const Transform2D &p_parent_xform = Transform2D(), const Transform2D &p_canvas_xform = Transform2D());
 	void _get_canvas_items_at_pos(const Point2 &p_pos, Vector<_SelectResult> &r_items, bool p_allow_locked = false);
@@ -402,7 +410,20 @@ private:
 	void _prepare_grid_menu();
 	void _on_grid_menu_id_pressed(int p_id);
 
-	List<CanvasItem *> _get_edited_canvas_items(bool retrieve_locked = false, bool remove_canvas_item_if_parent_in_selection = true);
+public:
+	enum ThemePreviewMode {
+		THEME_PREVIEW_PROJECT,
+		THEME_PREVIEW_EDITOR,
+		THEME_PREVIEW_DEFAULT,
+
+		THEME_PREVIEW_MAX // The number of options for enumerating.
+	};
+
+private:
+	ThemePreviewMode theme_preview = THEME_PREVIEW_PROJECT;
+	void _switch_theme_preview(int p_mode);
+
+	List<CanvasItem *> _get_edited_canvas_items(bool retrieve_locked = false, bool remove_canvas_item_if_parent_in_selection = true) const;
 	Rect2 _get_encompassing_rect_from_list(List<CanvasItem *> p_list);
 	void _expand_encompassing_rect_using_children(Rect2 &r_rect, const Node *p_node, bool &r_first, const Transform2D &p_parent_xform = Transform2D(), const Transform2D &p_canvas_xform = Transform2D(), bool include_locked_nodes = true);
 	Rect2 _get_encompassing_rect(const Node *p_node);
@@ -478,6 +499,7 @@ private:
 			const Node *p_current);
 
 	VBoxContainer *controls_vb = nullptr;
+	Button *button_center_view = nullptr;
 	EditorZoomWidget *zoom_widget = nullptr;
 	void _update_zoom(real_t p_zoom);
 	void _shortcut_zoom_set(real_t p_zoom);
@@ -526,6 +548,7 @@ public:
 	static CanvasItemEditor *get_singleton() { return singleton; }
 	Dictionary get_state() const;
 	void set_state(const Dictionary &p_state);
+	void clear();
 
 	void add_control_to_menu_panel(Control *p_control);
 	void remove_control_from_menu_panel(Control *p_control);
@@ -552,6 +575,10 @@ public:
 	void focus_selection();
 	void center_at(const Point2 &p_pos);
 
+	virtual CursorShape get_cursor_shape(const Point2 &p_pos) const override;
+
+	ThemePreviewMode get_theme_preview() const { return theme_preview; }
+
 	EditorSelection *editor_selection = nullptr;
 
 	CanvasItemEditor();
@@ -573,6 +600,7 @@ public:
 	virtual void make_visible(bool p_visible) override;
 	virtual Dictionary get_state() const override;
 	virtual void set_state(const Dictionary &p_state) override;
+	virtual void clear() override;
 
 	CanvasItemEditor *get_canvas_item_editor() { return canvas_item_editor; }
 
@@ -606,7 +634,6 @@ class CanvasItemEditorViewport : public Control {
 	void _on_select_type(Object *selected);
 	void _on_change_type_confirmed();
 	void _on_change_type_closed();
-	Node *_make_texture_node_type(String texture_node_type);
 
 	void _create_preview(const Vector<String> &files) const;
 	void _remove_preview();

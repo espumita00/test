@@ -28,6 +28,10 @@
 #endif
 #endif
 
+#if !defined(TANGENT_USED) && (defined(NORMAL_MAP_USED) || defined(LIGHT_ANISOTROPY_USED))
+#define TANGENT_USED
+#endif
+
 layout(push_constant, std430) uniform DrawCall {
 	uint instance_index;
 	uint uv_offset;
@@ -42,20 +46,7 @@ draw_call;
 
 #include "../light_data_inc.glsl"
 
-#define SAMPLER_NEAREST_CLAMP 0
-#define SAMPLER_LINEAR_CLAMP 1
-#define SAMPLER_NEAREST_WITH_MIPMAPS_CLAMP 2
-#define SAMPLER_LINEAR_WITH_MIPMAPS_CLAMP 3
-#define SAMPLER_NEAREST_WITH_MIPMAPS_ANISOTROPIC_CLAMP 4
-#define SAMPLER_LINEAR_WITH_MIPMAPS_ANISOTROPIC_CLAMP 5
-#define SAMPLER_NEAREST_REPEAT 6
-#define SAMPLER_LINEAR_REPEAT 7
-#define SAMPLER_NEAREST_WITH_MIPMAPS_REPEAT 8
-#define SAMPLER_LINEAR_WITH_MIPMAPS_REPEAT 9
-#define SAMPLER_NEAREST_WITH_MIPMAPS_ANISOTROPIC_REPEAT 10
-#define SAMPLER_LINEAR_WITH_MIPMAPS_ANISOTROPIC_REPEAT 11
-
-layout(set = 0, binding = 1) uniform sampler material_samplers[12];
+#include "../samplers_inc.glsl"
 
 layout(set = 0, binding = 2) uniform sampler shadow_sampler;
 
@@ -224,6 +215,9 @@ struct InstanceData {
 	uint gi_offset; //GI information when using lightmapping (VCT or lightmap index)
 	uint layer_mask;
 	vec4 lightmap_uv_scale;
+	vec4 compressed_aabb_position_pad; // Only .xyz is used. .w is padding.
+	vec4 compressed_aabb_size_pad; // Only .xyz is used. .w is padding.
+	vec4 uv_scale;
 };
 
 layout(set = 1, binding = 2, std430) buffer restrict readonly InstanceDataBuffer {
@@ -271,21 +265,23 @@ layout(r32ui, set = 1, binding = 13) uniform restrict uimage3D geom_facing_grid;
 #define multiviewSampler sampler2D
 #else
 
-layout(set = 1, binding = 10) uniform texture2D depth_buffer;
-layout(set = 1, binding = 11) uniform texture2D color_buffer;
-
 #ifdef USE_MULTIVIEW
+layout(set = 1, binding = 10) uniform texture2DArray depth_buffer;
+layout(set = 1, binding = 11) uniform texture2DArray color_buffer;
 layout(set = 1, binding = 12) uniform texture2DArray normal_roughness_buffer;
+layout(set = 1, binding = 13) uniform texture2DArray ao_buffer;
 layout(set = 1, binding = 14) uniform texture2DArray ambient_buffer;
 layout(set = 1, binding = 15) uniform texture2DArray reflection_buffer;
 #define multiviewSampler sampler2DArray
 #else // USE_MULTIVIEW
+layout(set = 1, binding = 10) uniform texture2D depth_buffer;
+layout(set = 1, binding = 11) uniform texture2D color_buffer;
 layout(set = 1, binding = 12) uniform texture2D normal_roughness_buffer;
+layout(set = 1, binding = 13) uniform texture2D ao_buffer;
 layout(set = 1, binding = 14) uniform texture2D ambient_buffer;
 layout(set = 1, binding = 15) uniform texture2D reflection_buffer;
 #define multiviewSampler sampler2D
 #endif
-layout(set = 1, binding = 13) uniform texture2D ao_buffer;
 layout(set = 1, binding = 16) uniform texture2DArray sdfgi_lightprobe_texture;
 layout(set = 1, binding = 17) uniform texture3D sdfgi_occlusion_cascades;
 
@@ -311,7 +307,11 @@ voxel_gi_instances;
 
 layout(set = 1, binding = 19) uniform texture3D volumetric_fog_texture;
 
+#ifdef USE_MULTIVIEW
+layout(set = 1, binding = 20) uniform texture2DArray ssil_buffer;
+#else
 layout(set = 1, binding = 20) uniform texture2D ssil_buffer;
+#endif // USE_MULTIVIEW
 
 #endif
 

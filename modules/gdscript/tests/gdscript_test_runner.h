@@ -32,6 +32,7 @@
 #define GDSCRIPT_TEST_RUNNER_H
 
 #include "../gdscript.h"
+
 #include "core/error/error_macros.h"
 #include "core/string/print_string.h"
 #include "core/string/ustring.h"
@@ -92,6 +93,7 @@ public:
 	bool generate_output();
 
 	const String &get_source_file() const { return source_file; }
+	const String get_source_relative_filepath() const { return source_file.trim_prefix(base_dir); }
 	const String &get_output_file() const { return output_file; }
 
 	GDScriptTest(const String &p_source_path, const String &p_output_path, const String &p_base_dir);
@@ -105,6 +107,7 @@ class GDScriptTestRunner {
 
 	bool is_generating = false;
 	bool do_init_languages = false;
+	bool print_filenames; // Whether filenames should be printed when generated/running tests
 
 	bool make_tests();
 	bool make_tests_for_dir(const String &p_dir);
@@ -117,7 +120,7 @@ public:
 	int run_tests();
 	bool generate_outputs();
 
-	GDScriptTestRunner(const String &p_source_dir, bool p_init_language);
+	GDScriptTestRunner(const String &p_source_dir, bool p_init_language, bool p_print_filenames = false);
 	~GDScriptTestRunner();
 };
 

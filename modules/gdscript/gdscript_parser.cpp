@@ -30,66 +30,36 @@
 
 #include "gdscript_parser.h"
 
+#include "gdscript.h"
+
 #include "core/config/project_settings.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "core/math/math_defs.h"
-#include "gdscript.h"
 #include "scene/main/multiplayer_api.h"
 
 #ifdef DEBUG_ENABLED
 #include "core/os/os.h"
 #include "core/string/string_builder.h"
-#include "gdscript_warning.h"
-#endif // DEBUG_ENABLED
+#include "servers/text_server.h"
+#endif
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_settings.h"
-#endif // TOOLS_ENABLED
+#endif
 
+// This function is used to determine that a type is "built-in" as opposed to native
+// and custom classes. So `Variant::NIL` and `Variant::OBJECT` are excluded:
+// `Variant::NIL` - `null` is literal, not a type.
+// `Variant::OBJECT` - `Object` should be treated as a class, not as a built-in type.
 static HashMap<StringName, Variant::Type> builtin_types;
 Variant::Type GDScriptParser::get_builtin_type(const StringName &p_type) {
-	if (builtin_types.is_empty()) {
-		builtin_types["bool"] = Variant::BOOL;
-		builtin_types["int"] = Variant::INT;
-		builtin_types["float"] = Variant::FLOAT;
-		builtin_types["String"] = Variant::STRING;
-		builtin_types["Vector2"] = Variant::VECTOR2;
-		builtin_types["Vector2i"] = Variant::VECTOR2I;
-		builtin_types["Rect2"] = Variant::RECT2;
-		builtin_types["Rect2i"] = Variant::RECT2I;
-		builtin_types["Transform2D"] = Variant::TRANSFORM2D;
-		builtin_types["Vector3"] = Variant::VECTOR3;
-		builtin_types["Vector3i"] = Variant::VECTOR3I;
-		builtin_types["Vector4"] = Variant::VECTOR4;
-		builtin_types["Vector4i"] = Variant::VECTOR4I;
-		builtin_types["AABB"] = Variant::AABB;
-		builtin_types["Plane"] = Variant::PLANE;
-		builtin_types["Quaternion"] = Variant::QUATERNION;
-		builtin_types["Basis"] = Variant::BASIS;
-		builtin_types["Transform3D"] = Variant::TRANSFORM3D;
-		builtin_types["Projection"] = Variant::PROJECTION;
-		builtin_types["Color"] = Variant::COLOR;
-		builtin_types["RID"] = Variant::RID;
-		builtin_types["Object"] = Variant::OBJECT;
-		builtin_types["StringName"] = Variant::STRING_NAME;
-		builtin_types["NodePath"] = Variant::NODE_PATH;
-		builtin_types["Dictionary"] = Variant::DICTIONARY;
-		builtin_types["Callable"] = Variant::CALLABLE;
-		builtin_types["Signal"] = Variant::SIGNAL;
-		builtin_types["Array"] = Variant::ARRAY;
-		builtin_types["PackedByteArray"] = Variant::PACKED_BYTE_ARRAY;
-		builtin_types["PackedInt32Array"] = Variant::PACKED_INT32_ARRAY;
-		builtin_types["PackedInt64Array"] = Variant::PACKED_INT64_ARRAY;
-		builtin_types["PackedFloat32Array"] = Variant::PACKED_FLOAT32_ARRAY;
-		builtin_types["PackedFloat64Array"] = Variant::PACKED_FLOAT64_ARRAY;
-		builtin_types["PackedStringArray"] = Variant::PACKED_STRING_ARRAY;
-		builtin_types["PackedVector2Array"] = Variant::PACKED_VECTOR2_ARRAY;
-		builtin_types["PackedVector3Array"] = Variant::PACKED_VECTOR3_ARRAY;
-		builtin_types["PackedColorArray"] = Variant::PACKED_COLOR_ARRAY;
-		// NIL is not here, hence the -1.
-		if (builtin_types.size() != Variant::VARIANT_MAX - 1) {
-			ERR_PRINT("Outdated parser: amount of built-in types don't match the amount of types in Variant.");
+	if (unlikely(builtin_types.is_empty())) {
+		for (int i = 0; i < Variant::VARIANT_MAX; i++) {
+			Variant::Type type = (Variant::Type)i;
+			if (type != Variant::NIL && type != Variant::OBJECT) {
+				builtin_types[Variant::get_type_name(type)] = type;
+			}
 		}
 	}
 
@@ -98,6 +68,10 @@ Variant::Type GDScriptParser::get_builtin_type(const StringName &p_type) {
 	}
 	return Variant::VARIANT_MAX;
 }
+
+#ifdef TOOLS_ENABLED
+HashMap<String, String> GDScriptParser::theme_color_names;
+#endif
 
 void GDScriptParser::cleanup() {
 	builtin_types.clear();
@@ -118,10 +92,12 @@ GDScriptParser::GDScriptParser() {
 	// TODO: Should this be static?
 	register_annotation(MethodInfo("@tool"), AnnotationInfo::SCRIPT, &GDScriptParser::tool_annotation);
 	register_annotation(MethodInfo("@icon", PropertyInfo(Variant::STRING, "icon_path")), AnnotationInfo::SCRIPT, &GDScriptParser::icon_annotation);
+	register_annotation(MethodInfo("@static_unload"), AnnotationInfo::SCRIPT, &GDScriptParser::static_unload_annotation);
+
 	register_annotation(MethodInfo("@onready"), AnnotationInfo::VARIABLE, &GDScriptParser::onready_annotation);
 	// Export annotations.
 	register_annotation(MethodInfo("@export"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_NONE, Variant::NIL>);
-	register_annotation(MethodInfo("@export_enum", PropertyInfo(Variant::STRING, "names")), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_ENUM, Variant::INT>, varray(), true);
+	register_annotation(MethodInfo("@export_enum", PropertyInfo(Variant::STRING, "names")), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_ENUM, Variant::NIL>, varray(), true);
 	register_annotation(MethodInfo("@export_file", PropertyInfo(Variant::STRING, "filter")), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_FILE, Variant::STRING>, varray(""), true);
 	register_annotation(MethodInfo("@export_dir"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_DIR, Variant::STRING>);
 	register_annotation(MethodInfo("@export_global_file", PropertyInfo(Variant::STRING, "filter")), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_GLOBAL_FILE, Variant::STRING>, varray(""), true);
@@ -139,6 +115,7 @@ GDScriptParser::GDScriptParser() {
 	register_annotation(MethodInfo("@export_flags_3d_render"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_LAYERS_3D_RENDER, Variant::INT>);
 	register_annotation(MethodInfo("@export_flags_3d_physics"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_LAYERS_3D_PHYSICS, Variant::INT>);
 	register_annotation(MethodInfo("@export_flags_3d_navigation"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_LAYERS_3D_NAVIGATION, Variant::INT>);
+	register_annotation(MethodInfo("@export_flags_avoidance"), AnnotationInfo::VARIABLE, &GDScriptParser::export_annotations<PROPERTY_HINT_LAYERS_AVOIDANCE, Variant::INT>);
 	// Export grouping annotations.
 	register_annotation(MethodInfo("@export_category", PropertyInfo(Variant::STRING, "name")), AnnotationInfo::STANDALONE, &GDScriptParser::export_group_annotations<PROPERTY_USAGE_CATEGORY>);
 	register_annotation(MethodInfo("@export_group", PropertyInfo(Variant::STRING, "name"), PropertyInfo(Variant::STRING, "prefix")), AnnotationInfo::STANDALONE, &GDScriptParser::export_group_annotations<PROPERTY_USAGE_GROUP>, varray(""));
@@ -146,10 +123,19 @@ GDScriptParser::GDScriptParser() {
 	// Warning annotations.
 	register_annotation(MethodInfo("@warning_ignore", PropertyInfo(Variant::STRING, "warning")), AnnotationInfo::CLASS | AnnotationInfo::VARIABLE | AnnotationInfo::SIGNAL | AnnotationInfo::CONSTANT | AnnotationInfo::FUNCTION | AnnotationInfo::STATEMENT, &GDScriptParser::warning_annotations, varray(), true);
 	// Networking.
-	register_annotation(MethodInfo("@rpc", PropertyInfo(Variant::STRING, "mode"), PropertyInfo(Variant::STRING, "sync"), PropertyInfo(Variant::STRING, "transfer_mode"), PropertyInfo(Variant::INT, "transfer_channel")), AnnotationInfo::FUNCTION, &GDScriptParser::rpc_annotation, varray("", "", "", 0), true);
+	register_annotation(MethodInfo("@rpc", PropertyInfo(Variant::STRING, "mode"), PropertyInfo(Variant::STRING, "sync"), PropertyInfo(Variant::STRING, "transfer_mode"), PropertyInfo(Variant::INT, "transfer_channel")), AnnotationInfo::FUNCTION, &GDScriptParser::rpc_annotation, varray("authority", "call_remote", "unreliable", 0));
 
 #ifdef DEBUG_ENABLED
 	is_ignoring_warnings = !(bool)GLOBAL_GET("debug/gdscript/warnings/enable");
+#endif
+
+#ifdef TOOLS_ENABLED
+	if (theme_color_names.is_empty()) {
+		theme_color_names.insert("x", "axis_x_color");
+		theme_color_names.insert("y", "axis_y_color");
+		theme_color_names.insert("z", "axis_z_color");
+		theme_color_names.insert("w", "axis_w_color");
+	}
 #endif
 }
 
@@ -186,26 +172,8 @@ void GDScriptParser::push_error(const String &p_message, const Node *p_origin) {
 }
 
 #ifdef DEBUG_ENABLED
-void GDScriptParser::push_warning(const Node *p_source, GDScriptWarning::Code p_code, const String &p_symbol1, const String &p_symbol2, const String &p_symbol3, const String &p_symbol4) {
-	ERR_FAIL_COND(p_source == nullptr);
-	Vector<String> symbols;
-	if (!p_symbol1.is_empty()) {
-		symbols.push_back(p_symbol1);
-	}
-	if (!p_symbol2.is_empty()) {
-		symbols.push_back(p_symbol2);
-	}
-	if (!p_symbol3.is_empty()) {
-		symbols.push_back(p_symbol3);
-	}
-	if (!p_symbol4.is_empty()) {
-		symbols.push_back(p_symbol4);
-	}
-	push_warning(p_source, p_code, symbols);
-}
-
 void GDScriptParser::push_warning(const Node *p_source, GDScriptWarning::Code p_code, const Vector<String> &p_symbols) {
-	ERR_FAIL_COND(p_source == nullptr);
+	ERR_FAIL_NULL(p_source);
 	if (is_ignoring_warnings) {
 		return;
 	}
@@ -213,14 +181,10 @@ void GDScriptParser::push_warning(const Node *p_source, GDScriptWarning::Code p_
 		return;
 	}
 
-	if (ignored_warning_codes.has(p_code)) {
+	if (ignored_warnings.has(p_code)) {
 		return;
 	}
 
-	String warn_name = GDScriptWarning::get_name_from_code((GDScriptWarning::Code)p_code).to_lower();
-	if (ignored_warnings.has(warn_name)) {
-		return;
-	}
 	int warn_level = (int)GLOBAL_GET(GDScriptWarning::get_settings_path_from_code(p_code));
 	if (!warn_level) {
 		return;
@@ -234,8 +198,8 @@ void GDScriptParser::push_warning(const Node *p_source, GDScriptWarning::Code p_
 	warning.leftmost_column = p_source->leftmost_column;
 	warning.rightmost_column = p_source->rightmost_column;
 
-	if (warn_level == GDScriptWarning::WarnLevel::ERROR || bool(GLOBAL_GET("debug/gdscript/warnings/treat_warnings_as_errors"))) {
-		push_error(warning.get_message(), p_source);
+	if (warn_level == GDScriptWarning::WarnLevel::ERROR) {
+		push_error(warning.get_message() + String(" (Warning treated as error.)"), p_source);
 		return;
 	}
 
@@ -422,8 +386,10 @@ GDScriptTokenizer::Token GDScriptParser::advance() {
 		push_error(current.literal);
 		current = tokenizer.scan();
 	}
-	for (Node *n : nodes_in_progress) {
-		update_extents(n);
+	if (previous.type != GDScriptTokenizer::Token::DEDENT) { // `DEDENT` belongs to the next non-empty line.
+		for (Node *n : nodes_in_progress) {
+			update_extents(n);
+		}
 	}
 	return previous;
 }
@@ -542,19 +508,34 @@ void GDScriptParser::parse_program() {
 	current_class = head;
 	bool can_have_class_or_extends = true;
 
-	while (match(GDScriptTokenizer::Token::ANNOTATION)) {
-		AnnotationNode *annotation = parse_annotation(AnnotationInfo::SCRIPT | AnnotationInfo::STANDALONE | AnnotationInfo::CLASS_LEVEL);
-		if (annotation != nullptr) {
-			if (annotation->applies_to(AnnotationInfo::SCRIPT)) {
-				annotation->apply(this, head);
-			} else {
-				annotation_stack.push_back(annotation);
-				// This annotation must appear after script-level annotations
-				// and class_name/extends (ex: could be @onready or @export),
-				// so we stop looking for script-level stuff.
-				can_have_class_or_extends = false;
-				break;
+	while (!check(GDScriptTokenizer::Token::TK_EOF)) {
+		if (match(GDScriptTokenizer::Token::ANNOTATION)) {
+			AnnotationNode *annotation = parse_annotation(AnnotationInfo::SCRIPT | AnnotationInfo::STANDALONE | AnnotationInfo::CLASS_LEVEL);
+			if (annotation != nullptr) {
+				if (annotation->applies_to(AnnotationInfo::SCRIPT)) {
+					// `@icon` needs to be applied in the parser. See GH-72444.
+					if (annotation->name == SNAME("@icon")) {
+						annotation->apply(this, head, nullptr);
+					} else {
+						head->annotations.push_back(annotation);
+					}
+				} else {
+					annotation_stack.push_back(annotation);
+					// This annotation must appear after script-level annotations
+					// and class_name/extends (ex: could be @onready or @export),
+					// so we stop looking for script-level stuff.
+					can_have_class_or_extends = false;
+					break;
+				}
 			}
+		} else if (check(GDScriptTokenizer::Token::LITERAL) && current.literal.get_type() == Variant::STRING) {
+			// Allow strings in class body as multiline comments.
+			advance();
+			if (!match(GDScriptTokenizer::Token::NEWLINE)) {
+				push_error("Expected newline after comment string.");
+			}
+		} else {
+			break;
 		}
 	}
 
@@ -578,6 +559,16 @@ void GDScriptParser::parse_program() {
 					end_statement("superclass");
 				}
 				break;
+			case GDScriptTokenizer::Token::LITERAL:
+				if (current.literal.get_type() == Variant::STRING) {
+					// Allow strings in class body as multiline comments.
+					advance();
+					if (!match(GDScriptTokenizer::Token::NEWLINE)) {
+						push_error("Expected newline after comment string.");
+					}
+					break;
+				}
+				[[fallthrough]];
 			default:
 				// No tokens are allowed between script annotations and class/extends.
 				can_have_class_or_extends = false;
@@ -593,13 +584,14 @@ void GDScriptParser::parse_program() {
 	complete_extents(head);
 
 #ifdef TOOLS_ENABLED
-	for (const KeyValue<int, GDScriptTokenizer::CommentData> &E : tokenizer.get_comments()) {
-		if (E.value.new_line && E.value.comment.begins_with("##")) {
-			class_doc_line = MIN(class_doc_line, E.key);
+	const HashMap<int, GDScriptTokenizer::CommentData> &comments = tokenizer.get_comments();
+	int line = MIN(max_script_doc_line, head->end_line);
+	while (line > 0) {
+		if (comments.has(line) && comments[line].new_line && comments[line].comment.begins_with("##")) {
+			head->doc_data = parse_class_doc_comment(line);
+			break;
 		}
-	}
-	if (has_comment(class_doc_line)) {
-		get_class_doc_comment(class_doc_line, head->doc_brief_description, head->doc_description, head->doc_tutorials, false);
+		line--;
 	}
 #endif // TOOLS_ENABLED
 
@@ -657,7 +649,7 @@ bool GDScriptParser::has_class(const GDScriptParser::ClassNode *p_class) const {
 	return false;
 }
 
-GDScriptParser::ClassNode *GDScriptParser::parse_class() {
+GDScriptParser::ClassNode *GDScriptParser::parse_class(bool p_is_static) {
 	ClassNode *n_class = alloc_node<ClassNode>();
 
 	ClassNode *previous_class = current_class;
@@ -746,24 +738,20 @@ void GDScriptParser::parse_extends() {
 	if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected superclass name after "extends".)")) {
 		return;
 	}
-	current_class->extends.push_back(previous.literal);
+	current_class->extends.push_back(parse_identifier());
 
 	while (match(GDScriptTokenizer::Token::PERIOD)) {
 		make_completion_context(COMPLETION_INHERIT_TYPE, current_class, chain_index++);
 		if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected superclass name after ".".)")) {
 			return;
 		}
-		current_class->extends.push_back(previous.literal);
+		current_class->extends.push_back(parse_identifier());
 	}
 }
 
 template <class T>
-void GDScriptParser::parse_class_member(T *(GDScriptParser::*p_parse_function)(), AnnotationInfo::TargetKind p_target, const String &p_member_kind) {
+void GDScriptParser::parse_class_member(T *(GDScriptParser::*p_parse_function)(bool), AnnotationInfo::TargetKind p_target, const String &p_member_kind, bool p_is_static) {
 	advance();
-
-#ifdef TOOLS_ENABLED
-	int doc_comment_line = previous.start_line - 1;
-#endif // TOOLS_ENABLED
 
 	// Consume annotations.
 	List<AnnotationNode *> annotations;
@@ -776,51 +764,51 @@ void GDScriptParser::parse_class_member(T *(GDScriptParser::*p_parse_function)()
 			push_error(vformat(R"(Annotation "%s" cannot be applied to a %s.)", last_annotation->name, p_member_kind));
 			clear_unused_annotations();
 		}
-#ifdef TOOLS_ENABLED
-		if (last_annotation->start_line == doc_comment_line) {
-			doc_comment_line--;
-		}
-#endif // TOOLS_ENABLED
 	}
 
-	T *member = (this->*p_parse_function)();
+	T *member = (this->*p_parse_function)(p_is_static);
 	if (member == nullptr) {
 		return;
 	}
 
-	// Apply annotations.
+#ifdef TOOLS_ENABLED
+	int doc_comment_line = member->start_line - 1;
+#endif // TOOLS_ENABLED
+
 	for (AnnotationNode *&annotation : annotations) {
 		member->annotations.push_back(annotation);
+#ifdef TOOLS_ENABLED
+		if (annotation->start_line <= doc_comment_line) {
+			doc_comment_line = annotation->start_line - 1;
+		}
+#endif // TOOLS_ENABLED
 	}
 
 #ifdef TOOLS_ENABLED
-	// Consume doc comments.
-	class_doc_line = MIN(class_doc_line, doc_comment_line - 1);
-	if (has_comment(doc_comment_line)) {
-		if constexpr (std::is_same_v<T, ClassNode>) {
-			get_class_doc_comment(doc_comment_line, member->doc_brief_description, member->doc_description, member->doc_tutorials, true);
-		} else {
-			member->doc_description = get_doc_comment(doc_comment_line);
+	if constexpr (std::is_same_v<T, ClassNode>) {
+		if (has_comment(member->start_line, true)) {
+			// Inline doc comment.
+			member->doc_data = parse_class_doc_comment(member->start_line, true);
+		} else if (has_comment(doc_comment_line, true) && tokenizer.get_comments()[doc_comment_line].new_line) {
+			// Normal doc comment. Don't check `min_member_doc_line` because a class ends parsing after its members.
+			// This may not work correctly for cases like `var a; class B`, but it doesn't matter in practice.
+			member->doc_data = parse_class_doc_comment(doc_comment_line);
+		}
+	} else {
+		if (has_comment(member->start_line, true)) {
+			// Inline doc comment.
+			member->doc_data = parse_doc_comment(member->start_line, true);
+		} else if (doc_comment_line >= min_member_doc_line && has_comment(doc_comment_line, true) && tokenizer.get_comments()[doc_comment_line].new_line) {
+			// Normal doc comment.
+			member->doc_data = parse_doc_comment(doc_comment_line);
 		}
 	}
+
+	min_member_doc_line = member->end_line + 1; // Prevent multiple members from using the same doc comment.
 #endif // TOOLS_ENABLED
 
 	if (member->identifier != nullptr) {
 		if (!((String)member->identifier->name).is_empty()) { // Enums may be unnamed.
-
-#ifdef DEBUG_ENABLED
-			List<MethodInfo> gdscript_funcs;
-			GDScriptLanguage::get_singleton()->get_public_functions(&gdscript_funcs);
-			for (MethodInfo &info : gdscript_funcs) {
-				if (info.name == member->identifier->name) {
-					push_warning(member->identifier, GDScriptWarning::SHADOWED_GLOBAL_IDENTIFIER, p_member_kind, member->identifier->name, "built-in function");
-				}
-			}
-			if (Variant::has_utility_function(member->identifier->name)) {
-				push_warning(member->identifier, GDScriptWarning::SHADOWED_GLOBAL_IDENTIFIER, p_member_kind, member->identifier->name, "built-in function");
-			}
-#endif
-
 			if (current_class->members_indices.has(member->identifier->name)) {
 				push_error(vformat(R"(%s "%s" has the same name as a previously declared %s.)", p_member_kind.capitalize(), member->identifier->name, current_class->get_member(member->identifier->name).get_type_name()), member->identifier);
 			} else {
@@ -834,10 +822,15 @@ void GDScriptParser::parse_class_member(T *(GDScriptParser::*p_parse_function)()
 
 void GDScriptParser::parse_class_body(bool p_is_multiline) {
 	bool class_end = false;
+	bool next_is_static = false;
 	while (!class_end && !is_at_end()) {
-		switch (current.type) {
+		GDScriptTokenizer::Token token = current;
+		switch (token.type) {
 			case GDScriptTokenizer::Token::VAR:
-				parse_class_member(&GDScriptParser::parse_variable, AnnotationInfo::VARIABLE, "variable");
+				parse_class_member(&GDScriptParser::parse_variable, AnnotationInfo::VARIABLE, "variable", next_is_static);
+				if (next_is_static) {
+					current_class->has_static_data = true;
+				}
 				break;
 			case GDScriptTokenizer::Token::CONST:
 				parse_class_member(&GDScriptParser::parse_constant, AnnotationInfo::CONSTANT, "constant");
@@ -845,9 +838,8 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 			case GDScriptTokenizer::Token::SIGNAL:
 				parse_class_member(&GDScriptParser::parse_signal, AnnotationInfo::SIGNAL, "signal");
 				break;
-			case GDScriptTokenizer::Token::STATIC:
 			case GDScriptTokenizer::Token::FUNC:
-				parse_class_member(&GDScriptParser::parse_function, AnnotationInfo::FUNCTION, "function");
+				parse_class_member(&GDScriptParser::parse_function, AnnotationInfo::FUNCTION, "function", next_is_static);
 				break;
 			case GDScriptTokenizer::Token::CLASS:
 				parse_class_member(&GDScriptParser::parse_class, AnnotationInfo::CLASS, "class");
@@ -855,17 +847,29 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 			case GDScriptTokenizer::Token::ENUM:
 				parse_class_member(&GDScriptParser::parse_enum, AnnotationInfo::NONE, "enum");
 				break;
+			case GDScriptTokenizer::Token::STATIC: {
+				advance();
+				next_is_static = true;
+				if (!check(GDScriptTokenizer::Token::FUNC) && !check(GDScriptTokenizer::Token::VAR)) {
+					push_error(R"(Expected "func" or "var" after "static".)");
+				}
+			} break;
 			case GDScriptTokenizer::Token::ANNOTATION: {
 				advance();
 
-				// Check for class-level annotations.
+				// Check for standalone and class-level annotations.
 				AnnotationNode *annotation = parse_annotation(AnnotationInfo::STANDALONE | AnnotationInfo::CLASS_LEVEL);
 				if (annotation != nullptr) {
 					if (annotation->applies_to(AnnotationInfo::STANDALONE)) {
 						if (previous.type != GDScriptTokenizer::Token::NEWLINE) {
 							push_error(R"(Expected newline after a standalone annotation.)");
 						}
-						annotation->apply(this, head);
+						if (annotation->name == SNAME("@export_category") || annotation->name == SNAME("@export_group") || annotation->name == SNAME("@export_subgroup")) {
+							current_class->add_member_group(annotation);
+						} else {
+							// For potential non-group standalone annotations.
+							push_error(R"(Unexpected standalone annotation in class body.)");
+						}
 					} else {
 						annotation_stack.push_back(annotation);
 					}
@@ -879,12 +883,25 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 			case GDScriptTokenizer::Token::DEDENT:
 				class_end = true;
 				break;
+			case GDScriptTokenizer::Token::LITERAL:
+				if (current.literal.get_type() == Variant::STRING) {
+					// Allow strings in class body as multiline comments.
+					advance();
+					if (!match(GDScriptTokenizer::Token::NEWLINE)) {
+						push_error("Expected newline after comment string.");
+					}
+					break;
+				}
+				[[fallthrough]];
 			default:
 				// Display a completion with identifiers.
 				make_completion_context(COMPLETION_IDENTIFIER, nullptr);
 				push_error(vformat(R"(Unexpected "%s" in class body.)", current.get_name()));
 				advance();
 				break;
+		}
+		if (token.type != GDScriptTokenizer::Token::STATIC) {
+			next_is_static = false;
 		}
 		if (panic_mode) {
 			synchronize();
@@ -895,11 +912,11 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 	}
 }
 
-GDScriptParser::VariableNode *GDScriptParser::parse_variable() {
-	return parse_variable(true);
+GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static) {
+	return parse_variable(p_is_static, true);
 }
 
-GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_allow_property) {
+GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static, bool p_allow_property) {
 	VariableNode *variable = alloc_node<VariableNode>();
 
 	if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected variable name after "var".)")) {
@@ -909,6 +926,7 @@ GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_allow_proper
 
 	variable->identifier = parse_identifier();
 	variable->export_info.name = variable->identifier->name;
+	variable->is_static = p_is_static;
 
 	if (match(GDScriptTokenizer::Token::COLON)) {
 		if (check(GDScriptTokenizer::Token::NEWLINE)) {
@@ -995,14 +1013,14 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 
 	// Run with a loop because order doesn't matter.
 	for (int i = 0; i < 2; i++) {
-		if (function->name == "set") {
+		if (function->name == SNAME("set")) {
 			if (setter_used) {
 				push_error(R"(Properties can only have one setter.)");
 			} else {
 				parse_property_setter(property);
 				setter_used = true;
 			}
-		} else if (function->name == "get") {
+		} else if (function->name == SNAME("get")) {
 			if (getter_used) {
 				push_error(R"(Properties can only have one getter.)");
 			} else {
@@ -1052,6 +1070,7 @@ void GDScriptParser::parse_property_setter(VariableNode *p_variable) {
 			complete_extents(identifier);
 			identifier->name = "@" + p_variable->identifier->name + "_setter";
 			function->identifier = identifier;
+			function->is_static = p_variable->is_static;
 
 			consume(GDScriptTokenizer::Token::PARENTHESIS_OPEN, R"(Expected "(" after "set".)");
 
@@ -1103,6 +1122,7 @@ void GDScriptParser::parse_property_getter(VariableNode *p_variable) {
 			complete_extents(identifier);
 			identifier->name = "@" + p_variable->identifier->name + "_getter";
 			function->identifier = identifier;
+			function->is_static = p_variable->is_static;
 
 			FunctionNode *previous_function = current_function;
 			current_function = function;
@@ -1127,10 +1147,11 @@ void GDScriptParser::parse_property_getter(VariableNode *p_variable) {
 	}
 }
 
-GDScriptParser::ConstantNode *GDScriptParser::parse_constant() {
+GDScriptParser::ConstantNode *GDScriptParser::parse_constant(bool p_is_static) {
 	ConstantNode *constant = alloc_node<ConstantNode>();
 
 	if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected constant name after "const".)")) {
+		complete_extents(constant);
 		return nullptr;
 	}
 
@@ -1194,7 +1215,7 @@ GDScriptParser::ParameterNode *GDScriptParser::parse_parameter() {
 	return parameter;
 }
 
-GDScriptParser::SignalNode *GDScriptParser::parse_signal() {
+GDScriptParser::SignalNode *GDScriptParser::parse_signal(bool p_is_static) {
 	SignalNode *signal = alloc_node<SignalNode>();
 
 	if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected signal name after "signal".)")) {
@@ -1239,7 +1260,7 @@ GDScriptParser::SignalNode *GDScriptParser::parse_signal() {
 	return signal;
 }
 
-GDScriptParser::EnumNode *GDScriptParser::parse_enum() {
+GDScriptParser::EnumNode *GDScriptParser::parse_enum(bool p_is_static) {
 	EnumNode *enum_node = alloc_node<EnumNode>();
 	bool named = false;
 
@@ -1251,6 +1272,9 @@ GDScriptParser::EnumNode *GDScriptParser::parse_enum() {
 
 	push_multiline(true);
 	consume(GDScriptTokenizer::Token::BRACE_OPEN, vformat(R"(Expected "{" after %s.)", named ? "enum name" : R"("enum")"));
+#ifdef TOOLS_ENABLED
+	int min_enum_value_doc_line = previous.end_line + 1;
+#endif
 
 	HashMap<StringName, int> elements;
 
@@ -1313,34 +1337,35 @@ GDScriptParser::EnumNode *GDScriptParser::parse_enum() {
 		}
 	} while (match(GDScriptTokenizer::Token::COMMA));
 
-	pop_multiline();
-	consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected closing "}" for enum.)");
-
 #ifdef TOOLS_ENABLED
 	// Enum values documentation.
 	for (int i = 0; i < enum_node->values.size(); i++) {
-		if (i == enum_node->values.size() - 1) {
-			// If close bracket is same line as last value.
-			if (enum_node->values[i].line != previous.start_line && has_comment(enum_node->values[i].line)) {
-				if (named) {
-					enum_node->values.write[i].doc_description = get_doc_comment(enum_node->values[i].line, true);
-				} else {
-					current_class->set_enum_value_doc(enum_node->values[i].identifier->name, get_doc_comment(enum_node->values[i].line, true));
-				}
+		int enum_value_line = enum_node->values[i].line;
+		int doc_comment_line = enum_value_line - 1;
+
+		MemberDocData doc_data;
+		if (has_comment(enum_value_line, true)) {
+			// Inline doc comment.
+			if (i == enum_node->values.size() - 1 || enum_node->values[i + 1].line > enum_value_line) {
+				doc_data = parse_doc_comment(enum_value_line, true);
 			}
-		} else {
-			// If two values are same line.
-			if (enum_node->values[i].line != enum_node->values[i + 1].line && has_comment(enum_node->values[i].line)) {
-				if (named) {
-					enum_node->values.write[i].doc_description = get_doc_comment(enum_node->values[i].line, true);
-				} else {
-					current_class->set_enum_value_doc(enum_node->values[i].identifier->name, get_doc_comment(enum_node->values[i].line, true));
-				}
-			}
+		} else if (doc_comment_line >= min_enum_value_doc_line && has_comment(doc_comment_line, true) && tokenizer.get_comments()[doc_comment_line].new_line) {
+			// Normal doc comment.
+			doc_data = parse_doc_comment(doc_comment_line);
 		}
+
+		if (named) {
+			enum_node->values.write[i].doc_data = doc_data;
+		} else {
+			current_class->set_enum_value_doc_data(enum_node->values[i].identifier->name, doc_data);
+		}
+
+		min_enum_value_doc_line = enum_value_line + 1; // Prevent multiple enum values from using the same doc comment.
 	}
 #endif // TOOLS_ENABLED
 
+	pop_multiline();
+	consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected closing "}" for enum.)");
 	complete_extents(enum_node);
 	end_statement("enum");
 
@@ -1363,7 +1388,7 @@ void GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 				default_used = true;
 			} else {
 				if (default_used) {
-					push_error("Cannot have a mandatory parameters after optional parameters.");
+					push_error("Cannot have mandatory parameters after optional parameters.");
 					continue;
 				}
 			}
@@ -1388,22 +1413,22 @@ void GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 		}
 	}
 
+	if (!p_function->source_lambda && p_function->identifier && p_function->identifier->name == GDScriptLanguage::get_singleton()->strings._static_init) {
+		if (!p_function->is_static) {
+			push_error(R"(Static constructor must be declared static.)");
+		}
+		if (p_function->parameters.size() != 0) {
+			push_error(R"(Static constructor cannot have parameters.)");
+		}
+		current_class->has_static_data = true;
+	}
+
 	// TODO: Improve token consumption so it synchronizes to a statement boundary. This way we can get into the function body with unrecognized tokens.
 	consume(GDScriptTokenizer::Token::COLON, vformat(R"(Expected ":" after %s declaration.)", p_type));
 }
 
-GDScriptParser::FunctionNode *GDScriptParser::parse_function() {
+GDScriptParser::FunctionNode *GDScriptParser::parse_function(bool p_is_static) {
 	FunctionNode *function = alloc_node<FunctionNode>();
-
-	bool _static = false;
-	if (previous.type == GDScriptTokenizer::Token::STATIC) {
-		// TODO: Improve message if user uses "static" with "var" or "const"
-		if (!consume(GDScriptTokenizer::Token::FUNC, R"(Expected "func" after "static".)")) {
-			complete_extents(function);
-			return nullptr;
-		}
-		_static = true;
-	}
 
 	make_completion_context(COMPLETION_OVERRIDE_METHOD, function);
 
@@ -1416,7 +1441,7 @@ GDScriptParser::FunctionNode *GDScriptParser::parse_function() {
 	current_function = function;
 
 	function->identifier = parse_identifier();
-	function->is_static = _static;
+	function->is_static = p_is_static;
 
 	SuiteNode *body = alloc_node<SuiteNode>();
 	SuiteNode *previous_suite = current_suite;
@@ -1451,31 +1476,40 @@ GDScriptParser::AnnotationNode *GDScriptParser::parse_annotation(uint32_t p_vali
 	annotation->info = &valid_annotations[annotation->name];
 
 	if (!annotation->applies_to(p_valid_targets)) {
-		push_error(vformat(R"(Annotation "%s" is not allowed in this level.)", annotation->name));
+		if (annotation->applies_to(AnnotationInfo::SCRIPT)) {
+			push_error(vformat(R"(Annotation "%s" must be at the top of the script, before "extends" and "class_name".)", annotation->name));
+		} else {
+			push_error(vformat(R"(Annotation "%s" is not allowed in this level.)", annotation->name));
+		}
 		valid = false;
 	}
 
-	if (match(GDScriptTokenizer::Token::PARENTHESIS_OPEN)) {
+	if (check(GDScriptTokenizer::Token::PARENTHESIS_OPEN)) {
+		push_multiline(true);
+		advance();
 		// Arguments.
 		push_completion_call(annotation);
 		make_completion_context(COMPLETION_ANNOTATION_ARGUMENTS, annotation, 0, true);
-		if (!check(GDScriptTokenizer::Token::PARENTHESIS_CLOSE) && !is_at_end()) {
-			push_multiline(true);
-			int argument_index = 0;
-			do {
-				make_completion_context(COMPLETION_ANNOTATION_ARGUMENTS, annotation, argument_index, true);
-				set_last_completion_call_arg(argument_index++);
-				ExpressionNode *argument = parse_expression(false);
-				if (argument == nullptr) {
-					valid = false;
-					continue;
-				}
-				annotation->arguments.push_back(argument);
-			} while (match(GDScriptTokenizer::Token::COMMA));
-			pop_multiline();
+		int argument_index = 0;
+		do {
+			if (check(GDScriptTokenizer::Token::PARENTHESIS_CLOSE)) {
+				// Allow for trailing comma.
+				break;
+			}
 
-			consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after annotation arguments.)*");
-		}
+			make_completion_context(COMPLETION_ANNOTATION_ARGUMENTS, annotation, argument_index, true);
+			set_last_completion_call_arg(argument_index++);
+			ExpressionNode *argument = parse_expression(false);
+			if (argument == nullptr) {
+				push_error("Expected expression as the annotation argument.");
+				valid = false;
+				continue;
+			}
+			annotation->arguments.push_back(argument);
+		} while (match(GDScriptTokenizer::Token::COMMA) && !is_at_end());
+
+		pop_multiline();
+		consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after annotation arguments.)*");
 		pop_completion_call();
 	}
 	complete_extents(annotation);
@@ -1491,7 +1525,7 @@ GDScriptParser::AnnotationNode *GDScriptParser::parse_annotation(uint32_t p_vali
 
 void GDScriptParser::clear_unused_annotations() {
 	for (const AnnotationNode *annotation : annotation_stack) {
-		push_error(vformat(R"(Annotation "%s" does not precedes a valid target, so it will have no effect.)", annotation->name), annotation);
+		push_error(vformat(R"(Annotation "%s" does not precede a valid target, so it will have no effect.)", annotation->name), annotation);
 	}
 
 	annotation_stack.clear();
@@ -1519,6 +1553,11 @@ GDScriptParser::SuiteNode *GDScriptParser::parse_suite(const String &p_context, 
 	suite->parent_function = current_function;
 	current_suite = suite;
 
+	if (!p_for_lambda && suite->parent_block != nullptr && suite->parent_block->is_in_loop) {
+		// Do not reset to false if true is set before calling parse_suite().
+		suite->is_in_loop = true;
+	}
+
 	bool multiline = false;
 
 	if (match(GDScriptTokenizer::Token::NEWLINE)) {
@@ -1537,7 +1576,7 @@ GDScriptParser::SuiteNode *GDScriptParser::parse_suite(const String &p_context, 
 	int error_count = 0;
 
 	do {
-		if (!multiline && previous.type == GDScriptTokenizer::Token::SEMICOLON && check(GDScriptTokenizer::Token::NEWLINE)) {
+		if (is_at_end() || (!multiline && previous.type == GDScriptTokenizer::Token::SEMICOLON && check(GDScriptTokenizer::Token::NEWLINE))) {
 			break;
 		}
 		Node *statement = parse_statement();
@@ -1619,11 +1658,11 @@ GDScriptParser::Node *GDScriptParser::parse_statement() {
 			break;
 		case GDScriptTokenizer::Token::VAR:
 			advance();
-			result = parse_variable();
+			result = parse_variable(false, false);
 			break;
 		case GDScriptTokenizer::Token::CONST:
 			advance();
-			result = parse_constant();
+			result = parse_constant(false);
 			break;
 		case GDScriptTokenizer::Token::IF:
 			advance();
@@ -1653,7 +1692,7 @@ GDScriptParser::Node *GDScriptParser::parse_statement() {
 			advance();
 			ReturnNode *n_return = alloc_node<ReturnNode>();
 			if (!is_statement_end()) {
-				if (current_function && current_function->identifier->name == GDScriptLanguage::get_singleton()->strings._init) {
+				if (current_function && (current_function->identifier->name == GDScriptLanguage::get_singleton()->strings._init || current_function->identifier->name == GDScriptLanguage::get_singleton()->strings._static_init)) {
 					push_error(R"(Constructor cannot return a value.)");
 				}
 				n_return->return_value = parse_expression(false);
@@ -1714,12 +1753,19 @@ GDScriptParser::Node *GDScriptParser::parse_statement() {
 					case Node::CALL:
 					case Node::ASSIGNMENT:
 					case Node::AWAIT:
+					case Node::TERNARY_OPERATOR:
 						// Fine.
 						break;
 					case Node::LAMBDA:
 						// Standalone lambdas can't be used, so make this an error.
 						push_error("Standalone lambdas cannot be accessed. Consider assigning it to a variable.", expression);
 						break;
+					case Node::LITERAL:
+						if (static_cast<GDScriptParser::LiteralNode *>(expression)->value.get_type() == Variant::STRING) {
+							// Allow strings as multiline comments.
+							break;
+						}
+						[[fallthrough]];
 					default:
 						push_warning(expression, GDScriptWarning::STANDALONE_EXPRESSION);
 				}
@@ -1729,7 +1775,6 @@ GDScriptParser::Node *GDScriptParser::parse_statement() {
 		}
 	}
 
-	// Apply annotations to statement.
 	while (!is_annotation && result != nullptr && !annotation_stack.is_empty()) {
 		AnnotationNode *last_annotation = annotation_stack.back()->get();
 		if (last_annotation->applies_to(AnnotationInfo::STATEMENT)) {
@@ -1806,11 +1851,10 @@ GDScriptParser::BreakNode *GDScriptParser::parse_break() {
 
 GDScriptParser::ContinueNode *GDScriptParser::parse_continue() {
 	if (!can_continue) {
-		push_error(R"(Cannot use "continue" outside of a loop or pattern matching block.)");
+		push_error(R"(Cannot use "continue" outside of a loop.)");
 	}
 	current_suite->has_continue = true;
 	ContinueNode *cont = alloc_node<ContinueNode>();
-	cont->is_for_match = is_continue_match;
 	complete_extents(cont);
 	end_statement(R"("continue")");
 	return cont;
@@ -1823,12 +1867,23 @@ GDScriptParser::ForNode *GDScriptParser::parse_for() {
 		n_for->variable = parse_identifier();
 	}
 
-	consume(GDScriptTokenizer::Token::IN, R"(Expected "in" after "for" variable name.)");
+	if (match(GDScriptTokenizer::Token::COLON)) {
+		n_for->datatype_specifier = parse_type();
+		if (n_for->datatype_specifier == nullptr) {
+			push_error(R"(Expected type specifier after ":".)");
+		}
+	}
+
+	if (n_for->datatype_specifier == nullptr) {
+		consume(GDScriptTokenizer::Token::IN, R"(Expected "in" or ":" after "for" variable name.)");
+	} else {
+		consume(GDScriptTokenizer::Token::IN, R"(Expected "in" after "for" variable type specifier.)");
+	}
 
 	n_for->list = parse_expression(false);
 
 	if (!n_for->list) {
-		push_error(R"(Expected a list or range after "in".)");
+		push_error(R"(Expected iterable after "in".)");
 	}
 
 	consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after "for" condition.)");
@@ -1836,12 +1891,10 @@ GDScriptParser::ForNode *GDScriptParser::parse_for() {
 	// Save break/continue state.
 	bool could_break = can_break;
 	bool could_continue = can_continue;
-	bool was_continue_match = is_continue_match;
 
 	// Allow break/continue.
 	can_break = true;
 	can_continue = true;
-	is_continue_match = false;
 
 	SuiteNode *suite = alloc_node<SuiteNode>();
 	if (n_for->variable) {
@@ -1851,15 +1904,13 @@ GDScriptParser::ForNode *GDScriptParser::parse_for() {
 		}
 		suite->add_local(SuiteNode::Local(n_for->variable, current_function));
 	}
-
+	suite->is_in_loop = true;
 	n_for->loop = parse_suite(R"("for" block)", suite);
-	n_for->loop->is_loop = true;
 	complete_extents(n_for);
 
 	// Reset break/continue state.
 	can_break = could_break;
 	can_continue = could_continue;
-	is_continue_match = was_continue_match;
 
 	return n_for;
 }
@@ -1883,10 +1934,18 @@ GDScriptParser::IfNode *GDScriptParser::parse_if(const String &p_token) {
 
 	if (match(GDScriptTokenizer::Token::ELIF)) {
 		SuiteNode *else_block = alloc_node<SuiteNode>();
+		else_block->parent_function = current_function;
+		else_block->parent_block = current_suite;
+
+		SuiteNode *previous_suite = current_suite;
+		current_suite = else_block;
+
 		IfNode *elif = parse_if("elif");
 		else_block->statements.push_back(elif);
 		complete_extents(else_block);
 		n_if->false_block = else_block;
+
+		current_suite = previous_suite;
 	} else if (match(GDScriptTokenizer::Token::ELSE)) {
 		consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after "else".)");
 		n_if->false_block = parse_suite(R"("else" block)");
@@ -1919,11 +1978,8 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 		return match;
 	}
 
-#ifdef DEBUG_ENABLED
 	bool all_have_return = true;
 	bool have_wildcard = false;
-	bool have_wildcard_without_continue = false;
-#endif
 
 	while (!check(GDScriptTokenizer::Token::DEDENT) && !is_at_end()) {
 		MatchBranchNode *branch = parse_match_branch();
@@ -1933,31 +1989,22 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 		}
 
 #ifdef DEBUG_ENABLED
-		if (have_wildcard_without_continue && !branch->patterns.is_empty()) {
+		if (have_wildcard && !branch->patterns.is_empty()) {
 			push_warning(branch->patterns[0], GDScriptWarning::UNREACHABLE_PATTERN);
 		}
-
-		if (branch->has_wildcard) {
-			have_wildcard = true;
-			if (!branch->block->has_continue) {
-				have_wildcard_without_continue = true;
-			}
-		}
-		if (!branch->block->has_return) {
-			all_have_return = false;
-		}
 #endif
+
+		have_wildcard = have_wildcard || branch->has_wildcard;
+		all_have_return = all_have_return && branch->block->has_return;
 		match->branches.push_back(branch);
 	}
 	complete_extents(match);
 
 	consume(GDScriptTokenizer::Token::DEDENT, R"(Expected an indented block after "match" statement.)");
 
-#ifdef DEBUG_ENABLED
 	if (all_have_return && have_wildcard) {
 		current_suite->has_return = true;
 	}
-#endif
 
 	return match;
 }
@@ -1991,17 +2038,40 @@ GDScriptParser::MatchBranchNode *GDScriptParser::parse_match_branch() {
 		push_error(R"(No pattern found for "match" branch.)");
 	}
 
-	if (!consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after "match" patterns.)")) {
+	bool has_guard = false;
+	if (match(GDScriptTokenizer::Token::WHEN)) {
+		// Pattern guard.
+		// Create block for guard because it also needs to access the bound variables from patterns, and we don't want to add them to the outer scope.
+		branch->guard_body = alloc_node<SuiteNode>();
+		if (branch->patterns.size() > 0) {
+			for (const KeyValue<StringName, IdentifierNode *> &E : branch->patterns[0]->binds) {
+				SuiteNode::Local local(E.value, current_function);
+				local.type = SuiteNode::Local::PATTERN_BIND;
+				branch->guard_body->add_local(local);
+			}
+		}
+
+		SuiteNode *parent_block = current_suite;
+		branch->guard_body->parent_block = parent_block;
+		current_suite = branch->guard_body;
+
+		ExpressionNode *guard = parse_expression(false);
+		if (guard == nullptr) {
+			push_error(R"(Expected expression for pattern guard after "when".)");
+		} else {
+			branch->guard_body->statements.append(guard);
+		}
+		current_suite = parent_block;
+		complete_extents(branch->guard_body);
+
+		has_guard = true;
+		branch->has_wildcard = false; // If it has a guard, the wildcard might still not match.
+	}
+
+	if (!consume(GDScriptTokenizer::Token::COLON, vformat(R"(Expected ":"%s after "match" %s.)", has_guard ? "" : R"( or "when")", has_guard ? "pattern guard" : "patterns"))) {
 		complete_extents(branch);
 		return nullptr;
 	}
-
-	// Save continue state.
-	bool could_continue = can_continue;
-	bool was_continue_match = is_continue_match;
-	// Allow continue for match.
-	can_continue = true;
-	is_continue_match = true;
 
 	SuiteNode *suite = alloc_node<SuiteNode>();
 	if (branch->patterns.size() > 0) {
@@ -2014,10 +2084,6 @@ GDScriptParser::MatchBranchNode *GDScriptParser::parse_match_branch() {
 
 	branch->block = parse_suite("match pattern block", suite);
 	complete_extents(branch);
-
-	// Restore continue state.
-	can_continue = could_continue;
-	is_continue_match = was_continue_match;
 
 	return branch;
 }
@@ -2139,6 +2205,7 @@ GDScriptParser::PatternNode *GDScriptParser::parse_match_pattern(PatternNode *p_
 			ExpressionNode *expression = parse_expression(false);
 			if (expression == nullptr) {
 				push_error(R"(Expected expression for match pattern.)");
+				complete_extents(pattern);
 				return nullptr;
 			} else {
 				if (expression->type == GDScriptParser::Node::LITERAL) {
@@ -2177,21 +2244,19 @@ GDScriptParser::WhileNode *GDScriptParser::parse_while() {
 	// Save break/continue state.
 	bool could_break = can_break;
 	bool could_continue = can_continue;
-	bool was_continue_match = is_continue_match;
 
 	// Allow break/continue.
 	can_break = true;
 	can_continue = true;
-	is_continue_match = false;
 
-	n_while->loop = parse_suite(R"("while" block)");
-	n_while->loop->is_loop = true;
+	SuiteNode *suite = alloc_node<SuiteNode>();
+	suite->is_in_loop = true;
+	n_while->loop = parse_suite(R"("while" block)", suite);
 	complete_extents(n_while);
 
 	// Reset break/continue state.
 	can_break = could_break;
 	can_continue = could_continue;
-	is_continue_match = was_continue_match;
 
 	return n_while;
 }
@@ -2213,7 +2278,12 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_precedence(Precedence p_pr
 	make_completion_context(COMPLETION_IDENTIFIER, nullptr);
 
 	GDScriptTokenizer::Token token = current;
-	ParseFunction prefix_rule = get_rule(token.type)->prefix;
+	GDScriptTokenizer::Token::Type token_type = token.type;
+	if (token.is_identifier()) {
+		// Allow keywords that can be treated as identifiers.
+		token_type = GDScriptTokenizer::Token::IDENTIFIER;
+	}
+	ParseFunction prefix_rule = get_rule(token_type)->prefix;
 
 	if (prefix_rule == nullptr) {
 		// Expected expression. Let the caller give the proper error message.
@@ -2225,7 +2295,7 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_precedence(Precedence p_pr
 	ExpressionNode *previous_operand = (this->*prefix_rule)(nullptr, p_can_assign);
 
 	while (p_precedence <= get_rule(current.type)->precedence) {
-		if (previous_operand == nullptr || (p_stop_on_assign && current.type == GDScriptTokenizer::Token::EQUAL) || (previous_operand->type == Node::LAMBDA && lambda_ended)) {
+		if (previous_operand == nullptr || (p_stop_on_assign && current.type == GDScriptTokenizer::Token::EQUAL) || lambda_ended) {
 			return previous_operand;
 		}
 		// Also switch multiline mode on here for infix operators.
@@ -2251,7 +2321,14 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_expression(bool p_can_assi
 }
 
 GDScriptParser::IdentifierNode *GDScriptParser::parse_identifier() {
-	return static_cast<IdentifierNode *>(parse_identifier(nullptr, false));
+	IdentifierNode *identifier = static_cast<IdentifierNode *>(parse_identifier(nullptr, false));
+#ifdef DEBUG_ENABLED
+	// Check for spoofing here (if available in TextServer) since this isn't called inside expressions. This is only relevant for declarations.
+	if (identifier && TS->has_feature(TextServer::FEATURE_UNICODE_SECURITY) && TS->spoof_check(identifier->name.operator String())) {
+		push_warning(identifier, GDScriptWarning::CONFUSABLE_IDENTIFIER, identifier->name.operator String());
+	}
+#endif
+	return identifier;
 }
 
 GDScriptParser::ExpressionNode *GDScriptParser::parse_identifier(ExpressionNode *p_previous_operand, bool p_can_assign) {
@@ -2261,6 +2338,7 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_identifier(ExpressionNode 
 	IdentifierNode *identifier = alloc_node<IdentifierNode>();
 	complete_extents(identifier);
 	identifier->name = previous.get_identifier();
+	identifier->suite = current_suite;
 
 	if (current_suite != nullptr && current_suite->has_local(identifier->name)) {
 		const SuiteNode::Local &declaration = current_suite->get_local(identifier->name);
@@ -2424,7 +2502,7 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_binary_operator(Expression
 	complete_extents(operation);
 
 	if (operation->right_operand == nullptr) {
-		push_error(vformat(R"(Expected expression after "%s" operator.")", op.get_name()));
+		push_error(vformat(R"(Expected expression after "%s" operator.)", op.get_name()));
 	}
 
 	// TODO: Also for unary, ternary, and assignment.
@@ -2482,9 +2560,6 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_binary_operator(Expression
 		case GDScriptTokenizer::Token::PIPE_PIPE:
 			operation->operation = BinaryOpNode::OP_LOGIC_OR;
 			operation->variant_op = Variant::OP_OR;
-			break;
-		case GDScriptTokenizer::Token::IS:
-			operation->operation = BinaryOpNode::OP_TYPE_TEST;
 			break;
 		case GDScriptTokenizer::Token::IN:
 			operation->operation = BinaryOpNode::OP_CONTENT_TEST;
@@ -2754,12 +2829,12 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_dictionary(ExpressionNode 
 			switch (dictionary->style) {
 				case DictionaryNode::LUA_TABLE:
 					if (key != nullptr && key->type != Node::IDENTIFIER && key->type != Node::LITERAL) {
-						push_error("Expected identifier or string as LUA-style dictionary key.");
+						push_error(R"(Expected identifier or string as Lua-style dictionary key (e.g "{ key = value }").)");
 						advance();
 						break;
 					}
 					if (key != nullptr && key->type == Node::LITERAL && static_cast<LiteralNode *>(key)->value.get_type() != Variant::STRING) {
-						push_error("Expected identifier or string as LUA-style dictionary key.");
+						push_error(R"(Expected identifier or string as Lua-style dictionary key (e.g "{ key = value }").)");
 						advance();
 						break;
 					}
@@ -2843,6 +2918,9 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_attribute(ExpressionNode *
 
 	attribute->base = p_previous_operand;
 
+	if (current.is_node_name()) {
+		current.type = GDScriptTokenizer::Token::IDENTIFIER;
+	}
 	if (!consume(GDScriptTokenizer::Token::IDENTIFIER, R"(Expected identifier after "." for attribute access.)")) {
 		complete_extents(attribute);
 		return attribute;
@@ -2953,7 +3031,7 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_call(ExpressionNode *p_pre
 
 	// Arguments.
 	CompletionType ct = COMPLETION_CALL_ARGUMENTS;
-	if (call->function_name == "load") {
+	if (call->function_name == SNAME("load")) {
 		ct = COMPLETION_RESOURCE_PATH;
 	}
 	push_completion_call(call);
@@ -3013,10 +3091,8 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_get_node(ExpressionNode *p
 	if (previous.type == GDScriptTokenizer::Token::DOLLAR) {
 		// Detect initial slash, which will be handled in the loop if it matches.
 		match(GDScriptTokenizer::Token::SLASH);
-#ifdef DEBUG_ENABLED
 	} else {
 		get_node->use_dollar = false;
-#endif
 	}
 
 	int context_argument = 0;
@@ -3071,7 +3147,14 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_get_node(ExpressionNode *p
 			path_state = PATH_STATE_NODE_NAME;
 		} else if (current.is_node_name()) {
 			advance();
-			get_node->full_path += previous.get_identifier();
+			String identifier = previous.get_identifier();
+#ifdef DEBUG_ENABLED
+			// Check spoofing.
+			if (TS->has_feature(TextServer::FEATURE_UNICODE_SECURITY) && TS->spoof_check(identifier)) {
+				push_warning(get_node, GDScriptWarning::CONFUSABLE_IDENTIFIER, identifier);
+			}
+#endif
+			get_node->full_path += identifier;
 
 			path_state = PATH_STATE_NODE_NAME;
 		} else if (!check(GDScriptTokenizer::Token::SLASH) && !check(GDScriptTokenizer::Token::PERCENT)) {
@@ -3113,6 +3196,8 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_preload(ExpressionNode *p_
 GDScriptParser::ExpressionNode *GDScriptParser::parse_lambda(ExpressionNode *p_previous_operand, bool p_can_assign) {
 	LambdaNode *lambda = alloc_node<LambdaNode>();
 	lambda->parent_function = current_function;
+	lambda->parent_lambda = current_lambda;
+
 	FunctionNode *function = alloc_node<FunctionNode>();
 	function->source_lambda = lambda;
 
@@ -3140,6 +3225,9 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_lambda(ExpressionNode *p_p
 	FunctionNode *previous_function = current_function;
 	current_function = function;
 
+	LambdaNode *previous_lambda = current_lambda;
+	current_lambda = lambda;
+
 	SuiteNode *body = alloc_node<SuiteNode>();
 	body->parent_function = current_function;
 	body->parent_block = current_suite;
@@ -3153,6 +3241,14 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_lambda(ExpressionNode *p_p
 
 	bool previous_in_lambda = in_lambda;
 	in_lambda = true;
+
+	// Save break/continue state.
+	bool could_break = can_break;
+	bool could_continue = can_continue;
+
+	// Disallow break/continue.
+	can_break = false;
+	can_continue = false;
 
 	function->body = parse_suite("lambda declaration", body, true);
 	complete_extents(function);
@@ -3169,13 +3265,35 @@ GDScriptParser::ExpressionNode *GDScriptParser::parse_lambda(ExpressionNode *p_p
 	}
 
 	current_function = previous_function;
+	current_lambda = previous_lambda;
 	in_lambda = previous_in_lambda;
 	lambda->function = function;
+
+	// Reset break/continue state.
+	can_break = could_break;
+	can_continue = could_continue;
+
 	return lambda;
 }
 
+GDScriptParser::ExpressionNode *GDScriptParser::parse_type_test(ExpressionNode *p_previous_operand, bool p_can_assign) {
+	TypeTestNode *type_test = alloc_node<TypeTestNode>();
+	reset_extents(type_test, p_previous_operand);
+	update_extents(type_test);
+
+	type_test->operand = p_previous_operand;
+	type_test->test_type = parse_type();
+	complete_extents(type_test);
+
+	if (type_test->test_type == nullptr) {
+		push_error(R"(Expected type specifier after "is".)");
+	}
+
+	return type_test;
+}
+
 GDScriptParser::ExpressionNode *GDScriptParser::parse_yield(ExpressionNode *p_previous_operand, bool p_can_assign) {
-	push_error(R"("yield" was removed in Godot 4.0. Use "await" instead.)");
+	push_error(R"("yield" was removed in Godot 4. Use "await" instead.)");
 	return nullptr;
 }
 
@@ -3248,222 +3366,281 @@ GDScriptParser::TypeNode *GDScriptParser::parse_type(bool p_allow_void) {
 }
 
 #ifdef TOOLS_ENABLED
-static bool _in_codeblock(String p_line, bool p_already_in, int *r_block_begins = nullptr) {
-	int start_block = p_line.rfind("[codeblock]");
-	int end_block = p_line.rfind("[/codeblock]");
+enum DocLineState {
+	DOC_LINE_NORMAL,
+	DOC_LINE_IN_CODE,
+	DOC_LINE_IN_CODEBLOCK,
+};
 
-	if (start_block != -1 && r_block_begins) {
-		*r_block_begins = start_block;
-	}
-
-	if (p_already_in) {
-		if (end_block == -1) {
-			return true;
-		} else if (start_block == -1) {
-			return false;
-		} else {
-			return start_block > end_block;
-		}
+static String _process_doc_line(const String &p_line, const String &p_text, const String &p_space_prefix, DocLineState &r_state) {
+	String line = p_line;
+	if (r_state == DOC_LINE_NORMAL) {
+		line = line.strip_edges(true, false);
 	} else {
-		if (start_block == -1) {
-			return false;
-		} else if (end_block == -1) {
-			return true;
+		line = line.trim_prefix(p_space_prefix);
+	}
+
+	String line_join;
+	if (!p_text.is_empty()) {
+		if (r_state == DOC_LINE_NORMAL) {
+			if (p_text.ends_with("[/codeblock]")) {
+				line_join = "\n";
+			} else if (!p_text.ends_with("[br]")) {
+				line_join = " ";
+			}
 		} else {
-			return start_block > end_block;
+			line_join = "\n";
 		}
 	}
-}
 
-bool GDScriptParser::has_comment(int p_line) {
-	return tokenizer.get_comments().has(p_line);
-}
-
-String GDScriptParser::get_doc_comment(int p_line, bool p_single_line) {
-	const HashMap<int, GDScriptTokenizer::CommentData> &comments = tokenizer.get_comments();
-	ERR_FAIL_COND_V(!comments.has(p_line), String());
-
-	if (p_single_line) {
-		if (comments[p_line].comment.begins_with("##")) {
-			return comments[p_line].comment.trim_prefix("##").strip_edges();
-		}
-		return "";
-	}
-
-	String doc;
-
-	int line = p_line;
-	bool in_codeblock = false;
-
-	while (comments.has(line - 1)) {
-		if (!comments[line - 1].new_line || !comments[line - 1].comment.begins_with("##")) {
-			break;
-		}
-		line--;
-	}
-
-	int codeblock_begins = 0;
-	while (comments.has(line)) {
-		if (!comments[line].new_line || !comments[line].comment.begins_with("##")) {
-			break;
-		}
-		String doc_line = comments[line].comment.trim_prefix("##");
-
-		in_codeblock = _in_codeblock(doc_line, in_codeblock, &codeblock_begins);
-
-		if (in_codeblock) {
-			int i = 0;
-			for (; i < codeblock_begins; i++) {
-				if (doc_line[i] != ' ') {
+	String result;
+	int from = 0;
+	int buffer_start = 0;
+	const int len = line.length();
+	bool process = true;
+	while (process) {
+		switch (r_state) {
+			case DOC_LINE_NORMAL: {
+				int lb_pos = line.find_char('[', from);
+				if (lb_pos < 0) {
+					process = false;
 					break;
 				}
-			}
-			doc_line = doc_line.substr(i);
-		} else {
-			doc_line = doc_line.strip_edges();
-		}
-		String line_join = (in_codeblock) ? "\n" : " ";
+				int rb_pos = line.find_char(']', lb_pos + 1);
+				if (rb_pos < 0) {
+					process = false;
+					break;
+				}
 
-		doc = (doc.is_empty()) ? doc_line : doc + line_join + doc_line;
-		line++;
+				from = rb_pos + 1;
+
+				String tag = line.substr(lb_pos + 1, rb_pos - lb_pos - 1);
+				if (tag == "code") {
+					r_state = DOC_LINE_IN_CODE;
+				} else if (tag == "codeblock") {
+					if (lb_pos == 0) {
+						line_join = "\n";
+					} else {
+						result += line.substr(buffer_start, lb_pos - buffer_start) + '\n';
+					}
+					result += "[codeblock]";
+					if (from < len) {
+						result += '\n';
+					}
+
+					r_state = DOC_LINE_IN_CODEBLOCK;
+					buffer_start = from;
+				}
+			} break;
+			case DOC_LINE_IN_CODE: {
+				int pos = line.find("[/code]", from);
+				if (pos < 0) {
+					process = false;
+					break;
+				}
+
+				from = pos + 7;
+
+				r_state = DOC_LINE_NORMAL;
+			} break;
+			case DOC_LINE_IN_CODEBLOCK: {
+				int pos = line.find("[/codeblock]", from);
+				if (pos < 0) {
+					process = false;
+					break;
+				}
+
+				from = pos + 12;
+
+				if (pos == 0) {
+					line_join = "\n";
+				} else {
+					result += line.substr(buffer_start, pos - buffer_start) + '\n';
+				}
+				result += "[/codeblock]";
+				if (from < len) {
+					result += '\n';
+				}
+
+				r_state = DOC_LINE_NORMAL;
+				buffer_start = from;
+			} break;
+		}
 	}
 
-	return doc;
+	result += line.substr(buffer_start);
+	if (r_state == DOC_LINE_NORMAL) {
+		result = result.strip_edges(false, true);
+	}
+
+	return line_join + result;
 }
 
-void GDScriptParser::get_class_doc_comment(int p_line, String &p_brief, String &p_desc, Vector<Pair<String, String>> &p_tutorials, bool p_inner_class) {
-	const HashMap<int, GDScriptTokenizer::CommentData> &comments = tokenizer.get_comments();
-	if (!comments.has(p_line)) {
-		return;
+bool GDScriptParser::has_comment(int p_line, bool p_must_be_doc) {
+	bool has_comment = tokenizer.get_comments().has(p_line);
+	// If there are no comments or if we don't care whether the comment
+	// is a docstring, we have our result.
+	if (!p_must_be_doc || !has_comment) {
+		return has_comment;
 	}
-	ERR_FAIL_COND(!p_brief.is_empty() || !p_desc.is_empty() || p_tutorials.size() != 0);
 
+	return tokenizer.get_comments()[p_line].comment.begins_with("##");
+}
+
+GDScriptParser::MemberDocData GDScriptParser::parse_doc_comment(int p_line, bool p_single_line) {
+	ERR_FAIL_COND_V(!has_comment(p_line, true), MemberDocData());
+
+	const HashMap<int, GDScriptTokenizer::CommentData> &comments = tokenizer.get_comments();
 	int line = p_line;
-	bool in_codeblock = false;
-	enum Mode {
-		BRIEF,
-		DESC,
-		TUTORIALS,
-		DONE,
-	};
-	Mode mode = BRIEF;
 
-	if (p_inner_class) {
-		while (comments.has(line - 1)) {
-			if (!comments[line - 1].new_line || !comments[line - 1].comment.begins_with("##")) {
-				break;
-			}
+	if (!p_single_line) {
+		while (comments.has(line - 1) && comments[line - 1].new_line && comments[line - 1].comment.begins_with("##")) {
 			line--;
 		}
 	}
 
-	int codeblock_begins = 0;
-	while (comments.has(line)) {
-		if (!comments[line].new_line || !comments[line].comment.begins_with("##")) {
-			break;
+	max_script_doc_line = MIN(max_script_doc_line, line - 1);
+
+	String space_prefix;
+	{
+		int i = 2;
+		for (; i < comments[line].comment.length(); i++) {
+			if (comments[line].comment[i] != ' ') {
+				break;
+			}
+		}
+		space_prefix = String(" ").repeat(i - 2);
+	}
+
+	DocLineState state = DOC_LINE_NORMAL;
+	MemberDocData result;
+
+	while (line <= p_line) {
+		String doc_line = comments[line].comment.trim_prefix("##");
+		line++;
+
+		if (state == DOC_LINE_NORMAL) {
+			String stripped_line = doc_line.strip_edges();
+			if (stripped_line.begins_with("@deprecated")) {
+				result.is_deprecated = true;
+				continue;
+			} else if (stripped_line.begins_with("@experimental")) {
+				result.is_experimental = true;
+				continue;
+			}
 		}
 
-		String title, link; // For tutorials.
-		String doc_line = comments[line++].comment.trim_prefix("##");
-		String stripped_line = doc_line.strip_edges();
+		result.description += _process_doc_line(doc_line, result.description, space_prefix, state);
+	}
 
-		// Set the read mode.
-		if (stripped_line.is_empty() && mode == BRIEF && !p_brief.is_empty()) {
-			mode = DESC;
-			continue;
+	return result;
+}
 
-		} else if (stripped_line.begins_with("@tutorial")) {
-			int begin_scan = String("@tutorial").length();
-			if (begin_scan >= stripped_line.length()) {
-				continue; // invalid syntax.
-			}
+GDScriptParser::ClassDocData GDScriptParser::parse_class_doc_comment(int p_line, bool p_single_line) {
+	ERR_FAIL_COND_V(!has_comment(p_line, true), ClassDocData());
 
-			if (stripped_line[begin_scan] == ':') { // No title.
-				// Syntax: ## @tutorial: https://godotengine.org/ // The title argument is optional.
-				title = "";
-				link = stripped_line.trim_prefix("@tutorial:").strip_edges();
+	const HashMap<int, GDScriptTokenizer::CommentData> &comments = tokenizer.get_comments();
+	int line = p_line;
 
-			} else {
-				/* Syntax:
-				 *   @tutorial ( The Title Here )         :         https://the.url/
-				 *             ^ open           ^ close   ^ colon   ^ url
-				 */
-				int open_bracket_pos = begin_scan, close_bracket_pos = 0;
-				while (open_bracket_pos < stripped_line.length() && (stripped_line[open_bracket_pos] == ' ' || stripped_line[open_bracket_pos] == '\t')) {
-					open_bracket_pos++;
-				}
-				if (open_bracket_pos == stripped_line.length() || stripped_line[open_bracket_pos++] != '(') {
-					continue; // invalid syntax.
-				}
-				close_bracket_pos = open_bracket_pos;
-				while (close_bracket_pos < stripped_line.length() && stripped_line[close_bracket_pos] != ')') {
-					close_bracket_pos++;
-				}
-				if (close_bracket_pos == stripped_line.length()) {
-					continue; // invalid syntax.
-				}
-
-				int colon_pos = close_bracket_pos + 1;
-				while (colon_pos < stripped_line.length() && (stripped_line[colon_pos] == ' ' || stripped_line[colon_pos] == '\t')) {
-					colon_pos++;
-				}
-				if (colon_pos == stripped_line.length() || stripped_line[colon_pos++] != ':') {
-					continue; // invalid syntax.
-				}
-
-				title = stripped_line.substr(open_bracket_pos, close_bracket_pos - open_bracket_pos).strip_edges();
-				link = stripped_line.substr(colon_pos).strip_edges();
-			}
-
-			mode = TUTORIALS;
-			in_codeblock = false;
-		} else if (stripped_line.is_empty()) {
-			continue;
-		} else {
-			// Tutorial docs are single line, we need a @tag after it.
-			if (mode == TUTORIALS) {
-				mode = DONE;
-			}
-
-			in_codeblock = _in_codeblock(doc_line, in_codeblock, &codeblock_begins);
-		}
-
-		if (in_codeblock) {
-			int i = 0;
-			for (; i < codeblock_begins; i++) {
-				if (doc_line[i] != ' ') {
-					break;
-				}
-			}
-			doc_line = doc_line.substr(i);
-		} else {
-			doc_line = stripped_line;
-		}
-		String line_join = (in_codeblock) ? "\n" : " ";
-
-		switch (mode) {
-			case BRIEF:
-				p_brief = (p_brief.length() == 0) ? doc_line : p_brief + line_join + doc_line;
-				break;
-			case DESC:
-				p_desc = (p_desc.length() == 0) ? doc_line : p_desc + line_join + doc_line;
-				break;
-			case TUTORIALS:
-				p_tutorials.append(Pair<String, String>(title, link));
-				break;
-			case DONE:
-				break;
+	if (!p_single_line) {
+		while (comments.has(line - 1) && comments[line - 1].new_line && comments[line - 1].comment.begins_with("##")) {
+			line--;
 		}
 	}
-	if (current_class->members.size() > 0) {
-		const ClassNode::Member &m = current_class->members[0];
-		int first_member_line = m.get_line();
-		if (first_member_line == line) {
-			p_brief = "";
-			p_desc = "";
-			p_tutorials.clear();
+
+	max_script_doc_line = MIN(max_script_doc_line, line - 1);
+
+	String space_prefix;
+	{
+		int i = 2;
+		for (; i < comments[line].comment.length(); i++) {
+			if (comments[line].comment[i] != ' ') {
+				break;
+			}
+		}
+		space_prefix = String(" ").repeat(i - 2);
+	}
+
+	DocLineState state = DOC_LINE_NORMAL;
+	bool is_in_brief = true;
+	ClassDocData result;
+
+	while (line <= p_line) {
+		String doc_line = comments[line].comment.trim_prefix("##");
+		line++;
+
+		if (state == DOC_LINE_NORMAL) {
+			String stripped_line = doc_line.strip_edges();
+
+			// A blank line separates the description from the brief.
+			if (is_in_brief && !result.brief.is_empty() && stripped_line.is_empty()) {
+				is_in_brief = false;
+				continue;
+			}
+
+			if (stripped_line.begins_with("@tutorial")) {
+				String title, link;
+
+				int begin_scan = String("@tutorial").length();
+				if (begin_scan >= stripped_line.length()) {
+					continue; // Invalid syntax.
+				}
+
+				if (stripped_line[begin_scan] == ':') { // No title.
+					// Syntax: ## @tutorial: https://godotengine.org/ // The title argument is optional.
+					title = "";
+					link = stripped_line.trim_prefix("@tutorial:").strip_edges();
+				} else {
+					/* Syntax:
+					 *   @tutorial ( The Title Here )         :         https://the.url/
+					 *             ^ open           ^ close   ^ colon   ^ url
+					 */
+					int open_bracket_pos = begin_scan, close_bracket_pos = 0;
+					while (open_bracket_pos < stripped_line.length() && (stripped_line[open_bracket_pos] == ' ' || stripped_line[open_bracket_pos] == '\t')) {
+						open_bracket_pos++;
+					}
+					if (open_bracket_pos == stripped_line.length() || stripped_line[open_bracket_pos++] != '(') {
+						continue; // Invalid syntax.
+					}
+					close_bracket_pos = open_bracket_pos;
+					while (close_bracket_pos < stripped_line.length() && stripped_line[close_bracket_pos] != ')') {
+						close_bracket_pos++;
+					}
+					if (close_bracket_pos == stripped_line.length()) {
+						continue; // Invalid syntax.
+					}
+
+					int colon_pos = close_bracket_pos + 1;
+					while (colon_pos < stripped_line.length() && (stripped_line[colon_pos] == ' ' || stripped_line[colon_pos] == '\t')) {
+						colon_pos++;
+					}
+					if (colon_pos == stripped_line.length() || stripped_line[colon_pos++] != ':') {
+						continue; // Invalid syntax.
+					}
+
+					title = stripped_line.substr(open_bracket_pos, close_bracket_pos - open_bracket_pos).strip_edges();
+					link = stripped_line.substr(colon_pos).strip_edges();
+				}
+
+				result.tutorials.append(Pair<String, String>(title, link));
+				continue;
+			} else if (stripped_line.begins_with("@deprecated")) {
+				result.is_deprecated = true;
+				continue;
+			} else if (stripped_line.begins_with("@experimental")) {
+				result.is_experimental = true;
+				continue;
+			}
+		}
+
+		if (is_in_brief) {
+			result.brief += _process_doc_line(doc_line, result.brief, space_prefix, state);
+		} else {
+			result.description += _process_doc_line(doc_line, result.description, space_prefix, state);
 		}
 	}
+
+	return result;
 }
 #endif // TOOLS_ENABLED
 
@@ -3530,6 +3707,7 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // PASS,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // RETURN,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // MATCH,
+		{ nullptr,                                          nullptr,                                        PREC_NONE }, // WHEN,
 		// Keywords
 		{ nullptr,                                          &GDScriptParser::parse_cast,                 	PREC_CAST }, // AS,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // ASSERT,
@@ -3542,7 +3720,7 @@ GDScriptParser::ParseRule *GDScriptParser::get_rule(GDScriptTokenizer::Token::Ty
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // EXTENDS,
 		{ &GDScriptParser::parse_lambda,                    nullptr,                                        PREC_NONE }, // FUNC,
 		{ nullptr,                                          &GDScriptParser::parse_binary_operator,      	PREC_CONTENT_TEST }, // IN,
-		{ nullptr,                                          &GDScriptParser::parse_binary_operator,      	PREC_TYPE_TEST }, // IS,
+		{ nullptr,                                          &GDScriptParser::parse_type_test,            	PREC_TYPE_TEST }, // IS,
 		{ nullptr,                                          nullptr,                                        PREC_NONE }, // NAMESPACE,
 		{ &GDScriptParser::parse_preload,					nullptr,                                        PREC_NONE }, // PRELOAD,
 		{ &GDScriptParser::parse_self,                   	nullptr,                                        PREC_NONE }, // SELF,
@@ -3613,8 +3791,12 @@ const GDScriptParser::SuiteNode::Local &GDScriptParser::SuiteNode::get_local(con
 	return empty;
 }
 
-bool GDScriptParser::AnnotationNode::apply(GDScriptParser *p_this, Node *p_target) const {
-	return (p_this->*(p_this->valid_annotations[name].apply))(this, p_target);
+bool GDScriptParser::AnnotationNode::apply(GDScriptParser *p_this, Node *p_target, ClassNode *p_class) {
+	if (is_applied) {
+		return true;
+	}
+	is_applied = true;
+	return (p_this->*(p_this->valid_annotations[name].apply))(this, p_target, p_class);
 }
 
 bool GDScriptParser::AnnotationNode::applies_to(uint32_t p_target_kinds) const {
@@ -3636,83 +3818,86 @@ bool GDScriptParser::validate_annotation_arguments(AnnotationNode *p_annotation)
 		return false;
 	}
 
-	const List<PropertyInfo>::Element *E = info.arguments.front();
-	for (int i = 0; i < p_annotation->arguments.size(); i++) {
-		ExpressionNode *argument = p_annotation->arguments[i];
-		const PropertyInfo &parameter = E->get();
+	// `@icon`'s argument needs to be resolved in the parser. See GH-72444.
+	if (p_annotation->name == SNAME("@icon")) {
+		ExpressionNode *argument = p_annotation->arguments[0];
 
-		if (E->next() != nullptr) {
-			E = E->next();
+		if (argument->type != Node::LITERAL) {
+			push_error(R"(Argument 1 of annotation "@icon" must be a string literal.)", argument);
+			return false;
 		}
 
-		switch (parameter.type) {
-			case Variant::STRING:
-			case Variant::STRING_NAME:
-			case Variant::NODE_PATH:
-				// Allow "quote-less strings", as long as they are recognized as identifiers.
-				if (argument->type == Node::IDENTIFIER) {
-					IdentifierNode *string = static_cast<IdentifierNode *>(argument);
-					Callable::CallError error;
-					Vector<Variant> args = varray(string->name);
-					const Variant *name = args.ptr();
-					Variant r;
-					Variant::construct(parameter.type, r, &(name), 1, error);
-					p_annotation->resolved_arguments.push_back(r);
-					if (error.error != Callable::CallError::CALL_OK) {
-						push_error(vformat(R"(Expected %s as argument %d of annotation "%s".)", Variant::get_type_name(parameter.type), i + 1, p_annotation->name));
-						p_annotation->resolved_arguments.remove_at(p_annotation->resolved_arguments.size() - 1);
-						return false;
-					}
-					break;
-				}
-				[[fallthrough]];
-			default: {
-				if (argument->type != Node::LITERAL) {
-					push_error(vformat(R"(Expected %s as argument %d of annotation "%s".)", Variant::get_type_name(parameter.type), i + 1, p_annotation->name));
-					return false;
-				}
+		Variant value = static_cast<LiteralNode *>(argument)->value;
 
-				Variant value = static_cast<LiteralNode *>(argument)->value;
-				if (!Variant::can_convert_strict(value.get_type(), parameter.type)) {
-					push_error(vformat(R"(Expected %s as argument %d of annotation "%s".)", Variant::get_type_name(parameter.type), i + 1, p_annotation->name));
-					return false;
-				}
-				Callable::CallError error;
-				const Variant *args = &value;
-				Variant r;
-				Variant::construct(parameter.type, r, &(args), 1, error);
-				p_annotation->resolved_arguments.push_back(r);
-				if (error.error != Callable::CallError::CALL_OK) {
-					push_error(vformat(R"(Expected %s as argument %d of annotation "%s".)", Variant::get_type_name(parameter.type), i + 1, p_annotation->name));
-					p_annotation->resolved_arguments.remove_at(p_annotation->resolved_arguments.size() - 1);
-					return false;
-				}
-				break;
-			}
+		if (value.get_type() != Variant::STRING) {
+			push_error(R"(Argument 1 of annotation "@icon" must be a string literal.)", argument);
+			return false;
 		}
+
+		p_annotation->resolved_arguments.push_back(value);
+	}
+
+	// For other annotations, see `GDScriptAnalyzer::resolve_annotation()`.
+
+	return true;
+}
+
+bool GDScriptParser::tool_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+#ifdef DEBUG_ENABLED
+	if (this->_is_tool) {
+		push_error(R"("@tool" annotation can only be used once.)", p_annotation);
+		return false;
+	}
+#endif // DEBUG_ENABLED
+	this->_is_tool = true;
+	return true;
+}
+
+bool GDScriptParser::icon_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+	ERR_FAIL_COND_V_MSG(p_target->type != Node::CLASS, false, R"("@icon" annotation can only be applied to classes.)");
+	ERR_FAIL_COND_V(p_annotation->resolved_arguments.is_empty(), false);
+
+	ClassNode *class_node = static_cast<ClassNode *>(p_target);
+	String path = p_annotation->resolved_arguments[0];
+
+#ifdef DEBUG_ENABLED
+	if (!class_node->icon_path.is_empty()) {
+		push_error(R"("@icon" annotation can only be used once.)", p_annotation);
+		return false;
+	}
+	if (path.is_empty()) {
+		push_error(R"("@icon" annotation argument must contain the path to the icon.)", p_annotation->arguments[0]);
+		return false;
+	}
+#endif // DEBUG_ENABLED
+
+	class_node->icon_path = path;
+
+	if (path.is_empty() || path.is_absolute_path()) {
+		class_node->simplified_icon_path = path.simplify_path();
+	} else if (path.is_relative_path()) {
+		class_node->simplified_icon_path = script_path.get_base_dir().path_join(path).simplify_path();
+	} else {
+		class_node->simplified_icon_path = path;
 	}
 
 	return true;
 }
 
-bool GDScriptParser::tool_annotation(const AnnotationNode *p_annotation, Node *p_node) {
-	this->_is_tool = true;
-	return true;
-}
+bool GDScriptParser::onready_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+	ERR_FAIL_COND_V_MSG(p_target->type != Node::VARIABLE, false, R"("@onready" annotation can only be applied to class variables.)");
 
-bool GDScriptParser::icon_annotation(const AnnotationNode *p_annotation, Node *p_node) {
-	ERR_FAIL_COND_V_MSG(p_node->type != Node::CLASS, false, R"("@icon" annotation can only be applied to classes.)");
-	ClassNode *p_class = static_cast<ClassNode *>(p_node);
-	p_class->icon_path = p_annotation->resolved_arguments[0];
-	return true;
-}
+	if (current_class && !ClassDB::is_parent_class(current_class->get_datatype().native_type, SNAME("Node"))) {
+		push_error(R"("@onready" can only be used in classes that inherit "Node".)", p_annotation);
+	}
 
-bool GDScriptParser::onready_annotation(const AnnotationNode *p_annotation, Node *p_node) {
-	ERR_FAIL_COND_V_MSG(p_node->type != Node::VARIABLE, false, R"("@onready" annotation can only be applied to class variables.)");
-
-	VariableNode *variable = static_cast<VariableNode *>(p_node);
+	VariableNode *variable = static_cast<VariableNode *>(p_target);
+	if (variable->is_static) {
+		push_error(R"("@onready" annotation cannot be applied to a static variable.)", p_annotation);
+		return false;
+	}
 	if (variable->onready) {
-		push_error(R"("@onready" annotation can only be used once per variable.)");
+		push_error(R"("@onready" annotation can only be used once per variable.)", p_annotation);
 		return false;
 	}
 	variable->onready = true;
@@ -3721,19 +3906,15 @@ bool GDScriptParser::onready_annotation(const AnnotationNode *p_annotation, Node
 }
 
 template <PropertyHint t_hint, Variant::Type t_type>
-bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node *p_node) {
-	ERR_FAIL_COND_V_MSG(p_node->type != Node::VARIABLE, false, vformat(R"("%s" annotation can only be applied to variables.)", p_annotation->name));
+bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+	ERR_FAIL_COND_V_MSG(p_target->type != Node::VARIABLE, false, vformat(R"("%s" annotation can only be applied to variables.)", p_annotation->name));
+	ERR_FAIL_NULL_V(p_class, false);
 
-	{
-		const int max_flags = 32;
-
-		if (t_hint == PropertyHint::PROPERTY_HINT_FLAGS && p_annotation->resolved_arguments.size() > max_flags) {
-			push_error(vformat(R"(The argument count limit for "@export_flags" is exceeded (%d/%d).)", p_annotation->resolved_arguments.size(), max_flags), p_annotation);
-			return false;
-		}
+	VariableNode *variable = static_cast<VariableNode *>(p_target);
+	if (variable->is_static) {
+		push_error(vformat(R"(Annotation "%s" cannot be applied to a static variable.)", p_annotation->name), p_annotation);
+		return false;
 	}
-
-	VariableNode *variable = static_cast<VariableNode *>(p_node);
 	if (variable->exported) {
 		push_error(vformat(R"(Annotation "%s" cannot be used with another "@export" annotation.)", p_annotation->name), p_annotation);
 		return false;
@@ -3746,10 +3927,63 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 
 	String hint_string;
 	for (int i = 0; i < p_annotation->resolved_arguments.size(); i++) {
+		String arg_string = String(p_annotation->resolved_arguments[i]);
+
+		if (p_annotation->name != SNAME("@export_placeholder")) {
+			if (arg_string.is_empty()) {
+				push_error(vformat(R"(Argument %d of annotation "%s" is empty.)", i + 1, p_annotation->name), p_annotation->arguments[i]);
+				return false;
+			}
+			if (arg_string.contains(",")) {
+				push_error(vformat(R"(Argument %d of annotation "%s" contains a comma. Use separate arguments instead.)", i + 1, p_annotation->name), p_annotation->arguments[i]);
+				return false;
+			}
+		}
+
+		// WARNING: Do not merge with the previous `if` because there `!=`, not `==`!
+		if (p_annotation->name == SNAME("@export_flags")) {
+			const int64_t max_flags = 32;
+			Vector<String> t = arg_string.split(":", true, 1);
+			if (t[0].is_empty()) {
+				push_error(vformat(R"(Invalid argument %d of annotation "@export_flags": Expected flag name.)", i + 1), p_annotation->arguments[i]);
+				return false;
+			}
+			if (t.size() == 2) {
+				if (t[1].is_empty()) {
+					push_error(vformat(R"(Invalid argument %d of annotation "@export_flags": Expected flag value.)", i + 1), p_annotation->arguments[i]);
+					return false;
+				}
+				if (!t[1].is_valid_int()) {
+					push_error(vformat(R"(Invalid argument %d of annotation "@export_flags": The flag value must be a valid integer.)", i + 1), p_annotation->arguments[i]);
+					return false;
+				}
+				int64_t value = t[1].to_int();
+				if (value < 1 || value >= (1LL << max_flags)) {
+					push_error(vformat(R"(Invalid argument %d of annotation "@export_flags": The flag value must be at least 1 and at most 2 ** %d - 1.)", i + 1, max_flags), p_annotation->arguments[i]);
+					return false;
+				}
+			} else if (i >= max_flags) {
+				push_error(vformat(R"(Invalid argument %d of annotation "@export_flags": Starting from argument %d, the flag value must be specified explicitly.)", i + 1, max_flags + 1), p_annotation->arguments[i]);
+				return false;
+			}
+		} else if (p_annotation->name == SNAME("@export_node_path")) {
+			String native_class = arg_string;
+			if (ScriptServer::is_global_class(arg_string)) {
+				native_class = ScriptServer::get_global_class_native_base(arg_string);
+			}
+			if (!ClassDB::class_exists(native_class)) {
+				push_error(vformat(R"(Invalid argument %d of annotation "@export_node_path": The class "%s" was not found in the global scope.)", i + 1, arg_string), p_annotation->arguments[i]);
+				return false;
+			} else if (!ClassDB::is_parent_class(native_class, SNAME("Node"))) {
+				push_error(vformat(R"(Invalid argument %d of annotation "@export_node_path": The class "%s" does not inherit "Node".)", i + 1, arg_string), p_annotation->arguments[i]);
+				return false;
+			}
+		}
+
 		if (i > 0) {
 			hint_string += ",";
 		}
-		hint_string += String(p_annotation->resolved_arguments[i]);
+		hint_string += arg_string;
 	}
 
 	variable->export_info.hint_string = hint_string;
@@ -3761,8 +3995,7 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 		if (export_type.builtin_type == Variant::INT) {
 			variable->export_info.type = Variant::INT;
 		}
-	}
-	if (p_annotation->name == SNAME("@export_multiline")) {
+	} else if (p_annotation->name == SNAME("@export_multiline")) {
 		if (export_type.builtin_type == Variant::ARRAY && export_type.has_container_element_type()) {
 			DataType inner_type = export_type.get_container_element_type();
 			if (inner_type.builtin_type != Variant::STRING) {
@@ -3780,9 +4013,18 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 			variable->export_info.type = Variant::DICTIONARY;
 
 			return true;
+		} else if (export_type.builtin_type == Variant::PACKED_STRING_ARRAY) {
+			String hint_prefix = itos(Variant::STRING) + "/" + itos(variable->export_info.hint);
+			variable->export_info.hint = PROPERTY_HINT_TYPE_STRING;
+			variable->export_info.hint_string = hint_prefix + ":" + variable->export_info.hint_string;
+			variable->export_info.type = Variant::PACKED_STRING_ARRAY;
+
+			return true;
 		}
 	}
 
+	// WARNING: Do not merge with the previous `else if`! Otherwise `else` (default variable type check)
+	// will not work for the above annotations. `@export` and `@export_enum` validate the type separately.
 	if (p_annotation->name == SNAME("@export")) {
 		if (variable->datatype_specifier == nullptr && variable->initializer == nullptr) {
 			push_error(R"(Cannot use simple "@export" annotation with variable without type or initializer, since type can't be inferred.)", p_annotation);
@@ -3831,7 +4073,7 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 					variable->export_info.hint = PROPERTY_HINT_NODE_TYPE;
 					variable->export_info.hint_string = export_type.to_string();
 				} else {
-					push_error(R"(Export type can only be built-in, a resource, a node or an enum.)", variable);
+					push_error(R"(Export type can only be built-in, a resource, a node, or an enum.)", variable);
 					return false;
 				}
 
@@ -3857,28 +4099,38 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 				}
 			} break;
 			case GDScriptParser::DataType::ENUM: {
-				variable->export_info.type = Variant::INT;
-				variable->export_info.hint = PROPERTY_HINT_ENUM;
+				if (export_type.is_meta_type) {
+					variable->export_info.type = Variant::DICTIONARY;
+				} else {
+					variable->export_info.type = Variant::INT;
+					variable->export_info.hint = PROPERTY_HINT_ENUM;
 
-				String enum_hint_string;
-				bool first = true;
-				for (const KeyValue<StringName, int64_t> &E : export_type.enum_values) {
-					if (!first) {
-						enum_hint_string += ",";
-					} else {
-						first = false;
+					String enum_hint_string;
+					bool first = true;
+					for (const KeyValue<StringName, int64_t> &E : export_type.enum_values) {
+						if (!first) {
+							enum_hint_string += ",";
+						} else {
+							first = false;
+						}
+						enum_hint_string += E.key.operator String().capitalize().xml_escape();
+						enum_hint_string += ":";
+						enum_hint_string += String::num_int64(E.value).xml_escape();
 					}
-					enum_hint_string += E.key.operator String().capitalize().xml_escape();
-					enum_hint_string += ":";
-					enum_hint_string += String::num_int64(E.value).xml_escape();
-				}
 
-				variable->export_info.hint_string = enum_hint_string;
+					variable->export_info.hint_string = enum_hint_string;
+					variable->export_info.usage |= PROPERTY_USAGE_CLASS_IS_ENUM;
+					variable->export_info.class_name = String(export_type.native_type).replace("::", ".");
+				}
 			} break;
 			default:
-				// TODO: Allow custom user resources.
-				push_error(R"(Export type can only be built-in, a resource, or an enum.)", variable);
-				break;
+				push_error(R"(Export type can only be built-in, a resource, a node, or an enum.)", variable);
+				return false;
+		}
+
+		if (variable->export_info.hint == PROPERTY_HINT_NODE_TYPE && !ClassDB::is_parent_class(p_class->base_type.native_type, SNAME("Node"))) {
+			push_error(vformat(R"(Node export is only supported in Node-derived classes, but the current class inherits "%s".)", p_class->base_type.to_string()), variable);
+			return false;
 		}
 
 		if (is_array) {
@@ -3889,6 +4141,24 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 			variable->export_info.hint = PROPERTY_HINT_TYPE_STRING;
 			variable->export_info.hint_string = hint_prefix + ":" + variable->export_info.hint_string;
 			variable->export_info.type = Variant::ARRAY;
+		}
+	} else if (p_annotation->name == SNAME("@export_enum")) {
+		Variant::Type enum_type = Variant::INT;
+
+		if (export_type.kind == DataType::BUILTIN && export_type.builtin_type == Variant::STRING) {
+			enum_type = Variant::STRING;
+		} else if (export_type.is_variant() && variable->initializer != nullptr) {
+			DataType initializer_type = variable->initializer->get_datatype();
+			if (initializer_type.kind == DataType::BUILTIN && initializer_type.builtin_type == Variant::STRING) {
+				enum_type = Variant::STRING;
+			}
+		}
+
+		variable->export_info.type = enum_type;
+
+		if (!export_type.is_variant() && (export_type.kind != DataType::BUILTIN || export_type.builtin_type != enum_type)) {
+			push_error(vformat(R"("@export_enum" annotation requires a variable of type "int" or "String" but type "%s" was given instead.)", export_type.to_string()), variable);
+			return false;
 		}
 	} else {
 		// Validate variable type with export.
@@ -3905,8 +4175,12 @@ bool GDScriptParser::export_annotations(const AnnotationNode *p_annotation, Node
 }
 
 template <PropertyUsageFlags t_usage>
-bool GDScriptParser::export_group_annotations(const AnnotationNode *p_annotation, Node *p_node) {
+bool GDScriptParser::export_group_annotations(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
 	AnnotationNode *annotation = const_cast<AnnotationNode *>(p_annotation);
+
+	if (annotation->resolved_arguments.is_empty()) {
+		return false;
+	}
 
 	annotation->export_info.name = annotation->resolved_arguments[0];
 
@@ -3930,11 +4204,10 @@ bool GDScriptParser::export_group_annotations(const AnnotationNode *p_annotation
 		} break;
 	}
 
-	current_class->add_member_group(annotation);
 	return true;
 }
 
-bool GDScriptParser::warning_annotations(const AnnotationNode *p_annotation, Node *p_node) {
+bool GDScriptParser::warning_annotations(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
 #ifdef DEBUG_ENABLED
 	bool has_error = false;
 	for (const Variant &warning_name : p_annotation->resolved_arguments) {
@@ -3943,7 +4216,7 @@ bool GDScriptParser::warning_annotations(const AnnotationNode *p_annotation, Nod
 			push_error(vformat(R"(Invalid warning name: "%s".)", warning_name), p_annotation);
 			has_error = true;
 		} else {
-			p_node->ignored_warnings.push_back(warning);
+			p_target->ignored_warnings.push_back(warning);
 		}
 	}
 
@@ -3955,10 +4228,10 @@ bool GDScriptParser::warning_annotations(const AnnotationNode *p_annotation, Nod
 #endif // DEBUG_ENABLED
 }
 
-bool GDScriptParser::rpc_annotation(const AnnotationNode *p_annotation, Node *p_node) {
-	ERR_FAIL_COND_V_MSG(p_node->type != Node::FUNCTION, false, vformat(R"("%s" annotation can only be applied to functions.)", p_annotation->name));
+bool GDScriptParser::rpc_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+	ERR_FAIL_COND_V_MSG(p_target->type != Node::FUNCTION, false, vformat(R"("%s" annotation can only be applied to functions.)", p_annotation->name));
 
-	FunctionNode *function = static_cast<FunctionNode *>(p_node);
+	FunctionNode *function = static_cast<FunctionNode *>(p_target);
 	if (function->rpc_config.get_type() != Variant::NIL) {
 		push_error(R"(RPC annotations can only be used once per function.)", p_annotation);
 		return false;
@@ -3966,38 +4239,64 @@ bool GDScriptParser::rpc_annotation(const AnnotationNode *p_annotation, Node *p_
 
 	Dictionary rpc_config;
 	rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_AUTHORITY;
-	if (p_annotation->resolved_arguments.size()) {
-		int last = p_annotation->resolved_arguments.size() - 1;
-		if (p_annotation->resolved_arguments[last].get_type() == Variant::INT) {
-			rpc_config["channel"] = p_annotation->resolved_arguments[last].operator int();
-			last -= 1;
-		}
-		if (last > 3) {
-			push_error(R"(Invalid RPC arguments. At most 4 arguments are allowed, where only the last argument can be an integer to specify the channel.')", p_annotation);
-			return false;
-		}
-		for (int i = last; i >= 0; i--) {
-			String mode = p_annotation->resolved_arguments[i].operator String();
-			if (mode == "any_peer") {
-				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_ANY_PEER;
-			} else if (mode == "authority") {
-				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_AUTHORITY;
-			} else if (mode == "call_local") {
+	if (!p_annotation->resolved_arguments.is_empty()) {
+		unsigned char locality_args = 0;
+		unsigned char permission_args = 0;
+		unsigned char transfer_mode_args = 0;
+
+		for (int i = 0; i < p_annotation->resolved_arguments.size(); i++) {
+			if (i == 3) {
+				rpc_config["channel"] = p_annotation->resolved_arguments[i].operator int();
+				continue;
+			}
+
+			String arg = p_annotation->resolved_arguments[i].operator String();
+			if (arg == "call_local") {
+				locality_args++;
 				rpc_config["call_local"] = true;
-			} else if (mode == "call_remote") {
+			} else if (arg == "call_remote") {
+				locality_args++;
 				rpc_config["call_local"] = false;
-			} else if (mode == "reliable") {
+			} else if (arg == "any_peer") {
+				permission_args++;
+				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_ANY_PEER;
+			} else if (arg == "authority") {
+				permission_args++;
+				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_AUTHORITY;
+			} else if (arg == "reliable") {
+				transfer_mode_args++;
 				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_RELIABLE;
-			} else if (mode == "unreliable") {
+			} else if (arg == "unreliable") {
+				transfer_mode_args++;
 				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_UNRELIABLE;
-			} else if (mode == "unreliable_ordered") {
+			} else if (arg == "unreliable_ordered") {
+				transfer_mode_args++;
 				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_UNRELIABLE_ORDERED;
 			} else {
-				push_error(R"(Invalid RPC argument. Must be one of: 'call_local'/'call_remote' (local calls), 'any_peer'/'authority' (permission), 'reliable'/'unreliable'/'unreliable_ordered' (transfer mode).)", p_annotation);
+				push_error(R"(Invalid RPC argument. Must be one of: "call_local"/"call_remote" (local calls), "any_peer"/"authority" (permission), "reliable"/"unreliable"/"unreliable_ordered" (transfer mode).)", p_annotation);
 			}
+		}
+
+		if (locality_args > 1) {
+			push_error(R"(Invalid RPC config. The locality ("call_local"/"call_remote") must be specified no more than once.)", p_annotation);
+		} else if (permission_args > 1) {
+			push_error(R"(Invalid RPC config. The permission ("any_peer"/"authority") must be specified no more than once.)", p_annotation);
+		} else if (transfer_mode_args > 1) {
+			push_error(R"(Invalid RPC config. The transfer mode ("reliable"/"unreliable"/"unreliable_ordered") must be specified no more than once.)", p_annotation);
 		}
 	}
 	function->rpc_config = rpc_config;
+	return true;
+}
+
+bool GDScriptParser::static_unload_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
+	ERR_FAIL_COND_V_MSG(p_target->type != Node::CLASS, false, vformat(R"("%s" annotation can only be applied to classes.)", p_annotation->name));
+	ClassNode *class_node = static_cast<ClassNode *>(p_target);
+	if (class_node->annotated_static_unload) {
+		push_error(vformat(R"("%s" annotation can only be used once per script.)", p_annotation->name), p_annotation);
+		return false;
+	}
+	class_node->annotated_static_unload = true;
 	return true;
 }
 
@@ -4029,7 +4328,7 @@ String GDScriptParser::SuiteNode::Local::get_name() const {
 		case SuiteNode::Local::FOR_VARIABLE:
 			return "for loop iterator";
 		case SuiteNode::Local::PATTERN_BIND:
-			return "pattern_bind";
+			return "pattern bind";
 		case SuiteNode::Local::UNDEFINED:
 			return "<undefined>";
 		default:
@@ -4055,16 +4354,13 @@ String GDScriptParser::DataType::to_string() const {
 			}
 			return native_type.operator String();
 		case CLASS:
-			if (is_meta_type) {
-				return GDScript::get_class_static();
-			}
 			if (class_type->identifier != nullptr) {
 				return class_type->identifier->name.operator String();
 			}
 			return class_type->fqcn;
 		case SCRIPT: {
 			if (is_meta_type) {
-				return script_type->get_class_name().operator String();
+				return script_type != nullptr ? script_type->get_class_name().operator String() : "";
 			}
 			String name = script_type != nullptr ? script_type->get_name() : "";
 			if (!name.is_empty()) {
@@ -4087,6 +4383,104 @@ String GDScriptParser::DataType::to_string() const {
 	}
 
 	ERR_FAIL_V_MSG("<unresolved type>", "Kind set outside the enum range.");
+}
+
+PropertyInfo GDScriptParser::DataType::to_property_info(const String &p_name) const {
+	PropertyInfo result;
+	result.name = p_name;
+	result.usage = PROPERTY_USAGE_NONE;
+
+	if (!is_hard_type()) {
+		result.usage |= PROPERTY_USAGE_NIL_IS_VARIANT;
+		return result;
+	}
+
+	switch (kind) {
+		case BUILTIN:
+			result.type = builtin_type;
+			if (builtin_type == Variant::ARRAY && has_container_element_type()) {
+				const DataType *elem_type = container_element_type;
+				switch (elem_type->kind) {
+					case BUILTIN:
+						result.hint = PROPERTY_HINT_ARRAY_TYPE;
+						result.hint_string = Variant::get_type_name(elem_type->builtin_type);
+						break;
+					case NATIVE:
+						result.hint = PROPERTY_HINT_ARRAY_TYPE;
+						result.hint_string = elem_type->native_type;
+						break;
+					case SCRIPT:
+						result.hint = PROPERTY_HINT_ARRAY_TYPE;
+						if (elem_type->script_type.is_valid() && elem_type->script_type->get_global_name() != StringName()) {
+							result.hint_string = elem_type->script_type->get_global_name();
+						} else {
+							result.hint_string = elem_type->native_type;
+						}
+						break;
+					case CLASS:
+						result.hint = PROPERTY_HINT_ARRAY_TYPE;
+						if (elem_type->class_type != nullptr && elem_type->class_type->get_global_name() != StringName()) {
+							result.hint_string = elem_type->class_type->get_global_name();
+						} else {
+							result.hint_string = elem_type->native_type;
+						}
+						break;
+					case ENUM:
+						result.hint = PROPERTY_HINT_ARRAY_TYPE;
+						result.hint_string = String(elem_type->native_type).replace("::", ".");
+						break;
+					case VARIANT:
+					case RESOLVING:
+					case UNRESOLVED:
+						break;
+				}
+			}
+			break;
+		case NATIVE:
+			result.type = Variant::OBJECT;
+			if (is_meta_type) {
+				result.class_name = GDScriptNativeClass::get_class_static();
+			} else {
+				result.class_name = native_type;
+			}
+			break;
+		case SCRIPT:
+			result.type = Variant::OBJECT;
+			if (is_meta_type) {
+				result.class_name = script_type.is_valid() ? script_type->get_class() : Script::get_class_static();
+			} else if (script_type.is_valid() && script_type->get_global_name() != StringName()) {
+				result.class_name = script_type->get_global_name();
+			} else {
+				result.class_name = native_type;
+			}
+			break;
+		case CLASS:
+			result.type = Variant::OBJECT;
+			if (is_meta_type) {
+				result.class_name = GDScript::get_class_static();
+			} else if (class_type != nullptr && class_type->get_global_name() != StringName()) {
+				result.class_name = class_type->get_global_name();
+			} else {
+				result.class_name = native_type;
+			}
+			break;
+		case ENUM:
+			if (is_meta_type) {
+				result.type = Variant::DICTIONARY;
+			} else {
+				result.type = Variant::INT;
+				result.usage |= PROPERTY_USAGE_CLASS_IS_ENUM;
+				result.class_name = String(native_type).replace("::", ".");
+			}
+			break;
+		case VARIANT:
+		case RESOLVING:
+		case UNRESOLVED:
+			result.usage |= PROPERTY_USAGE_NIL_IS_VARIANT;
+			break;
+	}
+
+	return result;
 }
 
 static Variant::Type _variant_type_to_typed_array_element_type(Variant::Type p_type) {
@@ -4339,9 +4733,6 @@ void GDScriptParser::TreePrinter::print_binary_op(BinaryOpNode *p_binary_op) {
 		case BinaryOpNode::OP_LOGIC_OR:
 			push_text(" OR ");
 			break;
-		case BinaryOpNode::OP_TYPE_TEST:
-			push_text(" IS ");
-			break;
 		case BinaryOpNode::OP_CONTENT_TEST:
 			push_text(" IN ");
 			break;
@@ -4416,7 +4807,7 @@ void GDScriptParser::TreePrinter::print_class(ClassNode *p_class) {
 			} else {
 				first = false;
 			}
-			push_text(p_class->extends[i]);
+			push_text(p_class->extends[i]->name);
 		}
 	}
 
@@ -4543,6 +4934,9 @@ void GDScriptParser::TreePrinter::print_expression(ExpressionNode *p_expression)
 			break;
 		case Node::TERNARY_OPERATOR:
 			print_ternary_op(static_cast<TernaryOpNode *>(p_expression));
+			break;
+		case Node::TYPE_TEST:
+			print_type_test(static_cast<TypeTestNode *>(p_expression));
 			break;
 		case Node::UNARY_OPERATOR:
 			print_unary_op(static_cast<UnaryOpNode *>(p_expression));
@@ -4903,6 +5297,12 @@ void GDScriptParser::TreePrinter::print_type(TypeNode *p_type) {
 	}
 }
 
+void GDScriptParser::TreePrinter::print_type_test(TypeTestNode *p_test) {
+	print_expression(p_test->operand);
+	push_text(" IS ");
+	print_type(p_test->test_type);
+}
+
 void GDScriptParser::TreePrinter::print_unary_op(UnaryOpNode *p_unary_op) {
 	// Surround in parenthesis for disambiguation.
 	push_text("(");
@@ -5006,7 +5406,7 @@ void GDScriptParser::TreePrinter::print_while(WhileNode *p_while) {
 }
 
 void GDScriptParser::TreePrinter::print_tree(const GDScriptParser &p_parser) {
-	ERR_FAIL_COND_MSG(p_parser.get_tree() == nullptr, "Parse the code before printing the parse tree.");
+	ERR_FAIL_NULL_MSG(p_parser.get_tree(), "Parse the code before printing the parse tree.");
 
 	if (p_parser.is_tool()) {
 		push_line("@tool");

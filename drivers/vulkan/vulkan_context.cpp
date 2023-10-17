@@ -101,6 +101,7 @@ VkResult VulkanContext::vkCreateRenderPass2KHR(VkDevice p_device, const VkRender
 			attachments.push_back(att);
 		}
 
+		Vector<Vector<VkAttachmentReference>> attachment_references;
 		Vector<VkSubpassDescription> subpasses;
 		for (uint32_t i = 0; i < p_create_info->subpassCount; i++) {
 			// Here we need to do more, again it's just stripping out type and next
@@ -124,6 +125,10 @@ VkResult VulkanContext::vkCreateRenderPass2KHR(VkDevice p_device, const VkRender
 				p_create_info->pSubpasses[i].preserveAttachmentCount, /* preserveAttachmentCount */
 				p_create_info->pSubpasses[i].pPreserveAttachments /* pPreserveAttachments */
 			};
+			attachment_references.push_back(input_attachments);
+			attachment_references.push_back(color_attachments);
+			attachment_references.push_back(resolve_attachments);
+			attachment_references.push_back(depth_attachments);
 
 			subpasses.push_back(subpass);
 		}
@@ -353,11 +358,11 @@ Error VulkanContext::_get_preferred_validation_layers(uint32_t *count, const cha
 		ERR_FAIL_V(ERR_CANT_CREATE);
 	}
 
-	for (uint32_t i = 0; i < instance_validation_layers_alt.size(); i++) {
-		if (_check_layers(instance_validation_layers_alt[i].size(), instance_validation_layers_alt[i].ptr(), instance_layer_count, instance_layers)) {
-			*count = instance_validation_layers_alt[i].size();
+	for (const LocalVector<const char *> &layer : instance_validation_layers_alt) {
+		if (_check_layers(layer.size(), layer.ptr(), instance_layer_count, instance_layers)) {
+			*count = layer.size();
 			if (names != nullptr) {
-				*names = instance_validation_layers_alt[i].ptr();
+				*names = layer.ptr();
 			}
 			break;
 		}
@@ -413,6 +418,7 @@ Error VulkanContext::_initialize_instance_extensions() {
 		register_requested_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, false);
 	}
 
+	// This extension allows us to use the properties2 features to query additional device capabilities
 	register_requested_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
 
 	// Only enable debug utils in verbose mode or DEV_ENABLED.
@@ -493,7 +499,16 @@ Error VulkanContext::_initialize_device_extensions() {
 	register_requested_device_extension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, false);
 	register_requested_device_extension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME, false);
 	register_requested_device_extension(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, false);
+	register_requested_device_extension(VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME, false);
 	register_requested_device_extension(VK_KHR_16BIT_STORAGE_EXTENSION_NAME, false);
+	register_requested_device_extension(VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME, false);
+	register_requested_device_extension(VK_KHR_MAINTENANCE_2_EXTENSION_NAME, false);
+	register_requested_device_extension(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME, false);
+	register_requested_device_extension(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME, false);
+
+	if (Engine::get_singleton()->is_generate_spirv_debug_info_enabled()) {
+		register_requested_device_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME, true);
+	}
 
 	// TODO consider the following extensions:
 	// - VK_KHR_spirv_1_4
@@ -725,9 +740,12 @@ Error VulkanContext::_check_capabilities() {
 	multiview_capabilities.max_view_count = 0;
 	multiview_capabilities.max_instance_count = 0;
 	subgroup_capabilities.size = 0;
+	subgroup_capabilities.min_size = 0;
+	subgroup_capabilities.max_size = 0;
 	subgroup_capabilities.supportedStages = 0;
 	subgroup_capabilities.supportedOperations = 0;
 	subgroup_capabilities.quadOperationsInAllStages = false;
+	subgroup_capabilities.size_control_is_supported = false;
 	shader_capabilities.shader_float16_is_supported = false;
 	shader_capabilities.shader_int8_is_supported = false;
 	storage_buffer_capabilities.storage_buffer_16_bit_access_is_supported = false;
@@ -744,48 +762,100 @@ Error VulkanContext::_check_capabilities() {
 		}
 		if (vkGetPhysicalDeviceFeatures2_func != nullptr) {
 			// Check our extended features.
-			VkPhysicalDeviceFragmentShadingRateFeaturesKHR vrs_features = {
-				/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-				/*pNext*/ nullptr,
-				/*pipelineFragmentShadingRate*/ false,
-				/*primitiveFragmentShadingRate*/ false,
-				/*attachmentFragmentShadingRate*/ false,
-			};
+			void *next = nullptr;
 
-			VkPhysicalDeviceShaderFloat16Int8FeaturesKHR shader_features = {
-				/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
-				/*pNext*/ &vrs_features,
-				/*shaderFloat16*/ false,
-				/*shaderInt8*/ false,
-			};
+			// We must check that the relative extension is present before assuming a
+			// feature as enabled.
+			// See also: https://github.com/godotengine/godot/issues/65409
 
-			VkPhysicalDevice16BitStorageFeaturesKHR storage_feature = {
-				/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES_KHR,
-				/*pNext*/ &shader_features,
-				/*storageBuffer16BitAccess*/ false,
-				/*uniformAndStorageBuffer16BitAccess*/ false,
-				/*storagePushConstant16*/ false,
-				/*storageInputOutput16*/ false,
-			};
+			VkPhysicalDeviceVulkan12Features device_features_vk12 = {};
+			VkPhysicalDeviceShaderFloat16Int8FeaturesKHR shader_features = {};
+			VkPhysicalDeviceFragmentShadingRateFeaturesKHR vrs_features = {};
+			VkPhysicalDevice16BitStorageFeaturesKHR storage_feature = {};
+			VkPhysicalDeviceMultiviewFeatures multiview_features = {};
+			VkPhysicalDevicePipelineCreationCacheControlFeatures pipeline_cache_control_features = {};
 
-			VkPhysicalDeviceMultiviewFeatures multiview_features = {
-				/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-				/*pNext*/ &storage_feature,
-				/*multiview*/ false,
-				/*multiviewGeometryShader*/ false,
-				/*multiviewTessellationShader*/ false,
-			};
+			if (device_api_version >= VK_API_VERSION_1_2) {
+				device_features_vk12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+				device_features_vk12.pNext = next;
+				next = &device_features_vk12;
+			} else {
+				if (is_device_extension_enabled(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME)) {
+					shader_features = {
+						/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
+						/*pNext*/ next,
+						/*shaderFloat16*/ false,
+						/*shaderInt8*/ false,
+					};
+					next = &shader_features;
+				}
+			}
+
+			if (is_device_extension_enabled(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)) {
+				vrs_features = {
+					/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+					/*pNext*/ next,
+					/*pipelineFragmentShadingRate*/ false,
+					/*primitiveFragmentShadingRate*/ false,
+					/*attachmentFragmentShadingRate*/ false,
+				};
+				next = &vrs_features;
+			}
+
+			if (is_device_extension_enabled(VK_KHR_16BIT_STORAGE_EXTENSION_NAME)) {
+				storage_feature = {
+					/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES_KHR,
+					/*pNext*/ next,
+					/*storageBuffer16BitAccess*/ false,
+					/*uniformAndStorageBuffer16BitAccess*/ false,
+					/*storagePushConstant16*/ false,
+					/*storageInputOutput16*/ false,
+				};
+				next = &storage_feature;
+			}
+
+			if (is_device_extension_enabled(VK_KHR_MULTIVIEW_EXTENSION_NAME)) {
+				multiview_features = {
+					/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
+					/*pNext*/ next,
+					/*multiview*/ false,
+					/*multiviewGeometryShader*/ false,
+					/*multiviewTessellationShader*/ false,
+				};
+				next = &multiview_features;
+			}
+
+			if (is_device_extension_enabled(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME)) {
+				pipeline_cache_control_features = {
+					/*sType*/ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES,
+					/*pNext*/ next,
+					/*pipelineCreationCacheControl*/ false,
+				};
+				next = &pipeline_cache_control_features;
+			}
 
 			VkPhysicalDeviceFeatures2 device_features;
 			device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-			device_features.pNext = &multiview_features;
+			device_features.pNext = next;
 
 			vkGetPhysicalDeviceFeatures2_func(gpu, &device_features);
 
-			// We must check that the relative extension is present before assuming a
-			// feature as enabled. Actually, according to the spec we shouldn't add the
-			// structs in pNext at all, but this works fine.
-			// See also: https://github.com/godotengine/godot/issues/65409
+			if (device_api_version >= VK_API_VERSION_1_2) {
+#ifdef MACOS_ENABLED
+				ERR_FAIL_COND_V_MSG(!device_features_vk12.shaderSampledImageArrayNonUniformIndexing, ERR_CANT_CREATE, "Your GPU doesn't support shaderSampledImageArrayNonUniformIndexing which is required to use the Vulkan-based renderers in Godot.");
+#endif
+
+				if (is_device_extension_enabled(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME)) {
+					shader_capabilities.shader_float16_is_supported = device_features_vk12.shaderFloat16;
+					shader_capabilities.shader_int8_is_supported = device_features_vk12.shaderInt8;
+				}
+			} else {
+				if (is_device_extension_enabled(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME)) {
+					shader_capabilities.shader_float16_is_supported = shader_features.shaderFloat16;
+					shader_capabilities.shader_int8_is_supported = shader_features.shaderInt8;
+				}
+			}
+
 			if (is_device_extension_enabled(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)) {
 				vrs_capabilities.pipeline_vrs_supported = vrs_features.pipelineFragmentShadingRate;
 				vrs_capabilities.primitive_vrs_supported = vrs_features.primitiveFragmentShadingRate;
@@ -798,16 +868,15 @@ Error VulkanContext::_check_capabilities() {
 				multiview_capabilities.tessellation_shader_is_supported = multiview_features.multiviewTessellationShader;
 			}
 
-			if (is_device_extension_enabled(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME)) {
-				shader_capabilities.shader_float16_is_supported = shader_features.shaderFloat16;
-				shader_capabilities.shader_int8_is_supported = shader_features.shaderInt8;
-			}
-
 			if (is_device_extension_enabled(VK_KHR_16BIT_STORAGE_EXTENSION_NAME)) {
 				storage_buffer_capabilities.storage_buffer_16_bit_access_is_supported = storage_feature.storageBuffer16BitAccess;
 				storage_buffer_capabilities.uniform_and_storage_buffer_16_bit_access_is_supported = storage_feature.uniformAndStorageBuffer16BitAccess;
 				storage_buffer_capabilities.storage_push_constant_16_is_supported = storage_feature.storagePushConstant16;
 				storage_buffer_capabilities.storage_input_output_16 = storage_feature.storageInputOutput16;
+			}
+
+			if (is_device_extension_enabled(VK_EXT_PIPELINE_CREATION_CACHE_CONTROL_EXTENSION_NAME)) {
+				pipeline_cache_control_support = pipeline_cache_control_features.pipelineCreationCacheControl;
 			}
 		}
 
@@ -821,6 +890,7 @@ Error VulkanContext::_check_capabilities() {
 			VkPhysicalDeviceFragmentShadingRatePropertiesKHR vrsProperties{};
 			VkPhysicalDeviceMultiviewProperties multiviewProperties{};
 			VkPhysicalDeviceSubgroupProperties subgroupProperties{};
+			VkPhysicalDeviceSubgroupSizeControlProperties subgroupSizeControlProperties = {};
 			VkPhysicalDeviceProperties2 physicalDeviceProperties{};
 			void *nextptr = nullptr;
 
@@ -829,6 +899,15 @@ Error VulkanContext::_check_capabilities() {
 				subgroupProperties.pNext = nextptr;
 
 				nextptr = &subgroupProperties;
+
+				subgroup_capabilities.size_control_is_supported = is_device_extension_enabled(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
+
+				if (subgroup_capabilities.size_control_is_supported) {
+					subgroupSizeControlProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES;
+					subgroupSizeControlProperties.pNext = nextptr;
+
+					nextptr = &subgroupSizeControlProperties;
+				}
 			}
 
 			if (multiview_capabilities.is_supported) {
@@ -851,12 +930,19 @@ Error VulkanContext::_check_capabilities() {
 			device_properties_func(gpu, &physicalDeviceProperties);
 
 			subgroup_capabilities.size = subgroupProperties.subgroupSize;
+			subgroup_capabilities.min_size = subgroupProperties.subgroupSize;
+			subgroup_capabilities.max_size = subgroupProperties.subgroupSize;
 			subgroup_capabilities.supportedStages = subgroupProperties.supportedStages;
 			subgroup_capabilities.supportedOperations = subgroupProperties.supportedOperations;
 			// Note: quadOperationsInAllStages will be true if:
 			// - supportedStages has VK_SHADER_STAGE_ALL_GRAPHICS + VK_SHADER_STAGE_COMPUTE_BIT.
 			// - supportedOperations has VK_SUBGROUP_FEATURE_QUAD_BIT.
 			subgroup_capabilities.quadOperationsInAllStages = subgroupProperties.quadOperationsInAllStages;
+
+			if (subgroup_capabilities.size_control_is_supported && (subgroupSizeControlProperties.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT)) {
+				subgroup_capabilities.min_size = subgroupSizeControlProperties.minSubgroupSize;
+				subgroup_capabilities.max_size = subgroupSizeControlProperties.maxSubgroupSize;
+			}
 
 			if (vrs_capabilities.pipeline_vrs_supported || vrs_capabilities.primitive_vrs_supported || vrs_capabilities.attachment_vrs_supported) {
 				print_verbose("- Vulkan Variable Rate Shading supported:");
@@ -897,6 +983,8 @@ Error VulkanContext::_check_capabilities() {
 
 			print_verbose("- Vulkan subgroup:");
 			print_verbose("  size: " + itos(subgroup_capabilities.size));
+			print_verbose("  min size: " + itos(subgroup_capabilities.min_size));
+			print_verbose("  max size: " + itos(subgroup_capabilities.max_size));
 			print_verbose("  stages: " + subgroup_capabilities.supported_stages_desc());
 			print_verbose("  supported ops: " + subgroup_capabilities.supported_operations_desc());
 			if (subgroup_capabilities.quadOperationsInAllStages) {
@@ -1149,12 +1237,15 @@ Error VulkanContext::_create_physical_device(VkSurfaceKHR p_surface) {
 			VkQueueFamilyProperties *device_queue_props = (VkQueueFamilyProperties *)malloc(device_queue_family_count * sizeof(VkQueueFamilyProperties));
 			vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &device_queue_family_count, device_queue_props);
 			for (uint32_t j = 0; j < device_queue_family_count; j++) {
-				VkBool32 supports;
-				vkGetPhysicalDeviceSurfaceSupportKHR(physical_devices[i], j, p_surface, &supports);
-				if (supports && ((device_queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)) {
-					present_supported = true;
-				} else {
-					continue;
+				if ((device_queue_props[j].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
+					VkBool32 supports;
+					err = vkGetPhysicalDeviceSurfaceSupportKHR(
+							physical_devices[i], j, p_surface, &supports);
+					if (err == VK_SUCCESS && supports) {
+						present_supported = true;
+					} else {
+						continue;
+					}
 				}
 			}
 			String name = props.deviceName;
@@ -1258,8 +1349,15 @@ Error VulkanContext::_create_physical_device(VkSurfaceKHR p_surface) {
 	// Get device version
 	device_api_version = gpu_props.apiVersion;
 
+	String rendering_method;
+	if (OS::get_singleton()->get_current_rendering_method() == "mobile") {
+		rendering_method = "Forward Mobile";
+	} else {
+		rendering_method = "Forward+";
+	}
+
 	// Output our device version
-	print_line("Vulkan API " + get_device_api_version() + " - " + "Using Vulkan Device #" + itos(device_index) + ": " + device_vendor + " - " + device_name);
+	print_line(vformat("Vulkan API %s - %s - Using Vulkan Device #%d: %s - %s", get_device_api_version(), rendering_method, device_index, device_vendor, device_name));
 
 	{
 		Error _err = _initialize_device_extensions();
@@ -1277,14 +1375,119 @@ Error VulkanContext::_create_physical_device(VkSurfaceKHR p_surface) {
 	// Query fine-grained feature support for this device.
 	//  If app has specific feature requirements it should check supported
 	//  features based on this query
-	vkGetPhysicalDeviceFeatures(gpu, &physical_device_features);
+	VkPhysicalDeviceFeatures features = {};
+	vkGetPhysicalDeviceFeatures(gpu, &features);
 
-	physical_device_features.robustBufferAccess = false; // Turn off robust buffer access, which can hamper performance on some hardware.
+	// Check required features and abort if any of them is missing.
+	if (!features.imageCubeArray || !features.independentBlend) {
+		String error_string = vformat("Your GPU (%s) does not support the following features which are required to use Vulkan-based renderers in Godot:\n\n", device_name);
+		if (!features.imageCubeArray) {
+			error_string += "- No support for image cube arrays.\n";
+		}
+		if (!features.independentBlend) {
+			error_string += "- No support for independentBlend.\n";
+		}
+		error_string += "\nThis is usually a hardware limitation, so updating graphics drivers won't help in most cases.";
+
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+		// Android/iOS platform ports currently don't exit themselves when this method returns `ERR_CANT_CREATE`.
+		OS::get_singleton()->alert(error_string + "\nClick OK to exit (black screen will be visible).");
+#else
+		OS::get_singleton()->alert(error_string + "\nClick OK to exit.");
+#endif
+
+		return ERR_CANT_CREATE;
+	}
+
+	memset(&physical_device_features, 0, sizeof(physical_device_features));
+#define VK_DEVICEFEATURE_ENABLE_IF(x)            \
+	if (features.x) {                            \
+		physical_device_features.x = features.x; \
+	} else                                       \
+		((void)0)
+
+	//
+	// Opt-in to the features we actually need/use. These can be changed in the future.
+	// We do this for multiple reasons:
+	//
+	//	1. Certain features (like sparse* stuff) cause unnecessary internal driver allocations.
+	//	2. Others like shaderStorageImageMultisample are a huge red flag
+	//	   (MSAA + Storage is rarely needed).
+	//	3. Most features when turned off aren't actually off (we just promise the driver not to use them)
+	//	   and it is validation what will complain. This allows us to target a minimum baseline.
+	//
+	// TODO: Allow the user to override these settings (i.e. turn off more stuff) using profiles
+	// so they can target a broad range of HW. For example Mali HW does not have
+	// shaderClipDistance/shaderCullDistance; thus validation would complain if such feature is used;
+	// allowing them to fix the problem without even owning Mali HW to test on.
+	//
+
+	// Turn off robust buffer access, which can hamper performance on some hardware.
+	//VK_DEVICEFEATURE_ENABLE_IF(robustBufferAccess);
+	VK_DEVICEFEATURE_ENABLE_IF(fullDrawIndexUint32);
+	VK_DEVICEFEATURE_ENABLE_IF(imageCubeArray);
+	VK_DEVICEFEATURE_ENABLE_IF(independentBlend);
+	VK_DEVICEFEATURE_ENABLE_IF(geometryShader);
+	VK_DEVICEFEATURE_ENABLE_IF(tessellationShader);
+	VK_DEVICEFEATURE_ENABLE_IF(sampleRateShading);
+	VK_DEVICEFEATURE_ENABLE_IF(dualSrcBlend);
+	VK_DEVICEFEATURE_ENABLE_IF(logicOp);
+	VK_DEVICEFEATURE_ENABLE_IF(multiDrawIndirect);
+	VK_DEVICEFEATURE_ENABLE_IF(drawIndirectFirstInstance);
+	VK_DEVICEFEATURE_ENABLE_IF(depthClamp);
+	VK_DEVICEFEATURE_ENABLE_IF(depthBiasClamp);
+	VK_DEVICEFEATURE_ENABLE_IF(fillModeNonSolid);
+	VK_DEVICEFEATURE_ENABLE_IF(depthBounds);
+	VK_DEVICEFEATURE_ENABLE_IF(wideLines);
+	VK_DEVICEFEATURE_ENABLE_IF(largePoints);
+	VK_DEVICEFEATURE_ENABLE_IF(alphaToOne);
+	VK_DEVICEFEATURE_ENABLE_IF(multiViewport);
+	VK_DEVICEFEATURE_ENABLE_IF(samplerAnisotropy);
+	VK_DEVICEFEATURE_ENABLE_IF(textureCompressionETC2);
+	VK_DEVICEFEATURE_ENABLE_IF(textureCompressionASTC_LDR);
+	VK_DEVICEFEATURE_ENABLE_IF(textureCompressionBC);
+	//VK_DEVICEFEATURE_ENABLE_IF(occlusionQueryPrecise);
+	//VK_DEVICEFEATURE_ENABLE_IF(pipelineStatisticsQuery);
+	VK_DEVICEFEATURE_ENABLE_IF(vertexPipelineStoresAndAtomics);
+	VK_DEVICEFEATURE_ENABLE_IF(fragmentStoresAndAtomics);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderTessellationAndGeometryPointSize);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderImageGatherExtended);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderStorageImageExtendedFormats);
+	// Intel Arc doesn't support shaderStorageImageMultisample (yet? could be a driver thing), so it's
+	// better for Validation to scream at us if we use it. Furthermore MSAA Storage is a huge red flag
+	// for performance.
+	//VK_DEVICEFEATURE_ENABLE_IF(shaderStorageImageMultisample);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderStorageImageReadWithoutFormat);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderStorageImageWriteWithoutFormat);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderUniformBufferArrayDynamicIndexing);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderSampledImageArrayDynamicIndexing);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderStorageBufferArrayDynamicIndexing);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderStorageImageArrayDynamicIndexing);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderClipDistance);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderCullDistance);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderFloat64);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderInt64);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderInt16);
+	//VK_DEVICEFEATURE_ENABLE_IF(shaderResourceResidency);
+	VK_DEVICEFEATURE_ENABLE_IF(shaderResourceMinLod);
+	// We don't use sparse features and enabling them cause extra internal
+	// allocations inside the Vulkan driver we don't need.
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseBinding);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidencyBuffer);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidencyImage2D);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidencyImage3D);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidency2Samples);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidency4Samples);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidency8Samples);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidency16Samples);
+	//VK_DEVICEFEATURE_ENABLE_IF(sparseResidencyAliased);
+	VK_DEVICEFEATURE_ENABLE_IF(variableMultisampleRate);
+	//VK_DEVICEFEATURE_ENABLE_IF(inheritedQueries);
 
 #define GET_INSTANCE_PROC_ADDR(inst, entrypoint)                                            \
 	{                                                                                       \
 		fp##entrypoint = (PFN_vk##entrypoint)vkGetInstanceProcAddr(inst, "vk" #entrypoint); \
-		ERR_FAIL_COND_V_MSG(fp##entrypoint == nullptr, ERR_CANT_CREATE,                     \
+		ERR_FAIL_NULL_V_MSG(fp##entrypoint, ERR_CANT_CREATE,                                \
 				"vkGetInstanceProcAddr failed to find vk" #entrypoint);                     \
 	}
 
@@ -1338,6 +1541,16 @@ Error VulkanContext::_create_device() {
 		vrs_features.attachmentFragmentShadingRate = vrs_capabilities.attachment_vrs_supported;
 
 		nextptr = &vrs_features;
+	}
+
+	VkPhysicalDevicePipelineCreationCacheControlFeatures pipeline_cache_control_features = {};
+	if (pipeline_cache_control_support) {
+		pipeline_cache_control_features.sType =
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_CREATION_CACHE_CONTROL_FEATURES;
+		pipeline_cache_control_features.pNext = nextptr;
+		pipeline_cache_control_features.pipelineCreationCacheControl = pipeline_cache_control_support;
+
+		nextptr = &pipeline_cache_control_features;
 	}
 
 	VkPhysicalDeviceVulkan11Features vulkan11features = {};
@@ -1476,7 +1689,7 @@ Error VulkanContext::_initialize_queues(VkSurfaceKHR p_surface) {
 		if (!g_gdpa)                                                                              \
 			g_gdpa = (PFN_vkGetDeviceProcAddr)vkGetInstanceProcAddr(inst, "vkGetDeviceProcAddr"); \
 		fp##entrypoint = (PFN_vk##entrypoint)g_gdpa(dev, "vk" #entrypoint);                       \
-		ERR_FAIL_COND_V_MSG(fp##entrypoint == nullptr, ERR_CANT_CREATE,                           \
+		ERR_FAIL_NULL_V_MSG(fp##entrypoint, ERR_CANT_CREATE,                                      \
 				"vkGetDeviceProcAddr failed to find vk" #entrypoint);                             \
 	}
 
@@ -1640,17 +1853,6 @@ Error VulkanContext::_window_create(DisplayServer::WindowID p_window_id, Display
 	Error err = _update_swap_chain(&window);
 	ERR_FAIL_COND_V(err != OK, ERR_CANT_CREATE);
 
-	VkSemaphoreCreateInfo semaphoreCreateInfo = {
-		/*sType*/ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		/*pNext*/ nullptr,
-		/*flags*/ 0,
-	};
-
-	for (uint32_t i = 0; i < FRAME_LAG; i++) {
-		VkResult vkerr = vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &window.image_acquired_semaphores[i]);
-		ERR_FAIL_COND_V(vkerr, ERR_CANT_CREATE);
-	}
-
 	windows[p_window_id] = window;
 	return OK;
 }
@@ -1700,9 +1902,6 @@ VkFramebuffer VulkanContext::window_get_framebuffer(DisplayServer::WindowID p_wi
 void VulkanContext::window_destroy(DisplayServer::WindowID p_window_id) {
 	ERR_FAIL_COND(!windows.has(p_window_id));
 	_clean_up_swap_chain(&windows[p_window_id]);
-	for (uint32_t i = 0; i < FRAME_LAG; i++) {
-		vkDestroySemaphore(device, windows[p_window_id].image_acquired_semaphores[i], nullptr);
-	}
 
 	vkDestroySurfaceKHR(inst, windows[p_window_id].surface, nullptr);
 	windows.erase(p_window_id);
@@ -1718,6 +1917,7 @@ Error VulkanContext::_clean_up_swap_chain(Window *window) {
 	fpDestroySwapchainKHR(device, window->swapchain, nullptr);
 	window->swapchain = VK_NULL_HANDLE;
 	vkDestroyRenderPass(device, window->render_pass, nullptr);
+	window->render_pass = VK_NULL_HANDLE;
 	if (window->swapchain_image_resources) {
 		for (uint32_t i = 0; i < swapchainImageCount; i++) {
 			vkDestroyImageView(device, window->swapchain_image_resources[i].view, nullptr);
@@ -1726,10 +1926,22 @@ Error VulkanContext::_clean_up_swap_chain(Window *window) {
 
 		free(window->swapchain_image_resources);
 		window->swapchain_image_resources = nullptr;
+		swapchainImageCount = 0;
 	}
 	if (separate_present_queue) {
 		vkDestroyCommandPool(device, window->present_cmd_pool, nullptr);
 	}
+
+	for (uint32_t i = 0; i < FRAME_LAG; i++) {
+		// Destroy the semaphores now (we'll re-create it later if we have to).
+		// We must do this because the semaphore cannot be reused if it's in a signaled state
+		// (which happens if vkAcquireNextImageKHR returned VK_ERROR_OUT_OF_DATE_KHR or VK_SUBOPTIMAL_KHR)
+		// The only way to reset it would be to present the swapchain... the one we just destroyed.
+		// And the API has no way to "unsignal" the semaphore.
+		vkDestroySemaphore(device, window->image_acquired_semaphores[i], nullptr);
+		window->image_acquired_semaphores[i] = 0;
+	}
+
 	return OK;
 }
 
@@ -1745,11 +1957,21 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 	err = fpGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, window->surface, &surfCapabilities);
 	ERR_FAIL_COND_V(err, ERR_CANT_CREATE);
 
+	{
+		VkBool32 supports = VK_FALSE;
+		err = vkGetPhysicalDeviceSurfaceSupportKHR(
+				gpu, present_queue_family_index, window->surface, &supports);
+		ERR_FAIL_COND_V_MSG(err != VK_SUCCESS || supports == false, ERR_CANT_CREATE,
+				"Window's surface is not supported by device. Did the GPU go offline? Was the window "
+				"created on another monitor? Check previous errors & try launching with "
+				"--gpu-validation.");
+	}
+
 	uint32_t presentModeCount;
 	err = fpGetPhysicalDeviceSurfacePresentModesKHR(gpu, window->surface, &presentModeCount, nullptr);
 	ERR_FAIL_COND_V(err, ERR_CANT_CREATE);
 	VkPresentModeKHR *presentModes = (VkPresentModeKHR *)malloc(presentModeCount * sizeof(VkPresentModeKHR));
-	ERR_FAIL_COND_V(!presentModes, ERR_CANT_CREATE);
+	ERR_FAIL_NULL_V(presentModes, ERR_CANT_CREATE);
 	err = fpGetPhysicalDeviceSurfacePresentModesKHR(gpu, window->surface, &presentModeCount, presentModes);
 	if (err) {
 		free(presentModes);
@@ -1761,7 +1983,7 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 	if (window->width == 0 || window->height == 0) {
 		free(presentModes);
 		// Likely window minimized, no swapchain created.
-		return OK;
+		return ERR_SKIP;
 	}
 	// The FIFO present mode is guaranteed by the spec to be supported
 	// and to have no tearing.  It's a great default present mode to use.
@@ -1819,7 +2041,10 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 
 	// Set the windows present mode if it is available, otherwise FIFO is used (guaranteed supported).
 	if (present_mode_available) {
-		window->presentMode = requested_present_mode;
+		if (window->presentMode != requested_present_mode) {
+			window->presentMode = requested_present_mode;
+			print_verbose("Using present mode: " + String(string_VkPresentModeKHR(window->presentMode)));
+		}
 	} else {
 		String present_mode_string;
 		switch (window->vsync_mode) {
@@ -1839,8 +2064,6 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 		WARN_PRINT(vformat("The requested V-Sync mode %s is not available. Falling back to V-Sync mode Enabled.", present_mode_string));
 		window->vsync_mode = DisplayServer::VSYNC_ENABLED; // Set to default.
 	}
-
-	print_verbose("Using present mode: " + String(string_VkPresentModeKHR(window->presentMode)));
 
 	free(presentModes);
 
@@ -1923,7 +2146,7 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 	}
 
 	VkImage *swapchainImages = (VkImage *)malloc(swapchainImageCount * sizeof(VkImage));
-	ERR_FAIL_COND_V(!swapchainImages, ERR_CANT_CREATE);
+	ERR_FAIL_NULL_V(swapchainImages, ERR_CANT_CREATE);
 	err = fpGetSwapchainImagesKHR(device, window->swapchain, &swapchainImageCount, swapchainImages);
 	if (err) {
 		free(swapchainImages);
@@ -2102,6 +2325,17 @@ Error VulkanContext::_update_swap_chain(Window *window) {
 	// Reset current buffer.
 	window->current_buffer = 0;
 
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {
+		/*sType*/ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		/*pNext*/ nullptr,
+		/*flags*/ 0,
+	};
+
+	for (uint32_t i = 0; i < FRAME_LAG; i++) {
+		VkResult vkerr = vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &window->image_acquired_semaphores[i]);
+		ERR_FAIL_COND_V(vkerr, ERR_CANT_CREATE);
+	}
+
 	return OK;
 }
 
@@ -2216,10 +2450,13 @@ Error VulkanContext::prepare_buffers() {
 			} else if (err == VK_SUBOPTIMAL_KHR) {
 				// Swapchain is not as optimal as it could be, but the platform's
 				// presentation engine will still present the image correctly.
-				print_verbose("Vulkan: Early suboptimal swapchain.");
-				break;
+				print_verbose("Vulkan: Early suboptimal swapchain, recreating.");
+				Error swap_chain_err = _update_swap_chain(w);
+				if (swap_chain_err == ERR_SKIP) {
+					break;
+				}
 			} else if (err != VK_SUCCESS) {
-				ERR_BREAK_MSG(err != VK_SUCCESS, "Vulkan: Did not create swapchain successfully.");
+				ERR_BREAK_MSG(err != VK_SUCCESS, "Vulkan: Did not create swapchain successfully. Error code: " + String(string_VkResult(err)));
 			} else {
 				w->semaphore_acquired = true;
 			}
@@ -2252,7 +2489,7 @@ Error VulkanContext::swap_buffers() {
 		// simple that it doesn't do either of those.
 	}
 #endif
-	// Wait for the image acquired semaphore to be signalled to ensure
+	// Wait for the image acquired semaphore to be signaled to ensure
 	// that the image won't be rendered to until the presentation
 	// engine has fully released ownership to the application, and it is
 	// okay to render to the image.
@@ -2296,7 +2533,7 @@ Error VulkanContext::swap_buffers() {
 	submit_info.signalSemaphoreCount = 1;
 	submit_info.pSignalSemaphores = &draw_complete_semaphores[frame_index];
 	err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_index]);
-	ERR_FAIL_COND_V(err, ERR_CANT_CREATE);
+	ERR_FAIL_COND_V_MSG(err, ERR_CANT_CREATE, "Vulkan: Cannot submit graphics queue. Error code: " + String(string_VkResult(err)));
 
 	command_buffer_queue.write[0] = nullptr;
 	command_buffer_count = 1;
@@ -2304,7 +2541,7 @@ Error VulkanContext::swap_buffers() {
 	if (separate_present_queue) {
 		// If we are using separate queues, change image ownership to the
 		// present queue before presenting, waiting for the draw complete
-		// semaphore and signalling the ownership released semaphore when finished.
+		// semaphore and signaling the ownership released semaphore when finished.
 		VkFence nullFence = VK_NULL_HANDLE;
 		pipe_stage_flags[0] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		submit_info.waitSemaphoreCount = 1;
@@ -2327,7 +2564,7 @@ Error VulkanContext::swap_buffers() {
 		submit_info.signalSemaphoreCount = 1;
 		submit_info.pSignalSemaphores = &image_ownership_semaphores[frame_index];
 		err = vkQueueSubmit(present_queue, 1, &submit_info, nullFence);
-		ERR_FAIL_COND_V(err, ERR_CANT_CREATE);
+		ERR_FAIL_COND_V_MSG(err, ERR_CANT_CREATE, "Vulkan: Cannot submit present queue. Error code: " + String(string_VkResult(err)));
 	}
 
 	// If we are using separate queues, we have to wait for image ownership,
@@ -2436,14 +2673,14 @@ Error VulkanContext::swap_buffers() {
 	if (err == VK_ERROR_OUT_OF_DATE_KHR) {
 		// Swapchain is out of date (e.g. the window was resized) and
 		// must be recreated.
-		print_verbose("Vulkan: Swapchain is out of date, recreating.");
+		print_verbose("Vulkan queue submit: Swapchain is out of date, recreating.");
 		resize_notify();
 	} else if (err == VK_SUBOPTIMAL_KHR) {
 		// Swapchain is not as optimal as it could be, but the platform's
 		// presentation engine will still present the image correctly.
-		print_verbose("Vulkan: Swapchain is suboptimal.");
+		print_verbose("Vulkan queue submit: Swapchain is suboptimal.");
 	} else {
-		ERR_FAIL_COND_V(err, ERR_CANT_CREATE);
+		ERR_FAIL_COND_V_MSG(err, ERR_CANT_CREATE, "Error code: " + String(string_VkResult(err)));
 	}
 
 	buffers_prepared = false;

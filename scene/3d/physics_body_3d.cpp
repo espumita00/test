@@ -30,7 +30,6 @@
 
 #include "physics_body_3d.h"
 
-#include "core/core_string_names.h"
 #include "scene/scene_string_names.h"
 
 void PhysicsBody3D::_bind_methods() {
@@ -80,14 +79,14 @@ TypedArray<PhysicsBody3D> PhysicsBody3D::get_collision_exceptions() {
 void PhysicsBody3D::add_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->body_add_collision_exception(get_rid(), collision_object->get_rid());
 }
 
 void PhysicsBody3D::remove_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->body_remove_collision_exception(get_rid(), collision_object->get_rid());
 }
 
@@ -214,15 +213,13 @@ real_t PhysicsBody3D::get_inverse_mass() const {
 
 void StaticBody3D::set_physics_material_override(const Ref<PhysicsMaterial> &p_physics_material_override) {
 	if (physics_material_override.is_valid()) {
-		if (physics_material_override->is_connected(CoreStringNames::get_singleton()->changed, callable_mp(this, &StaticBody3D::_reload_physics_characteristics))) {
-			physics_material_override->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &StaticBody3D::_reload_physics_characteristics));
-		}
+		physics_material_override->disconnect_changed(callable_mp(this, &StaticBody3D::_reload_physics_characteristics));
 	}
 
 	physics_material_override = p_physics_material_override;
 
 	if (physics_material_override.is_valid()) {
-		physics_material_override->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &StaticBody3D::_reload_physics_characteristics));
+		physics_material_override->connect_changed(callable_mp(this, &StaticBody3D::_reload_physics_characteristics));
 	}
 	_reload_physics_characteristics();
 }
@@ -262,7 +259,7 @@ void StaticBody3D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "physics_material_override", PROPERTY_HINT_RESOURCE_TYPE, "PhysicsMaterial"), "set_physics_material_override", "get_physics_material_override");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_linear_velocity", PROPERTY_HINT_NONE, "suffix:m/s"), "set_constant_linear_velocity", "get_constant_linear_velocity");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_angular_velocity", PROPERTY_HINT_NONE, U"radians,suffix:\u00B0/s"), "set_constant_angular_velocity", "get_constant_angular_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_angular_velocity", PROPERTY_HINT_NONE, U"radians_as_degrees,suffix:\u00B0/s"), "set_constant_angular_velocity", "get_constant_angular_velocity");
 }
 
 StaticBody3D::StaticBody3D(PhysicsServer3D::BodyMode p_mode) :
@@ -333,6 +330,11 @@ void AnimatableBody3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
 }
 
 void AnimatableBody3D::_notification(int p_what) {
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+#endif
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			last_valid_transform = get_global_transform();
@@ -374,9 +376,8 @@ AnimatableBody3D::AnimatableBody3D() :
 void RigidBody3D::_body_enter_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
-
-	ERR_FAIL_COND(!contact_monitor);
+	ERR_FAIL_NULL(node);
+	ERR_FAIL_NULL(contact_monitor);
 	HashMap<ObjectID, BodyState>::Iterator E = contact_monitor->body_map.find(p_id);
 	ERR_FAIL_COND(!E);
 	ERR_FAIL_COND(E->value.in_tree);
@@ -397,8 +398,8 @@ void RigidBody3D::_body_enter_tree(ObjectID p_id) {
 void RigidBody3D::_body_exit_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
-	ERR_FAIL_COND(!contact_monitor);
+	ERR_FAIL_NULL(node);
+	ERR_FAIL_NULL(contact_monitor);
 	HashMap<ObjectID, BodyState>::Iterator E = contact_monitor->body_map.find(p_id);
 	ERR_FAIL_COND(!E);
 	ERR_FAIL_COND(!E->value.in_tree);
@@ -422,7 +423,7 @@ void RigidBody3D::_body_inout(int p_status, const RID &p_body, ObjectID p_instan
 	Object *obj = ObjectDB::get_instance(objid);
 	Node *node = Object::cast_to<Node>(obj);
 
-	ERR_FAIL_COND(!contact_monitor);
+	ERR_FAIL_NULL(contact_monitor);
 	HashMap<ObjectID, BodyState>::Iterator E = contact_monitor->body_map.find(objid);
 
 	ERR_FAIL_COND(!body_in && !E);
@@ -483,8 +484,7 @@ struct _RigidBodyInOut {
 	int local_shape = 0;
 };
 
-void RigidBody3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
-	set_ignore_transform_notification(true);
+void RigidBody3D::_sync_body_state(PhysicsDirectBodyState3D *p_state) {
 	set_global_transform(p_state->get_transform());
 
 	linear_velocity = p_state->get_linear_velocity();
@@ -496,9 +496,20 @@ void RigidBody3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
 		sleeping = p_state->is_sleeping();
 		emit_signal(SceneStringNames::get_singleton()->sleeping_state_changed);
 	}
+}
 
-	GDVIRTUAL_CALL(_integrate_forces, p_state);
+void RigidBody3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
+	lock_callback();
 
+	set_ignore_transform_notification(true);
+
+	if (GDVIRTUAL_IS_OVERRIDDEN(_integrate_forces)) {
+		_sync_body_state(p_state);
+
+		GDVIRTUAL_CALL(_integrate_forces, p_state);
+	}
+
+	_sync_body_state(p_state);
 	set_ignore_transform_notification(false);
 	_on_transform_changed();
 
@@ -578,6 +589,8 @@ void RigidBody3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
 
 		contact_monitor->locked = false;
 	}
+
+	unlock_callback();
 }
 
 void RigidBody3D::_notification(int p_what) {
@@ -590,9 +603,7 @@ void RigidBody3D::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_LOCAL_TRANSFORM_CHANGED: {
-			if (Engine::get_singleton()->is_editor_hint()) {
-				update_configuration_warnings();
-			}
+			update_configuration_warnings();
 		} break;
 	}
 #endif
@@ -720,15 +731,13 @@ const Vector3 &RigidBody3D::get_center_of_mass() const {
 
 void RigidBody3D::set_physics_material_override(const Ref<PhysicsMaterial> &p_physics_material_override) {
 	if (physics_material_override.is_valid()) {
-		if (physics_material_override->is_connected(CoreStringNames::get_singleton()->changed, callable_mp(this, &RigidBody3D::_reload_physics_characteristics))) {
-			physics_material_override->disconnect(CoreStringNames::get_singleton()->changed, callable_mp(this, &RigidBody3D::_reload_physics_characteristics));
-		}
+		physics_material_override->disconnect_changed(callable_mp(this, &RigidBody3D::_reload_physics_characteristics));
 	}
 
 	physics_material_override = p_physics_material_override;
 
 	if (physics_material_override.is_valid()) {
-		physics_material_override->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &RigidBody3D::_reload_physics_characteristics));
+		physics_material_override->connect_changed(callable_mp(this, &RigidBody3D::_reload_physics_characteristics));
 	}
 	_reload_physics_characteristics();
 }
@@ -955,7 +964,7 @@ bool RigidBody3D::is_contact_monitor_enabled() const {
 }
 
 TypedArray<Node3D> RigidBody3D::get_colliding_bodies() const {
-	ERR_FAIL_COND_V(!contact_monitor, TypedArray<Node3D>());
+	ERR_FAIL_NULL_V(contact_monitor, TypedArray<Node3D>());
 
 	TypedArray<Node3D> ret;
 	ret.resize(contact_monitor->body_map.size());
@@ -973,12 +982,11 @@ TypedArray<Node3D> RigidBody3D::get_colliding_bodies() const {
 }
 
 PackedStringArray RigidBody3D::get_configuration_warnings() const {
-	Transform3D t = get_transform();
+	PackedStringArray warnings = CollisionObject3D::get_configuration_warnings();
 
-	PackedStringArray warnings = Node::get_configuration_warnings();
-
-	if (ABS(t.basis.get_column(0).length() - 1.0) > 0.05 || ABS(t.basis.get_column(1).length() - 1.0) > 0.05 || ABS(t.basis.get_column(2).length() - 1.0) > 0.05) {
-		warnings.push_back(RTR("Size changes to RigidBody will be overridden by the physics engine when running.\nChange the size in children collision shapes instead."));
+	Vector3 scale = get_transform().get_basis().get_scale();
+	if (ABS(scale.x - 1.0) > 0.05 || ABS(scale.y - 1.0) > 0.05 || ABS(scale.z - 1.0) > 0.05) {
+		warnings.push_back(RTR("Scale changes to RigidBody3D will be overridden by the physics engine when running.\nPlease change the size in children collision shapes instead."));
 	}
 
 	return warnings;
@@ -1076,32 +1084,35 @@ void RigidBody3D::_bind_methods() {
 	GDVIRTUAL_BIND(_integrate_forces, "state");
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.01,1000,0.01,or_greater,exp,suffix:kg"), "set_mass", "get_mass");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "inertia", PROPERTY_HINT_RANGE, U"0,1000,0.01,or_greater,exp,suffix:kg\u22C5m\u00B2"), "set_inertia", "get_inertia");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "physics_material_override", PROPERTY_HINT_RESOURCE_TYPE, "PhysicsMaterial"), "set_physics_material_override", "get_physics_material_override");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_scale", PROPERTY_HINT_RANGE, "-8,8,0.001,or_less,or_greater"), "set_gravity_scale", "get_gravity_scale");
+	ADD_GROUP("Mass Distribution", "");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "center_of_mass_mode", PROPERTY_HINT_ENUM, "Auto,Custom", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), "set_center_of_mass_mode", "get_center_of_mass_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "center_of_mass", PROPERTY_HINT_RANGE, "-10,10,0.01,or_less,or_greater,suffix:m"), "set_center_of_mass", "get_center_of_mass");
 	ADD_LINKED_PROPERTY("center_of_mass_mode", "center_of_mass");
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "physics_material_override", PROPERTY_HINT_RESOURCE_TYPE, "PhysicsMaterial"), "set_physics_material_override", "get_physics_material_override");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_scale", PROPERTY_HINT_RANGE, "-128,128,0.01"), "set_gravity_scale", "get_gravity_scale");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "custom_integrator"), "set_use_custom_integrator", "is_using_custom_integrator");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "continuous_cd"), "set_use_continuous_collision_detection", "is_using_continuous_collision_detection");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_contacts_reported", PROPERTY_HINT_RANGE, "0,64,1,or_greater"), "set_max_contacts_reported", "get_max_contacts_reported");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "contact_monitor"), "set_contact_monitor", "is_contact_monitor_enabled");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "inertia", PROPERTY_HINT_RANGE, U"0,1000,0.01,or_greater,exp,suffix:kg\u22C5m\u00B2"), "set_inertia", "get_inertia");
+	ADD_GROUP("Deactivation", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "sleeping"), "set_sleeping", "is_sleeping");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "can_sleep"), "set_can_sleep", "is_able_to_sleep");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "lock_rotation"), "set_lock_rotation_enabled", "is_lock_rotation_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "freeze"), "set_freeze_enabled", "is_freeze_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "freeze_mode", PROPERTY_HINT_ENUM, "Static,Kinematic"), "set_freeze_mode", "get_freeze_mode");
+	ADD_GROUP("Solver", "");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "custom_integrator"), "set_use_custom_integrator", "is_using_custom_integrator");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "continuous_cd"), "set_use_continuous_collision_detection", "is_using_continuous_collision_detection");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_contacts_reported", PROPERTY_HINT_RANGE, "0,64,1,or_greater"), "set_max_contacts_reported", "get_max_contacts_reported");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "contact_monitor"), "set_contact_monitor", "is_contact_monitor_enabled");
 	ADD_GROUP("Linear", "linear_");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "linear_velocity", PROPERTY_HINT_NONE, "suffix:m/s"), "set_linear_velocity", "get_linear_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "linear_damp_mode", PROPERTY_HINT_ENUM, "Combine,Replace"), "set_linear_damp_mode", "get_linear_damp_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "linear_damp", PROPERTY_HINT_RANGE, "0,100,0.001,or_greater"), "set_linear_damp", "get_linear_damp");
 	ADD_GROUP("Angular", "angular_");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "angular_velocity", PROPERTY_HINT_NONE, U"radians,suffix:\u00B0/s"), "set_angular_velocity", "get_angular_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "angular_velocity", PROPERTY_HINT_NONE, U"radians_as_degrees,suffix:\u00B0/s"), "set_angular_velocity", "get_angular_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "angular_damp_mode", PROPERTY_HINT_ENUM, "Combine,Replace"), "set_angular_damp_mode", "get_angular_damp_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "angular_damp", PROPERTY_HINT_RANGE, "0,100,0.001,or_greater"), "set_angular_damp", "get_angular_damp");
 	ADD_GROUP("Constant Forces", "constant_");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_force"), "set_constant_force", "get_constant_force");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_torque"), "set_constant_torque", "get_constant_torque");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_force", PROPERTY_HINT_NONE, U"suffix:kg\u22C5m/s\u00B2 (N)"), "set_constant_force", "get_constant_force");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "constant_torque", PROPERTY_HINT_NONE, U"suffix:kg\u22C5m\u00B2/s\u00B2/rad"), "set_constant_torque", "get_constant_torque");
 
 	ADD_SIGNAL(MethodInfo("body_shape_entered", PropertyInfo(Variant::RID, "body_rid"), PropertyInfo(Variant::OBJECT, "body", PROPERTY_HINT_RESOURCE_TYPE, "Node"), PropertyInfo(Variant::INT, "body_shape_index"), PropertyInfo(Variant::INT, "local_shape_index")));
 	ADD_SIGNAL(MethodInfo("body_shape_exited", PropertyInfo(Variant::RID, "body_rid"), PropertyInfo(Variant::OBJECT, "body", PROPERTY_HINT_RESOURCE_TYPE, "Node"), PropertyInfo(Variant::INT, "body_shape_index"), PropertyInfo(Variant::INT, "local_shape_index")));
@@ -1343,7 +1354,7 @@ void CharacterBody3D::_move_and_slide_grounded(double p_delta, bool p_was_on_flo
 								motion = motion.slide(up_direction);
 								result.travel = Vector3();
 							} else {
-								// Travel is too high to be safely cancelled, we take it into account.
+								// Travel is too high to be safely canceled, we take it into account.
 								result.travel = result.travel.slide(up_direction);
 								motion = motion.normalized() * result.travel.length();
 							}
@@ -1351,7 +1362,7 @@ void CharacterBody3D::_move_and_slide_grounded(double p_delta, bool p_was_on_flo
 							// Determines if you are on the ground, and limits the possibility of climbing on the walls because of the approximations.
 							_snap_on_floor(true, false);
 						} else {
-							// If the movement is not cancelled we only keep the remaining.
+							// If the movement is not canceled we only keep the remaining.
 							motion = result.remainder;
 						}
 
@@ -1557,8 +1568,8 @@ void CharacterBody3D::_move_and_slide_floating(double p_delta) {
 	}
 }
 
-void CharacterBody3D::_snap_on_floor(bool p_was_on_floor, bool p_vel_dir_facing_up) {
-	if (collision_state.floor || !p_was_on_floor || p_vel_dir_facing_up) {
+void CharacterBody3D::apply_floor_snap() {
+	if (collision_state.floor) {
 		return;
 	}
 
@@ -1591,6 +1602,14 @@ void CharacterBody3D::_snap_on_floor(bool p_was_on_floor, bool p_vel_dir_facing_
 			set_global_transform(parameters.from);
 		}
 	}
+}
+
+void CharacterBody3D::_snap_on_floor(bool p_was_on_floor, bool p_vel_dir_facing_up) {
+	if (collision_state.floor || !p_was_on_floor || p_vel_dir_facing_up) {
+		return;
+	}
+
+	apply_floor_snap();
 }
 
 bool CharacterBody3D::_on_floor_if_snapped(bool p_was_on_floor, bool p_vel_dir_facing_up) {
@@ -1767,7 +1786,7 @@ const Vector3 &CharacterBody3D::get_last_motion() const {
 }
 
 Vector3 CharacterBody3D::get_position_delta() const {
-	return get_transform().origin - previous_position;
+	return get_global_transform().origin - previous_position;
 }
 
 const Vector3 &CharacterBody3D::get_real_velocity() const {
@@ -1946,6 +1965,7 @@ void CharacterBody3D::_notification(int p_what) {
 
 void CharacterBody3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("move_and_slide"), &CharacterBody3D::move_and_slide);
+	ClassDB::bind_method(D_METHOD("apply_floor_snap"), &CharacterBody3D::apply_floor_snap);
 
 	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &CharacterBody3D::set_velocity);
 	ClassDB::bind_method(D_METHOD("get_velocity"), &CharacterBody3D::get_velocity);
@@ -2004,19 +2024,19 @@ void CharacterBody3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "slide_on_ceiling"), "set_slide_on_ceiling_enabled", "is_slide_on_ceiling_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity", PROPERTY_HINT_NONE, "suffix:m/s", PROPERTY_USAGE_NO_EDITOR), "set_velocity", "get_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_slides", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_max_slides", "get_max_slides");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "wall_min_slide_angle", PROPERTY_HINT_RANGE, "0,180,0.1,radians", PROPERTY_USAGE_DEFAULT), "set_wall_min_slide_angle", "get_wall_min_slide_angle");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "wall_min_slide_angle", PROPERTY_HINT_RANGE, "0,180,0.1,radians_as_degrees", PROPERTY_USAGE_DEFAULT), "set_wall_min_slide_angle", "get_wall_min_slide_angle");
 
 	ADD_GROUP("Floor", "floor_");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "floor_stop_on_slope"), "set_floor_stop_on_slope_enabled", "is_floor_stop_on_slope_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "floor_constant_speed"), "set_floor_constant_speed_enabled", "is_floor_constant_speed_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "floor_block_on_wall"), "set_floor_block_on_wall_enabled", "is_floor_block_on_wall_enabled");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "floor_max_angle", PROPERTY_HINT_RANGE, "0,180,0.1,radians"), "set_floor_max_angle", "get_floor_max_angle");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "floor_max_angle", PROPERTY_HINT_RANGE, "0,180,0.1,radians_as_degrees"), "set_floor_max_angle", "get_floor_max_angle");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "floor_snap_length", PROPERTY_HINT_RANGE, "0,1,0.01,or_greater,suffix:m"), "set_floor_snap_length", "get_floor_snap_length");
 
 	ADD_GROUP("Moving Platform", "platform_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "platform_on_leave", PROPERTY_HINT_ENUM, "Add Velocity,Add Upward Velocity,Do Nothing", PROPERTY_USAGE_DEFAULT), "set_platform_on_leave", "get_platform_on_leave");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "platform_floor_layers", PROPERTY_HINT_LAYERS_2D_PHYSICS), "set_platform_floor_layers", "get_platform_floor_layers");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "platform_wall_layers", PROPERTY_HINT_LAYERS_2D_PHYSICS), "set_platform_wall_layers", "get_platform_wall_layers");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "platform_floor_layers", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_platform_floor_layers", "get_platform_floor_layers");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "platform_wall_layers", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_platform_wall_layers", "get_platform_wall_layers");
 
 	ADD_GROUP("Collision", "");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "safe_margin", PROPERTY_HINT_RANGE, "0.001,256,0.001,suffix:m"), "set_safe_margin", "get_safe_margin");
@@ -2906,24 +2926,30 @@ void PhysicalBone3D::_notification(int p_what) {
 	}
 }
 
+void PhysicalBone3D::_sync_body_state(PhysicsDirectBodyState3D *p_state) {
+	set_global_transform(p_state->get_transform());
+	linear_velocity = p_state->get_linear_velocity();
+	angular_velocity = p_state->get_angular_velocity();
+}
+
 void PhysicalBone3D::_body_state_changed(PhysicsDirectBodyState3D *p_state) {
 	if (!simulate_physics || !_internal_simulate_physics) {
 		return;
 	}
 
-	linear_velocity = p_state->get_linear_velocity();
-	angular_velocity = p_state->get_angular_velocity();
-
-	GDVIRTUAL_CALL(_integrate_forces, p_state);
-
-	/// Update bone transform.
-
-	Transform3D global_transform(p_state->get_transform());
-
 	set_ignore_transform_notification(true);
-	set_global_transform(global_transform);
+
+	if (GDVIRTUAL_IS_OVERRIDDEN(_integrate_forces)) {
+		_sync_body_state(p_state);
+
+		GDVIRTUAL_CALL(_integrate_forces, p_state);
+	}
+
+	_sync_body_state(p_state);
 	set_ignore_transform_notification(false);
 	_on_transform_changed();
+
+	Transform3D global_transform(p_state->get_transform());
 
 	// Update skeleton
 	if (parent_skeleton) {
@@ -2995,21 +3021,21 @@ void PhysicalBone3D::_bind_methods() {
 	ADD_GROUP("Joint", "joint_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "joint_type", PROPERTY_HINT_ENUM, "None,PinJoint,ConeJoint,HingeJoint,SliderJoint,6DOFJoint"), "set_joint_type", "get_joint_type");
 	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM3D, "joint_offset", PROPERTY_HINT_NONE, "suffix:m"), "set_joint_offset", "get_joint_offset");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "joint_rotation", PROPERTY_HINT_RANGE, "-360,360,0.01,or_less,or_greater,radians"), "set_joint_rotation", "get_joint_rotation");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "joint_rotation", PROPERTY_HINT_RANGE, "-360,360,0.01,or_less,or_greater,radians_as_degrees"), "set_joint_rotation", "get_joint_rotation");
 
 	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM3D, "body_offset", PROPERTY_HINT_NONE, "suffix:m"), "set_body_offset", "get_body_offset");
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mass", PROPERTY_HINT_RANGE, "0.01,1000,0.01,or_greater,exp,suffix:kg"), "set_mass", "get_mass");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "friction", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_friction", "get_friction");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "bounce", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_bounce", "get_bounce");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_scale", PROPERTY_HINT_RANGE, "-10,10,0.01"), "set_gravity_scale", "get_gravity_scale");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_scale", PROPERTY_HINT_RANGE, "-8,8,0.001,or_less,or_greater"), "set_gravity_scale", "get_gravity_scale");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "custom_integrator"), "set_use_custom_integrator", "is_using_custom_integrator");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "linear_damp_mode", PROPERTY_HINT_ENUM, "Combine,Replace"), "set_linear_damp_mode", "get_linear_damp_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "linear_damp", PROPERTY_HINT_RANGE, "0,100,0.001,or_greater"), "set_linear_damp", "get_linear_damp");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "angular_damp_mode", PROPERTY_HINT_ENUM, "Combine,Replace"), "set_angular_damp_mode", "get_angular_damp_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "angular_damp", PROPERTY_HINT_RANGE, "0,100,0.001,or_greater"), "set_angular_damp", "get_angular_damp");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "linear_velocity", PROPERTY_HINT_NONE, "suffix:m/s"), "set_linear_velocity", "get_linear_velocity");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "angular_velocity", PROPERTY_HINT_NONE, U"radians,suffix:\u00B0/s"), "set_angular_velocity", "get_angular_velocity");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "angular_velocity", PROPERTY_HINT_NONE, U"radians_as_degrees,suffix:\u00B0/s"), "set_angular_velocity", "get_angular_velocity");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "can_sleep"), "set_can_sleep", "is_able_to_sleep");
 
 	BIND_ENUM_CONSTANT(DAMP_MODE_COMBINE);

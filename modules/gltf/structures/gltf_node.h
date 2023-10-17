@@ -32,6 +32,7 @@
 #define GLTF_NODE_H
 
 #include "../gltf_defines.h"
+
 #include "core/io/resource.h"
 
 class GLTFNode : public Resource {
@@ -79,9 +80,6 @@ public:
 
 	GLTFSkeletonIndex get_skeleton();
 	void set_skeleton(GLTFSkeletonIndex p_skeleton);
-
-	bool get_joint();
-	void set_joint(bool p_joint);
 
 	Vector3 get_position();
 	void set_position(Vector3 p_position);

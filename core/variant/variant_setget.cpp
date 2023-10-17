@@ -151,8 +151,8 @@ void unregister_named_setters_getters() {
 bool Variant::has_member(Variant::Type p_type, const StringName &p_member) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
 
-	for (uint32_t i = 0; i < variant_setters_getters_names[p_type].size(); i++) {
-		if (variant_setters_getters_names[p_type][i] == p_member) {
+	for (const StringName &member : variant_setters_getters_names[p_type]) {
+		if (member == p_member) {
 			return true;
 		}
 	}
@@ -172,8 +172,8 @@ Variant::Type Variant::get_member_type(Variant::Type p_type, const StringName &p
 }
 
 void Variant::get_member_list(Variant::Type p_type, List<StringName> *r_members) {
-	for (uint32_t i = 0; i < variant_setters_getters_names[p_type].size(); i++) {
-		r_members->push_back(variant_setters_getters_names[p_type][i]);
+	for (const StringName &member : variant_setters_getters_names[p_type]) {
+		r_members->push_back(member);
 	}
 }
 
@@ -318,7 +318,7 @@ Variant Variant::get_named(const StringName &p_member, bool &r_valid) const {
 #ifdef DEBUG_ENABLED
 
 #define NULL_TEST(m_key) \
-	ERR_FAIL_COND(!m_key)
+	ERR_FAIL_NULL(m_key)
 
 #else
 
@@ -1068,7 +1068,7 @@ struct VariantKeyedSetGetObject {
 	}
 	static uint32_t ptr_has(const void *base, const void *key) {
 		const Object *obj = PtrToArg<Object *>::convert(base);
-		ERR_FAIL_COND_V(!obj, false);
+		ERR_FAIL_NULL_V(obj, false);
 		bool valid;
 		obj->getvar(PtrToArg<Variant>::convert(key), &valid);
 		return valid;
@@ -1245,7 +1245,7 @@ void Variant::get_property_list(List<PropertyInfo> *p_list) const {
 		}
 	} else if (type == OBJECT) {
 		Object *obj = get_validated_object();
-		ERR_FAIL_COND(!obj);
+		ERR_FAIL_NULL(obj);
 		obj->get_property_list(p_list);
 
 	} else {

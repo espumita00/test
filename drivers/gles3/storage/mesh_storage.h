@@ -33,19 +33,14 @@
 
 #ifdef GLES3_ENABLED
 
-#include "../shaders/skeleton.glsl.gen.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
+#include "drivers/gles3/shaders/skeleton.glsl.gen.h"
 #include "servers/rendering/storage/mesh_storage.h"
 #include "servers/rendering/storage/utilities.h"
 
-#include "platform_config.h"
-#ifndef OPENGL_INCLUDE_H
-#include <GLES3/gl3.h>
-#else
-#include OPENGL_INCLUDE_H
-#endif
+#include "platform_gl.h"
 
 namespace GLES3 {
 
@@ -63,7 +58,7 @@ struct Mesh {
 			uint32_t offset;
 		};
 		RS::PrimitiveType primitive = RS::PRIMITIVE_POINTS;
-		uint32_t format = 0;
+		uint64_t format = 0;
 
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
@@ -102,6 +97,8 @@ struct Mesh {
 		AABB aabb;
 
 		Vector<AABB> bone_aabbs;
+
+		Vector4 uv_scale;
 
 		struct BlendShape {
 			GLuint vertex_buffer = 0;
@@ -149,7 +146,7 @@ struct MeshInstance {
 		int vertex_size_cache = 0;
 		int vertex_normal_offset_cache = 0;
 		int vertex_tangent_offset_cache = 0;
-		uint32_t format_cache = 0;
+		uint64_t format_cache = 0;
 
 		Mesh::Surface::Version *versions = nullptr; //allocated on demand
 		uint32_t version_count = 0;
@@ -163,6 +160,7 @@ struct MeshInstance {
 	bool weights_dirty = false;
 	SelfList<MeshInstance> weight_update_list;
 	SelfList<MeshInstance> array_update_list;
+	Transform2D canvas_item_transform_2d;
 	MeshInstance() :
 			weight_update_list(this), array_update_list(this) {}
 };
@@ -225,7 +223,7 @@ private:
 
 	mutable RID_Owner<Mesh, true> mesh_owner;
 
-	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint32_t p_input_mask, MeshInstance::Surface *mis = nullptr);
+	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
 
 	/* Mesh Instance API */
 
@@ -301,7 +299,7 @@ public:
 
 	_FORCE_INLINE_ const RID *mesh_get_surface_count_and_materials(RID p_mesh, uint32_t &r_surface_count) {
 		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND_V(!mesh, nullptr);
+		ERR_FAIL_NULL_V(mesh, nullptr);
 		r_surface_count = mesh->surface_count;
 		if (r_surface_count == 0) {
 			return nullptr;
@@ -318,7 +316,7 @@ public:
 
 	_FORCE_INLINE_ void *mesh_get_surface(RID p_mesh, uint32_t p_surface_index) {
 		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND_V(!mesh, nullptr);
+		ERR_FAIL_NULL_V(mesh, nullptr);
 		ERR_FAIL_UNSIGNED_INDEX_V(p_surface_index, mesh->surface_count, nullptr);
 
 		return mesh->surfaces[p_surface_index];
@@ -326,7 +324,7 @@ public:
 
 	_FORCE_INLINE_ RID mesh_get_shadow_mesh(RID p_mesh) {
 		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND_V(!mesh, RID());
+		ERR_FAIL_NULL_V(mesh, RID());
 
 		return mesh->shadow_mesh;
 	}
@@ -348,7 +346,7 @@ public:
 
 	_FORCE_INLINE_ uint32_t mesh_surface_get_lod(void *p_surface, float p_model_scale, float p_distance_threshold, float p_mesh_lod_threshold, uint32_t &r_index_count) const {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
-		ERR_FAIL_COND_V(!s, 0);
+		ERR_FAIL_NULL_V(s, 0);
 
 		int32_t current_lod = -1;
 		r_index_count = s->index_count;
@@ -385,18 +383,18 @@ public:
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once
-	_FORCE_INLINE_ void mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint32_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ void mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
 
 		s->version_lock.lock();
 
-		//there will never be more than, at much, 3 or 4 versions, so iterating is the fastest way
+		// There will never be more than 3 or 4 versions, so iterating is the fastest way.
 
 		for (uint32_t i = 0; i < s->version_count; i++) {
 			if (s->versions[i].input_mask != p_input_mask) {
 				continue;
 			}
-			//we have this version, hooray
+			// We have this version, hooray.
 			r_vertex_array_gl = s->versions[i].vertex_array;
 			s->version_lock.unlock();
 			return;
@@ -423,13 +421,14 @@ public:
 	virtual void mesh_instance_set_skeleton(RID p_mesh_instance, RID p_skeleton) override;
 	virtual void mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int p_shape, float p_weight) override;
 	virtual void mesh_instance_check_for_update(RID p_mesh_instance) override;
+	virtual void mesh_instance_set_canvas_item_transform(RID p_mesh_instance, const Transform2D &p_transform) override;
 	virtual void update_mesh_instances() override;
 
 	// TODO: considering hashing versions with multimesh buffer RID.
 	// Doing so would allow us to avoid specifying multimesh buffer pointers every frame and may improve performance.
-	_FORCE_INLINE_ void mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint32_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ void mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
-		ERR_FAIL_COND(!mi);
+		ERR_FAIL_NULL(mi);
 		Mesh *mesh = mi->mesh;
 		ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mesh->surface_count);
 

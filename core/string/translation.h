@@ -33,7 +33,6 @@
 
 #include "core/io/resource.h"
 #include "core/object/gdvirtual.gen.inc"
-#include "core/object/script_language.h"
 
 class Translation : public Resource {
 	GDCLASS(Translation, Resource);
@@ -46,6 +45,8 @@ class Translation : public Resource {
 	virtual Vector<String> _get_message_list() const;
 	virtual Dictionary _get_messages() const;
 	virtual void _set_messages(const Dictionary &p_messages);
+
+	void _notify_translation_changed_if_applies();
 
 protected:
 	static void _bind_methods();
@@ -78,6 +79,7 @@ class TranslationServer : public Object {
 	HashSet<Ref<Translation>> translations;
 	Ref<Translation> tool_translation;
 	Ref<Translation> doc_translation;
+	Ref<Translation> property_translation;
 
 	bool enabled = true;
 
@@ -174,6 +176,8 @@ public:
 	void set_doc_translation(const Ref<Translation> &p_translation);
 	StringName doc_translate(const StringName &p_message, const StringName &p_context = "") const;
 	StringName doc_translate_plural(const StringName &p_message, const StringName &p_message_plural, int p_n, const StringName &p_context = "") const;
+	void set_property_translation(const Ref<Translation> &p_translation);
+	StringName property_translate(const StringName &p_message) const;
 
 	void setup();
 

@@ -54,6 +54,8 @@ private:
 
 	double time_total = 0.0;
 
+	static bool gles_over_gl;
+
 protected:
 	GLES3::Config *config = nullptr;
 	GLES3::Utilities *utilities = nullptr;
@@ -67,8 +69,9 @@ protected:
 	GLES3::CopyEffects *copy_effects = nullptr;
 	RasterizerCanvasGLES3 *canvas = nullptr;
 	RasterizerSceneGLES3 *scene = nullptr;
+	static RasterizerGLES3 *singleton;
 
-	void _blit_render_target_to_screen(RID p_render_target, DisplayServer::WindowID p_screen, const Rect2 &p_screen_rect, uint32_t p_layer);
+	void _blit_render_target_to_screen(RID p_render_target, DisplayServer::WindowID p_screen, const Rect2 &p_screen_rect, uint32_t p_layer, bool p_first = true);
 
 public:
 	RendererUtilities *get_utilities() { return utilities; }
@@ -98,7 +101,11 @@ public:
 		return memnew(RasterizerGLES3);
 	}
 
-	static void make_current() {
+	static bool is_gles_over_gl() { return gles_over_gl; }
+	static void clear_depth(float p_depth);
+
+	static void make_current(bool p_gles_over_gl) {
+		gles_over_gl = p_gles_over_gl;
 		_create_func = _create_current;
 		low_end = true;
 	}
@@ -107,6 +114,7 @@ public:
 	_ALWAYS_INLINE_ double get_frame_delta_time() const { return delta; }
 	_ALWAYS_INLINE_ double get_total_time() const { return time_total; }
 
+	static RasterizerGLES3 *get_singleton() { return singleton; }
 	RasterizerGLES3();
 	~RasterizerGLES3();
 };

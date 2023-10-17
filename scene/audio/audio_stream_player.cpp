@@ -111,7 +111,7 @@ float AudioStreamPlayer::get_volume_db() const {
 }
 
 void AudioStreamPlayer::set_pitch_scale(float p_pitch_scale) {
-	ERR_FAIL_COND(p_pitch_scale <= 0.0);
+	ERR_FAIL_COND(!(p_pitch_scale > 0.0));
 	pitch_scale = p_pitch_scale;
 
 	for (Ref<AudioStreamPlayback> &playback : stream_playbacks) {
@@ -200,7 +200,7 @@ StringName AudioStreamPlayer::get_bus() const {
 			return bus;
 		}
 	}
-	return SNAME("Master");
+	return SceneStringNames::get_singleton()->Master;
 }
 
 void AudioStreamPlayer::set_autoplay(bool p_enable) {
@@ -234,6 +234,14 @@ bool AudioStreamPlayer::_is_active() const {
 		}
 	}
 	return false;
+}
+
+void AudioStreamPlayer::_on_bus_layout_changed() {
+	notify_property_list_changed();
+}
+
+void AudioStreamPlayer::_on_bus_renamed(int p_bus_index, const StringName &p_old_name, const StringName &p_new_name) {
+	notify_property_list_changed();
 }
 
 void AudioStreamPlayer::set_stream_paused(bool p_pause) {
@@ -303,15 +311,13 @@ void AudioStreamPlayer::_validate_property(PropertyInfo &p_property) const {
 	}
 }
 
-void AudioStreamPlayer::_bus_layout_changed() {
-	notify_property_list_changed();
+bool AudioStreamPlayer::has_stream_playback() {
+	return !stream_playbacks.is_empty();
 }
 
 Ref<AudioStreamPlayback> AudioStreamPlayer::get_stream_playback() {
-	if (!stream_playbacks.is_empty()) {
-		return stream_playbacks[stream_playbacks.size() - 1];
-	}
-	return nullptr;
+	ERR_FAIL_COND_V_MSG(stream_playbacks.is_empty(), Ref<AudioStreamPlayback>(), "Player is inactive. Call play() before requesting get_stream_playback().");
+	return stream_playbacks[stream_playbacks.size() - 1];
 }
 
 void AudioStreamPlayer::_bind_methods() {
@@ -349,6 +355,7 @@ void AudioStreamPlayer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_max_polyphony", "max_polyphony"), &AudioStreamPlayer::set_max_polyphony);
 	ClassDB::bind_method(D_METHOD("get_max_polyphony"), &AudioStreamPlayer::get_max_polyphony);
 
+	ClassDB::bind_method(D_METHOD("has_stream_playback"), &AudioStreamPlayer::has_stream_playback);
 	ClassDB::bind_method(D_METHOD("get_stream_playback"), &AudioStreamPlayer::get_stream_playback);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "stream", PROPERTY_HINT_RESOURCE_TYPE, "AudioStream"), "set_stream", "get_stream");
@@ -369,7 +376,8 @@ void AudioStreamPlayer::_bind_methods() {
 }
 
 AudioStreamPlayer::AudioStreamPlayer() {
-	AudioServer::get_singleton()->connect("bus_layout_changed", callable_mp(this, &AudioStreamPlayer::_bus_layout_changed));
+	AudioServer::get_singleton()->connect("bus_layout_changed", callable_mp(this, &AudioStreamPlayer::_on_bus_layout_changed));
+	AudioServer::get_singleton()->connect("bus_renamed", callable_mp(this, &AudioStreamPlayer::_on_bus_renamed));
 }
 
 AudioStreamPlayer::~AudioStreamPlayer() {

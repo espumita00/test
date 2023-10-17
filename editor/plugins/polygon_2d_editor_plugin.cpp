@@ -39,7 +39,10 @@
 #include "editor/plugins/canvas_item_editor_plugin.h"
 #include "scene/2d/skeleton_2d.h"
 #include "scene/gui/check_box.h"
+#include "scene/gui/dialogs.h"
+#include "scene/gui/label.h"
 #include "scene/gui/menu_button.h"
+#include "scene/gui/panel.h"
 #include "scene/gui/scroll_container.h"
 #include "scene/gui/separator.h"
 #include "scene/gui/slider.h"
@@ -77,23 +80,23 @@ void Polygon2DEditor::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_READY: {
-			button_uv->set_icon(get_theme_icon(SNAME("Uv"), SNAME("EditorIcons")));
+			button_uv->set_icon(get_editor_theme_icon(SNAME("Uv")));
 
-			uv_button[UV_MODE_CREATE]->set_icon(get_theme_icon(SNAME("Edit"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_CREATE_INTERNAL]->set_icon(get_theme_icon(SNAME("EditInternal"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_REMOVE_INTERNAL]->set_icon(get_theme_icon(SNAME("RemoveInternal"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_EDIT_POINT]->set_icon(get_theme_icon(SNAME("ToolSelect"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_MOVE]->set_icon(get_theme_icon(SNAME("ToolMove"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_ROTATE]->set_icon(get_theme_icon(SNAME("ToolRotate"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_SCALE]->set_icon(get_theme_icon(SNAME("ToolScale"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_ADD_POLYGON]->set_icon(get_theme_icon(SNAME("Edit"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_REMOVE_POLYGON]->set_icon(get_theme_icon(SNAME("Close"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_PAINT_WEIGHT]->set_icon(get_theme_icon(SNAME("Bucket"), SNAME("EditorIcons")));
-			uv_button[UV_MODE_CLEAR_WEIGHT]->set_icon(get_theme_icon(SNAME("Clear"), SNAME("EditorIcons")));
+			uv_button[UV_MODE_CREATE]->set_icon(get_editor_theme_icon(SNAME("Edit")));
+			uv_button[UV_MODE_CREATE_INTERNAL]->set_icon(get_editor_theme_icon(SNAME("EditInternal")));
+			uv_button[UV_MODE_REMOVE_INTERNAL]->set_icon(get_editor_theme_icon(SNAME("RemoveInternal")));
+			uv_button[UV_MODE_EDIT_POINT]->set_icon(get_editor_theme_icon(SNAME("ToolSelect")));
+			uv_button[UV_MODE_MOVE]->set_icon(get_editor_theme_icon(SNAME("ToolMove")));
+			uv_button[UV_MODE_ROTATE]->set_icon(get_editor_theme_icon(SNAME("ToolRotate")));
+			uv_button[UV_MODE_SCALE]->set_icon(get_editor_theme_icon(SNAME("ToolScale")));
+			uv_button[UV_MODE_ADD_POLYGON]->set_icon(get_editor_theme_icon(SNAME("Edit")));
+			uv_button[UV_MODE_REMOVE_POLYGON]->set_icon(get_editor_theme_icon(SNAME("Close")));
+			uv_button[UV_MODE_PAINT_WEIGHT]->set_icon(get_editor_theme_icon(SNAME("Bucket")));
+			uv_button[UV_MODE_CLEAR_WEIGHT]->set_icon(get_editor_theme_icon(SNAME("Clear")));
 
-			b_snap_grid->set_icon(get_theme_icon(SNAME("Grid"), SNAME("EditorIcons")));
-			b_snap_enable->set_icon(get_theme_icon(SNAME("SnapGrid"), SNAME("EditorIcons")));
-			uv_icon_zoom->set_texture(get_theme_icon(SNAME("Zoom"), SNAME("EditorIcons")));
+			b_snap_grid->set_icon(get_editor_theme_icon(SNAME("Grid")));
+			b_snap_enable->set_icon(get_editor_theme_icon(SNAME("SnapGrid")));
+			uv_icon_zoom->set_texture(get_editor_theme_icon(SNAME("Zoom")));
 
 			uv_vscroll->set_anchors_and_offsets_preset(PRESET_RIGHT_WIDE);
 			uv_hscroll->set_anchors_and_offsets_preset(PRESET_BOTTOM_WIDE);
@@ -294,6 +297,8 @@ void Polygon2DEditor::_menu_option(int p_option) {
 				error->popup_centered();
 				return;
 			}
+
+			uv_edit_draw->set_texture_filter(node->get_texture_filter_in_tree());
 
 			Vector<Vector2> points = node->get_polygon();
 			Vector<Vector2> uvs = node->get_uv();
@@ -939,21 +944,13 @@ void Polygon2DEditor::_uv_input(const Ref<InputEvent> &p_input) {
 	}
 }
 
-void Polygon2DEditor::_uv_scroll_callback(Vector2 p_scroll_vec, bool p_alt) {
-	_uv_pan_callback(-p_scroll_vec * 32);
-}
-
-void Polygon2DEditor::_uv_pan_callback(Vector2 p_scroll_vec) {
+void Polygon2DEditor::_uv_pan_callback(Vector2 p_scroll_vec, Ref<InputEvent> p_event) {
 	uv_hscroll->set_value(uv_hscroll->get_value() - p_scroll_vec.x);
 	uv_vscroll->set_value(uv_vscroll->get_value() - p_scroll_vec.y);
 }
 
-void Polygon2DEditor::_uv_zoom_callback(Vector2 p_scroll_vec, Vector2 p_origin, bool p_alt) {
-	if (p_scroll_vec.y < 0) {
-		uv_zoom->set_value(uv_zoom->get_value() / (1 - (0.1 * Math::abs(p_scroll_vec.y))));
-	} else {
-		uv_zoom->set_value(uv_zoom->get_value() * (1 - (0.1 * Math::abs(p_scroll_vec.y))));
-	}
+void Polygon2DEditor::_uv_zoom_callback(float p_zoom_factor, Vector2 p_origin, Ref<InputEvent> p_event) {
+	uv_zoom->set_value(uv_zoom->get_value() * p_zoom_factor);
 }
 
 void Polygon2DEditor::_uv_scroll_changed(real_t) {
@@ -1046,7 +1043,7 @@ void Polygon2DEditor::_uv_draw() {
 	}
 
 	// All UV points are sharp, so use the sharp handle icon
-	Ref<Texture2D> handle = get_theme_icon(SNAME("EditorPathSharpHandle"), SNAME("EditorIcons"));
+	Ref<Texture2D> handle = get_editor_theme_icon(SNAME("EditorPathSharpHandle"));
 
 	Color poly_line_color = Color(0.9, 0.5, 0.5);
 	if (polygons.size() || polygon_create.size()) {
@@ -1240,12 +1237,13 @@ Vector2 Polygon2DEditor::snap_point(Vector2 p_target) const {
 
 Polygon2DEditor::Polygon2DEditor() {
 	snap_offset = EditorSettings::get_singleton()->get_project_metadata("polygon_2d_uv_editor", "snap_offset", Vector2());
-	snap_step = EditorSettings::get_singleton()->get_project_metadata("polygon_2d_uv_editor", "snap_step", Vector2(10, 10));
+	// A power-of-two value works better as a default grid size.
+	snap_step = EditorSettings::get_singleton()->get_project_metadata("polygon_2d_uv_editor", "snap_step", Vector2(8, 8));
 	use_snap = EditorSettings::get_singleton()->get_project_metadata("polygon_2d_uv_editor", "snap_enabled", false);
 	snap_show_grid = EditorSettings::get_singleton()->get_project_metadata("polygon_2d_uv_editor", "show_grid", false);
 
 	button_uv = memnew(Button);
-	button_uv->set_flat(true);
+	button_uv->set_theme_type_variation("FlatButton");
 	add_child(button_uv);
 	button_uv->set_tooltip_text(TTR("Open Polygon 2D UV editor."));
 	button_uv->connect("pressed", callable_mp(this, &Polygon2DEditor::_menu_option).bind(MODE_EDIT_UV));
@@ -1254,7 +1252,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	uv_edit = memnew(AcceptDialog);
 	add_child(uv_edit);
 	uv_edit->set_title(TTR("Polygon 2D UV Editor"));
-	uv_edit->connect("cancelled", callable_mp(this, &Polygon2DEditor::_uv_edit_popup_hide));
+	uv_edit->connect("canceled", callable_mp(this, &Polygon2DEditor::_uv_edit_popup_hide));
 
 	VBoxContainer *uv_main_vb = memnew(VBoxContainer);
 	uv_edit->add_child(uv_main_vb);
@@ -1296,7 +1294,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	uv_main_vb->add_child(uv_mode_hb);
 	for (int i = 0; i < UV_MODE_MAX; i++) {
 		uv_button[i] = memnew(Button);
-		uv_button[i]->set_flat(true);
+		uv_button[i]->set_theme_type_variation("FlatButton");
 		uv_button[i]->set_toggle_mode(true);
 		uv_mode_hb->add_child(uv_button[i]);
 		uv_button[i]->connect("pressed", callable_mp(this, &Polygon2DEditor::_uv_mode).bind(i));
@@ -1306,7 +1304,8 @@ Polygon2DEditor::Polygon2DEditor() {
 	uv_button[UV_MODE_CREATE]->set_tooltip_text(TTR("Create Polygon"));
 	uv_button[UV_MODE_CREATE_INTERNAL]->set_tooltip_text(TTR("Create Internal Vertex"));
 	uv_button[UV_MODE_REMOVE_INTERNAL]->set_tooltip_text(TTR("Remove Internal Vertex"));
-	uv_button[UV_MODE_EDIT_POINT]->set_tooltip_text(TTR("Move Points") + "\n" + TTR("Ctrl: Rotate") + "\n" + TTR("Shift: Move All") + "\n" + TTR("Shift+Ctrl: Scale"));
+	Key key = (OS::get_singleton()->has_feature("macos") || OS::get_singleton()->has_feature("web_macos") || OS::get_singleton()->has_feature("web_ios")) ? Key::META : Key::CTRL;
+	uv_button[UV_MODE_EDIT_POINT]->set_tooltip_text(TTR("Move Points") + "\n" + find_keycode_name(key) + TTR(": Rotate") + "\n" + TTR("Shift: Move All") + "\n" + keycode_get_string((Key)KeyModifierMask::CMD_OR_CTRL) + TTR("Shift: Scale"));
 	uv_button[UV_MODE_MOVE]->set_tooltip_text(TTR("Move Polygon"));
 	uv_button[UV_MODE_ROTATE]->set_tooltip_text(TTR("Rotate Polygon"));
 	uv_button[UV_MODE_SCALE]->set_tooltip_text(TTR("Scale Polygon"));
@@ -1360,6 +1359,8 @@ Polygon2DEditor::Polygon2DEditor() {
 
 	uv_menu = memnew(MenuButton);
 	uv_mode_hb->add_child(uv_menu);
+	uv_menu->set_flat(false);
+	uv_menu->set_theme_type_variation("FlatMenuButton");
 	uv_menu->set_text(TTR("Edit"));
 	uv_menu->get_popup()->add_item(TTR("Copy Polygon to UV"), UVEDIT_POLYGON_TO_UV);
 	uv_menu->get_popup()->add_item(TTR("Copy UV to Polygon"), UVEDIT_UV_TO_POLYGON);
@@ -1372,7 +1373,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	uv_mode_hb->add_child(memnew(VSeparator));
 
 	b_snap_enable = memnew(Button);
-	b_snap_enable->set_flat(true);
+	b_snap_enable->set_theme_type_variation("FlatButton");
 	uv_mode_hb->add_child(b_snap_enable);
 	b_snap_enable->set_text(TTR("Snap"));
 	b_snap_enable->set_focus_mode(FOCUS_NONE);
@@ -1382,7 +1383,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	b_snap_enable->connect("toggled", callable_mp(this, &Polygon2DEditor::_set_use_snap));
 
 	b_snap_grid = memnew(Button);
-	b_snap_grid->set_flat(true);
+	b_snap_grid->set_theme_type_variation("FlatButton");
 	uv_mode_hb->add_child(b_snap_grid);
 	b_snap_grid->set_text(TTR("Grid"));
 	b_snap_grid->set_focus_mode(FOCUS_NONE);
@@ -1478,7 +1479,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	bone_scroll->add_child(bone_scroll_vb);
 
 	uv_panner.instantiate();
-	uv_panner->set_callbacks(callable_mp(this, &Polygon2DEditor::_uv_scroll_callback), callable_mp(this, &Polygon2DEditor::_uv_pan_callback), callable_mp(this, &Polygon2DEditor::_uv_zoom_callback));
+	uv_panner->set_callbacks(callable_mp(this, &Polygon2DEditor::_uv_pan_callback), callable_mp(this, &Polygon2DEditor::_uv_zoom_callback));
 
 	uv_edit_draw->connect("draw", callable_mp(this, &Polygon2DEditor::_uv_draw));
 	uv_edit_draw->connect("gui_input", callable_mp(this, &Polygon2DEditor::_uv_input));

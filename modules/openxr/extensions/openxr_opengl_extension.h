@@ -33,44 +33,14 @@
 
 #ifdef GLES3_ENABLED
 
-#include "core/templates/vector.h"
-#include "openxr_extension_wrapper.h"
-
 #include "../openxr_api.h"
 #include "../util.h"
+#include "openxr_extension_wrapper.h"
 
-#ifdef ANDROID_ENABLED
-#define XR_USE_GRAPHICS_API_OPENGL_ES
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include <GLES3/gl3.h>
-#include <GLES3/gl3ext.h>
-#else
-#define XR_USE_GRAPHICS_API_OPENGL
-#endif
+#include "core/templates/vector.h"
 
-#ifdef WINDOWS_ENABLED
-// Including windows.h here is absolutely evil, we shouldn't be doing this outside of platform
-// however due to the way the openxr headers are put together, we have no choice.
-#include <windows.h>
-#endif
-
-#ifdef X11_ENABLED
-#include OPENGL_INCLUDE_H
-#define GL_GLEXT_PROTOTYPES 1
-#define GL3_PROTOTYPES 1
-#include "thirdparty/glad/glad/gl.h"
-#include "thirdparty/glad/glad/glx.h"
-#include <X11/Xlib.h>
-#endif
-
-#ifdef ANDROID_ENABLED
-// The jobject type from jni.h is used by openxr_platform.h on Android.
-#include <jni.h>
-#endif
-
-// include platform dependent structs
-#include <openxr/openxr_platform.h>
+// always include this as late as possible
+#include "../openxr_platform_inc.h"
 
 class OpenXROpenGLExtension : public OpenXRGraphicsExtensionWrapper {
 public:
@@ -78,6 +48,9 @@ public:
 
 	virtual void on_instance_created(const XrInstance p_instance) override;
 	virtual void *set_session_create_and_get_next_pointer(void *p_next_pointer) override;
+
+	virtual void on_pre_draw_viewport(RID p_render_target) override;
+	virtual void on_post_draw_viewport(RID p_render_target) override;
 
 	virtual void get_usable_swapchain_formats(Vector<int64_t> &p_usable_swap_chains) override;
 	virtual void get_usable_depth_formats(Vector<int64_t> &p_usable_swap_chains) override;
@@ -102,6 +75,9 @@ private:
 		bool is_multiview;
 		Vector<RID> texture_rids;
 	};
+
+	bool srgb_ext_is_available = true;
+	bool hw_linear_to_srgb_is_enabled = false;
 
 	bool check_graphics_api_support(XrVersion p_desired_version);
 

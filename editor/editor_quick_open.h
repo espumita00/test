@@ -39,11 +39,13 @@
 class EditorQuickOpen : public ConfirmationDialog {
 	GDCLASS(EditorQuickOpen, ConfirmationDialog);
 
+	static Rect2i prev_rect;
+	static bool was_showed;
+
 	LineEdit *search_box = nullptr;
 	Tree *search_options = nullptr;
 	String base_type;
 	bool allow_multi_select = false;
-	bool _load_resources = false; // Prohibitively slow for now.
 
 	Vector<String> files;
 	OAHashMap<String, Ref<Texture2D>> icons;

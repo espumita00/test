@@ -33,9 +33,10 @@
 
 #include "editor/editor_inspector.h"
 #include "editor/editor_locale_dialog.h"
-#include "editor/editor_spin_slider.h"
 #include "editor/filesystem_dock.h"
-#include "scene/gui/button.h"
+
+class Button;
+class EditorSpinSlider;
 
 class EditorPropertyArrayObject : public RefCounted {
 	GDCLASS(EditorPropertyArrayObject, RefCounted);
@@ -101,6 +102,8 @@ class EditorPropertyArray : public EditorProperty {
 	float reorder_mouse_y_delta = 0.0f;
 	HBoxContainer *reorder_selected_element_hbox = nullptr;
 	Button *reorder_selected_button = nullptr;
+
+	void initialize_array(Variant &p_array);
 
 	void _page_changed(int p_page);
 

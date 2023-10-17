@@ -278,7 +278,7 @@ bool NavigationMesh::get_filter_walkable_low_height_spans() const {
 
 void NavigationMesh::set_filter_baking_aabb(const AABB &p_aabb) {
 	filter_baking_aabb = p_aabb;
-	notify_property_list_changed();
+	emit_changed();
 }
 
 AABB NavigationMesh::get_filter_baking_aabb() const {
@@ -287,7 +287,7 @@ AABB NavigationMesh::get_filter_baking_aabb() const {
 
 void NavigationMesh::set_filter_baking_aabb_offset(const Vector3 &p_aabb_offset) {
 	filter_baking_aabb_offset = p_aabb_offset;
-	notify_property_list_changed();
+	emit_changed();
 }
 
 Vector3 NavigationMesh::get_filter_baking_aabb_offset() const {
@@ -339,6 +339,11 @@ Vector<int> NavigationMesh::get_polygon(int p_idx) {
 
 void NavigationMesh::clear_polygons() {
 	polygons.clear();
+}
+
+void NavigationMesh::clear() {
+	polygons.clear();
+	vertices.clear();
 }
 
 #ifdef DEBUG_ENABLED
@@ -517,6 +522,8 @@ void NavigationMesh::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("_set_polygons", "polygons"), &NavigationMesh::_set_polygons);
 	ClassDB::bind_method(D_METHOD("_get_polygons"), &NavigationMesh::_get_polygons);
+
+	ClassDB::bind_method(D_METHOD("clear"), &NavigationMesh::clear);
 
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR3_ARRAY, "vertices", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "set_vertices", "get_vertices");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "polygons", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_polygons", "_get_polygons");

@@ -78,7 +78,7 @@ class XRNode3D : public Node3D {
 private:
 	StringName tracker_name;
 	StringName pose_name = "default";
-	bool is_active = true;
+	bool has_tracking_data = false;
 
 protected:
 	Ref<XRPositionalTracker> tracker;
@@ -91,6 +91,8 @@ protected:
 	void _removed_tracker(const StringName p_tracker_name, int p_tracker_type);
 
 	void _pose_changed(const Ref<XRPose> &p_pose);
+	void _pose_lost_tracking(const Ref<XRPose> &p_pose);
+	void _set_has_tracking_data(bool p_has_tracking_data);
 
 public:
 	void _validate_property(PropertyInfo &p_property) const;
@@ -131,13 +133,14 @@ protected:
 
 	void _button_pressed(const String &p_name);
 	void _button_released(const String &p_name);
-	void _input_value_changed(const String &p_name, float p_value);
-	void _input_axis_changed(const String &p_name, Vector2 p_value);
+	void _input_float_changed(const String &p_name, float p_value);
+	void _input_vector2_changed(const String &p_name, Vector2 p_value);
 
 public:
 	bool is_button_pressed(const StringName &p_name) const;
-	float get_value(const StringName &p_name) const;
-	Vector2 get_axis(const StringName &p_name) const;
+	Variant get_input(const StringName &p_name) const;
+	float get_float(const StringName &p_name) const;
+	Vector2 get_vector2(const StringName &p_name) const;
 
 	XRPositionalTracker::TrackerHand get_tracker_hand() const;
 

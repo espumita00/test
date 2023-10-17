@@ -61,7 +61,7 @@ class ShapeCast2D : public Node2D {
 	real_t collision_unsafe_fraction = 1.0;
 
 	Array _get_collision_result() const;
-	void _redraw_shape();
+	void _shape_changed();
 
 protected:
 	void _notification(int p_what);
@@ -119,6 +119,8 @@ public:
 	void clear_exceptions();
 
 	PackedStringArray get_configuration_warnings() const override;
+
+	ShapeCast2D();
 };
 
 #endif // SHAPE_CAST_2D_H

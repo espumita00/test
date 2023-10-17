@@ -46,12 +46,14 @@ void SoftBodyRenderingServerHandler::prepare(RID p_mesh, int p_surface) {
 
 	uint32_t surface_offsets[RS::ARRAY_MAX];
 	uint32_t vertex_stride;
+	uint32_t normal_tangent_stride;
 	uint32_t attrib_stride;
 	uint32_t skin_stride;
-	RS::get_singleton()->mesh_surface_make_offsets_from_format(surface_data.format, surface_data.vertex_count, surface_data.index_count, surface_offsets, vertex_stride, attrib_stride, skin_stride);
+	RS::get_singleton()->mesh_surface_make_offsets_from_format(surface_data.format, surface_data.vertex_count, surface_data.index_count, surface_offsets, vertex_stride, normal_tangent_stride, attrib_stride, skin_stride);
 
 	buffer = surface_data.vertex_data;
 	stride = vertex_stride;
+	normal_stride = normal_tangent_stride;
 	offset_vertices = surface_offsets[RS::ARRAY_VERTEX];
 	offset_normal = surface_offsets[RS::ARRAY_NORMAL];
 }
@@ -59,6 +61,7 @@ void SoftBodyRenderingServerHandler::prepare(RID p_mesh, int p_surface) {
 void SoftBodyRenderingServerHandler::clear() {
 	buffer.resize(0);
 	stride = 0;
+	normal_stride = 0;
 	offset_vertices = 0;
 	offset_normal = 0;
 
@@ -78,21 +81,16 @@ void SoftBodyRenderingServerHandler::commit_changes() {
 	RS::get_singleton()->mesh_surface_update_vertex_region(mesh, surface, 0, buffer);
 }
 
-void SoftBodyRenderingServerHandler::set_vertex(int p_vertex_id, const void *p_vector3) {
-	memcpy(&write_buffer[p_vertex_id * stride + offset_vertices], p_vector3, sizeof(float) * 3);
+void SoftBodyRenderingServerHandler::set_vertex(int p_vertex_id, const Vector3 &p_vertex) {
+	memcpy(&write_buffer[p_vertex_id * stride + offset_vertices], &p_vertex, sizeof(Vector3));
 }
 
-void SoftBodyRenderingServerHandler::set_normal(int p_vertex_id, const void *p_vector3) {
-	// Store normal vector in A2B10G10R10 format.
-	Vector3 n;
-	memcpy(&n, p_vector3, sizeof(Vector3));
-	n *= Vector3(0.5, 0.5, 0.5);
-	n += Vector3(0.5, 0.5, 0.5);
-	Vector2 res = n.octahedron_encode();
+void SoftBodyRenderingServerHandler::set_normal(int p_vertex_id, const Vector3 &p_normal) {
+	Vector2 res = p_normal.octahedron_encode();
 	uint32_t value = 0;
 	value |= (uint16_t)CLAMP(res.x * 65535, 0, 65535);
 	value |= (uint16_t)CLAMP(res.y * 65535, 0, 65535) << 16;
-	memcpy(&write_buffer[p_vertex_id * stride + offset_normal], &value, sizeof(uint32_t));
+	memcpy(&write_buffer[p_vertex_id * normal_stride + offset_normal], &value, sizeof(uint32_t));
 }
 
 void SoftBodyRenderingServerHandler::set_aabb(const AABB &p_aabb) {
@@ -217,8 +215,7 @@ bool SoftBody3D::_set_property_pinned_points_attachment(int p_item, const String
 
 	if ("spatial_attachment_path" == p_what) {
 		PinnedPoint *w = pinned_points.ptrw();
-		pin_point(w[p_item].point_index, true, p_value);
-		_make_cache_dirty();
+		callable_mp(this, &SoftBody3D::_pin_point_deferred).call_deferred(Variant(w[p_item].point_index), true, p_value);
 	} else if ("offset" == p_what) {
 		PinnedPoint *w = pinned_points.ptrw();
 		w[p_item].offset = p_value;
@@ -302,14 +299,6 @@ void SoftBody3D::_notification(int p_what) {
 				_prepare_physics_server();
 			}
 		} break;
-
-#ifdef TOOLS_ENABLED
-		case NOTIFICATION_LOCAL_TRANSFORM_CHANGED: {
-			if (Engine::get_singleton()->is_editor_hint()) {
-				update_configuration_warnings();
-			}
-		} break;
-#endif
 	}
 }
 
@@ -389,11 +378,6 @@ PackedStringArray SoftBody3D::get_configuration_warnings() const {
 
 	if (mesh.is_null()) {
 		warnings.push_back(RTR("This body will be ignored until you set a mesh."));
-	}
-
-	Transform3D t = get_transform();
-	if ((ABS(t.basis.get_column(0).length() - 1.0) > 0.05 || ABS(t.basis.get_column(1).length() - 1.0) > 0.05 || ABS(t.basis.get_column(2).length() - 1.0) > 0.05)) {
-		warnings.push_back(RTR("Size changes to SoftBody3D will be overridden by the physics engine when running.\nChange the size in children collision shapes instead."));
 	}
 
 	return warnings;
@@ -607,14 +591,14 @@ TypedArray<PhysicsBody3D> SoftBody3D::get_collision_exceptions() {
 void SoftBody3D::add_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->soft_body_add_collision_exception(physics_rid, collision_object->get_rid());
 }
 
 void SoftBody3D::remove_collision_exception_with(Node *p_node) {
 	ERR_FAIL_NULL(p_node);
 	CollisionObject3D *collision_object = Object::cast_to<CollisionObject3D>(p_node);
-	ERR_FAIL_COND_MSG(!collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
+	ERR_FAIL_NULL_MSG(collision_object, "Collision exception only works between two nodes that inherit from CollisionObject3D (such as Area3D or PhysicsBody3D).");
 	PhysicsServer3D::get_singleton()->soft_body_remove_collision_exception(physics_rid, collision_object->get_rid());
 }
 
@@ -681,6 +665,11 @@ void SoftBody3D::pin_point(int p_point_index, bool pin, const NodePath &p_spatia
 	} else {
 		_remove_pinned_point(p_point_index);
 	}
+}
+
+void SoftBody3D::_pin_point_deferred(int p_point_index, bool pin, const NodePath p_spatial_attachment_path) {
+	pin_point(p_point_index, pin, p_spatial_attachment_path);
+	_make_cache_dirty();
 }
 
 bool SoftBody3D::is_point_pinned(int p_point_index) const {
@@ -754,7 +743,11 @@ void SoftBody3D::_add_pinned_point(int p_point_index, const NodePath &p_spatial_
 		pinned_point->spatial_attachment_path = p_spatial_attachment_path;
 
 		if (!p_spatial_attachment_path.is_empty() && has_node(p_spatial_attachment_path)) {
-			pinned_point->spatial_attachment = Object::cast_to<Node3D>(get_node(p_spatial_attachment_path));
+			Node3D *attachment_node = Object::cast_to<Node3D>(get_node(p_spatial_attachment_path));
+
+			ERR_FAIL_NULL_MSG(attachment_node, "Attachment node path is invalid.");
+
+			pinned_point->spatial_attachment = attachment_node;
 			pinned_point->offset = (pinned_point->spatial_attachment->get_global_transform().affine_inverse() * get_global_transform()).xform(PhysicsServer3D::get_singleton()->soft_body_get_point_global_position(physics_rid, pinned_point->point_index));
 		}
 	}

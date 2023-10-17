@@ -69,6 +69,7 @@ private:
 
 	SafeFlag active{ false };
 	SafeNumeric<float> setplay{ -1.0 };
+	Ref<AudioStreamPlayback> setplayback;
 
 	AttenuationModel attenuation_model = ATTENUATION_INVERSE_DISTANCE;
 	float volume_db = 0.0;
@@ -96,7 +97,8 @@ private:
 	Area3D *_get_overriding_area();
 	Vector<AudioFrame> _update_panning();
 
-	void _bus_layout_changed();
+	void _on_bus_layout_changed();
+	void _on_bus_renamed(int p_bus_index, const StringName &p_old_name, const StringName &p_new_name);
 
 	uint32_t area_mask = 1;
 
@@ -188,6 +190,7 @@ public:
 	void set_panning_strength(float p_panning_strength);
 	float get_panning_strength() const;
 
+	bool has_stream_playback();
 	Ref<AudioStreamPlayback> get_stream_playback();
 
 	AudioStreamPlayer3D();

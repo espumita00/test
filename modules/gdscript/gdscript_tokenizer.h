@@ -105,6 +105,7 @@ public:
 			PASS,
 			RETURN,
 			MATCH,
+			WHEN,
 			// Keywords
 			AS,
 			ASSERT,
@@ -171,6 +172,7 @@ public:
 		String source;
 
 		const char *get_name() const;
+		bool can_precede_bin_op() const;
 		bool is_identifier() const;
 		bool is_node_name() const;
 		StringName get_identifier() const { return source; }
@@ -186,6 +188,8 @@ public:
 #ifdef TOOLS_ENABLED
 	struct CommentData {
 		String comment;
+		// true: Comment starts at beginning of line or after indentation.
+		// false: Inline comment (starts after some code).
 		bool new_line = false;
 		CommentData() {}
 		CommentData(const String &p_comment, bool p_new_line) {
@@ -216,6 +220,7 @@ private:
 	bool multiline_mode = false;
 	List<Token> error_stack;
 	bool pending_newline = false;
+	Token last_token;
 	Token last_newline;
 	int pending_indents = 0;
 	List<int> indent_stack;
@@ -224,6 +229,9 @@ private:
 	char32_t indent_char = '\0';
 	int position = 0;
 	int length = 0;
+#ifdef DEBUG_ENABLED
+	Vector<String> keyword_list;
+#endif // DEBUG_ENABLED
 
 #ifdef TOOLS_ENABLED
 	HashMap<int, CommentData> comments;
@@ -238,6 +246,10 @@ private:
 	String _get_indent_char_name(char32_t ch);
 	void _skip_whitespace();
 	void check_indent();
+
+#ifdef DEBUG_ENABLED
+	void make_keyword_list();
+#endif // DEBUG_ENABLED
 
 	Token make_error(const String &p_message);
 	void push_error(const String &p_message);

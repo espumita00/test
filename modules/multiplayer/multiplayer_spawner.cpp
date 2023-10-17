@@ -103,6 +103,15 @@ void MultiplayerSpawner::add_spawnable_scene(const String &p_path) {
 		ERR_FAIL_COND(!FileAccess::exists(p_path));
 	}
 	spawnable_scenes.push_back(sc);
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+#endif
+	Node *node = get_spawn_node();
+	if (spawnable_scenes.size() == 1 && node && !node->is_connected("child_entered_tree", callable_mp(this, &MultiplayerSpawner::_node_added))) {
+		node->connect("child_entered_tree", callable_mp(this, &MultiplayerSpawner::_node_added));
+	}
 }
 
 int MultiplayerSpawner::get_spawnable_scene_count() const {
@@ -116,6 +125,15 @@ String MultiplayerSpawner::get_spawnable_scene(int p_idx) const {
 
 void MultiplayerSpawner::clear_spawnable_scenes() {
 	spawnable_scenes.clear();
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint()) {
+		return;
+	}
+#endif
+	Node *node = get_spawn_node();
+	if (node && node->is_connected("child_entered_tree", callable_mp(this, &MultiplayerSpawner::_node_added))) {
+		node->disconnect("child_entered_tree", callable_mp(this, &MultiplayerSpawner::_node_added));
+	}
 }
 
 Vector<String> MultiplayerSpawner::_get_spawnable_scenes() const {
@@ -157,7 +175,7 @@ void MultiplayerSpawner::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_spawn_function"), &MultiplayerSpawner::get_spawn_function);
 	ClassDB::bind_method(D_METHOD("set_spawn_function", "spawn_function"), &MultiplayerSpawner::set_spawn_function);
-	ADD_PROPERTY(PropertyInfo(Variant::CALLABLE, "spawn_function", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_spawn_function", "get_spawn_function");
+	ADD_PROPERTY(PropertyInfo(Variant::CALLABLE, "spawn_function", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_spawn_function", "get_spawn_function");
 
 	ADD_SIGNAL(MethodInfo("despawned", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Node")));
 	ADD_SIGNAL(MethodInfo("spawned", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "Node")));
@@ -250,7 +268,7 @@ void MultiplayerSpawner::_spawn_notify(ObjectID p_id) {
 
 void MultiplayerSpawner::_node_exit(ObjectID p_id) {
 	Node *node = Object::cast_to<Node>(ObjectDB::get_instance(p_id));
-	ERR_FAIL_COND(!node);
+	ERR_FAIL_NULL(node);
 	if (tracked_nodes.has(p_id)) {
 		tracked_nodes.erase(p_id);
 		get_multiplayer()->object_configuration_remove(node, this);
@@ -305,10 +323,10 @@ Node *MultiplayerSpawner::spawn(const Variant &p_data) {
 	ERR_FAIL_COND_V_MSG(!spawn_function.is_valid(), nullptr, "Custom spawn requires the 'spawn_function' property to be a valid callable.");
 
 	Node *parent = get_spawn_node();
-	ERR_FAIL_COND_V_MSG(!parent, nullptr, "Cannot find spawn node.");
+	ERR_FAIL_NULL_V_MSG(parent, nullptr, "Cannot find spawn node.");
 
 	Node *node = instantiate_custom(p_data);
-	ERR_FAIL_COND_V_MSG(!node, nullptr, "The 'spawn_function' callable must return a valid node.");
+	ERR_FAIL_NULL_V_MSG(node, nullptr, "The 'spawn_function' callable must return a valid node.");
 
 	_track(node, p_data);
 	parent->add_child(node, true);

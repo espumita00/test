@@ -48,6 +48,7 @@ typedef Vector<uint8_t> (*SavePNGBufferFunc)(const Ref<Image> &p_img);
 typedef Error (*SaveJPGFunc)(const String &p_path, const Ref<Image> &p_img, float p_quality);
 typedef Vector<uint8_t> (*SaveJPGBufferFunc)(const Ref<Image> &p_img, float p_quality);
 typedef Ref<Image> (*ImageMemLoadFunc)(const uint8_t *p_png, int p_size);
+typedef Ref<Image> (*ScalableImageMemLoadFunc)(const uint8_t *p_data, int p_size, float p_scale);
 typedef Error (*SaveWebPFunc)(const String &p_path, const Ref<Image> &p_img, const bool p_lossy, const float p_quality);
 typedef Vector<uint8_t> (*SaveWebPBufferFunc)(const Ref<Image> &p_img, const bool p_lossy, const float p_quality);
 
@@ -148,12 +149,14 @@ public:
 	static ImageMemLoadFunc _webp_mem_loader_func;
 	static ImageMemLoadFunc _tga_mem_loader_func;
 	static ImageMemLoadFunc _bmp_mem_loader_func;
+	static ScalableImageMemLoadFunc _svg_scalable_mem_loader_func;
+	static ImageMemLoadFunc _ktx_mem_loader_func;
 
-	static void (*_image_compress_bc_func)(Image *, float, UsedChannels p_channels);
-	static void (*_image_compress_bptc_func)(Image *, float p_lossy_quality, UsedChannels p_channels);
-	static void (*_image_compress_etc1_func)(Image *, float);
-	static void (*_image_compress_etc2_func)(Image *, float, UsedChannels p_channels);
-	static void (*_image_compress_astc_func)(Image *, float, ASTCFormat p_format);
+	static void (*_image_compress_bc_func)(Image *, UsedChannels p_channels);
+	static void (*_image_compress_bptc_func)(Image *, UsedChannels p_channels);
+	static void (*_image_compress_etc1_func)(Image *);
+	static void (*_image_compress_etc2_func)(Image *, UsedChannels p_channels);
+	static void (*_image_compress_astc_func)(Image *, ASTCFormat p_format);
 
 	static void (*_image_decompress_bc)(Image *);
 	static void (*_image_decompress_bptc)(Image *);
@@ -368,8 +371,8 @@ public:
 		COMPRESS_SOURCE_MAX,
 	};
 
-	Error compress(CompressMode p_mode, CompressSource p_source = COMPRESS_SOURCE_GENERIC, float p_lossy_quality = 0.7, ASTCFormat p_astc_format = ASTC_FORMAT_4x4);
-	Error compress_from_channels(CompressMode p_mode, UsedChannels p_channels, float p_lossy_quality = 0.7, ASTCFormat p_astc_format = ASTC_FORMAT_4x4);
+	Error compress(CompressMode p_mode, CompressSource p_source = COMPRESS_SOURCE_GENERIC, ASTCFormat p_astc_format = ASTC_FORMAT_4x4);
+	Error compress_from_channels(CompressMode p_mode, UsedChannels p_channels, ASTCFormat p_astc_format = ASTC_FORMAT_4x4);
 	Error decompress();
 	bool is_compressed() const;
 
@@ -391,8 +394,8 @@ public:
 	Rect2i get_used_rect() const;
 	Ref<Image> get_region(const Rect2i &p_area) const;
 
-	static void set_compress_bc_func(void (*p_compress_func)(Image *, float, UsedChannels));
-	static void set_compress_bptc_func(void (*p_compress_func)(Image *, float, UsedChannels));
+	static void set_compress_bc_func(void (*p_compress_func)(Image *, UsedChannels));
+	static void set_compress_bptc_func(void (*p_compress_func)(Image *, UsedChannels));
 	static String get_format_name(Format p_format);
 
 	Error load_png_from_buffer(const Vector<uint8_t> &p_array);
@@ -400,6 +403,10 @@ public:
 	Error load_webp_from_buffer(const Vector<uint8_t> &p_array);
 	Error load_tga_from_buffer(const Vector<uint8_t> &p_array);
 	Error load_bmp_from_buffer(const Vector<uint8_t> &p_array);
+	Error load_ktx_from_buffer(const Vector<uint8_t> &p_array);
+
+	Error load_svg_from_buffer(const Vector<uint8_t> &p_array, float scale = 1.0);
+	Error load_svg_from_string(const String &p_svg_str, float scale = 1.0);
 
 	void convert_rg_to_ra_rgba8();
 	void convert_ra_rgba8_to_rg();

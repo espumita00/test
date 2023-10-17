@@ -36,6 +36,7 @@
 #include "core/io/image.h"
 #include "core/io/marshalls.h"
 #include "core/io/missing_resource.h"
+#include "core/object/script_language.h"
 #include "core/version.h"
 
 //#define print_bl(m_what) print_line(m_what)
@@ -91,7 +92,8 @@ enum {
 	// Version 2: added 64 bits support for float and int.
 	// Version 3: changed nodepath encoding.
 	// Version 4: new string ID for ext/subresources, breaks forward compat.
-	FORMAT_VERSION = 4,
+	// Version 5: Ability to store script class in the header.
+	FORMAT_VERSION = 5,
 	FORMAT_VERSION_CAN_RENAME_DEPS = 1,
 	FORMAT_VERSION_NO_NODEPATH_PROPERTY = 3,
 };
@@ -444,13 +446,12 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 						WARN_PRINT("Broken external resource! (index out of size)");
 						r_v = Variant();
 					} else {
-						if (external_resources[erindex].cache.is_null()) {
-							//cache not here yet, wait for it?
-							if (use_sub_threads) {
-								Error err;
-								external_resources.write[erindex].cache = ResourceLoader::load_threaded_get(external_resources[erindex].path, &err);
-
-								if (err != OK || external_resources[erindex].cache.is_null()) {
+						Ref<ResourceLoader::LoadToken> &load_token = external_resources.write[erindex].load_token;
+						if (load_token.is_valid()) { // If not valid, it's OK since then we know this load accepts broken dependencies.
+							Error err;
+							Ref<Resource> res = ResourceLoader::_load_complete(*load_token.ptr(), &err);
+							if (res.is_null()) {
+								if (!ResourceLoader::is_cleaning_tasks()) {
 									if (!ResourceLoader::get_abort_on_missing_resources()) {
 										ResourceLoader::notify_dependency_error(local_path, external_resources[erindex].path, external_resources[erindex].type);
 									} else {
@@ -458,12 +459,11 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 										ERR_FAIL_V_MSG(error, "Can't load dependency: " + external_resources[erindex].path + ".");
 									}
 								}
+							} else {
+								r_v = res;
 							}
 						}
-
-						r_v = external_resources[erindex].cache;
 					}
-
 				} break;
 				default: {
 					ERR_FAIL_V(ERR_FILE_CORRUPT);
@@ -683,28 +683,13 @@ Error ResourceLoaderBinary::load() {
 		}
 
 		external_resources.write[i].path = path; //remap happens here, not on load because on load it can actually be used for filesystem dock resource remap
-
-		if (!use_sub_threads) {
-			external_resources.write[i].cache = ResourceLoader::load(path, external_resources[i].type);
-
-			if (external_resources[i].cache.is_null()) {
-				if (!ResourceLoader::get_abort_on_missing_resources()) {
-					ResourceLoader::notify_dependency_error(local_path, path, external_resources[i].type);
-				} else {
-					error = ERR_FILE_MISSING_DEPENDENCIES;
-					ERR_FAIL_V_MSG(error, "Can't load dependency: " + path + ".");
-				}
-			}
-
-		} else {
-			Error err = ResourceLoader::load_threaded_request(path, external_resources[i].type, use_sub_threads, ResourceFormatLoader::CACHE_MODE_REUSE, local_path);
-			if (err != OK) {
-				if (!ResourceLoader::get_abort_on_missing_resources()) {
-					ResourceLoader::notify_dependency_error(local_path, path, external_resources[i].type);
-				} else {
-					error = ERR_FILE_MISSING_DEPENDENCIES;
-					ERR_FAIL_V_MSG(error, "Can't load dependency: " + path + ".");
-				}
+		external_resources.write[i].load_token = ResourceLoader::_load_start(path, external_resources[i].type, use_sub_threads ? ResourceLoader::LOAD_THREAD_DISTRIBUTE : ResourceLoader::LOAD_THREAD_FROM_CURRENT, ResourceFormatLoader::CACHE_MODE_REUSE);
+		if (!external_resources[i].load_token.is_valid()) {
+			if (!ResourceLoader::get_abort_on_missing_resources()) {
+				ResourceLoader::notify_dependency_error(local_path, path, external_resources[i].type);
+			} else {
+				error = ERR_FILE_MISSING_DEPENDENCIES;
+				ERR_FAIL_V_MSG(error, "Can't load dependency: " + path + ".");
 			}
 		}
 	}
@@ -831,6 +816,18 @@ Error ResourceLoaderBinary::load() {
 				}
 			}
 
+			if (value.get_type() == Variant::ARRAY) {
+				Array set_array = value;
+				bool is_get_valid = false;
+				Variant get_value = res->get(name, &is_get_valid);
+				if (is_get_valid && get_value.get_type() == Variant::ARRAY) {
+					Array get_array = get_value;
+					if (!set_array.is_same_typed(get_array)) {
+						value = Array(set_array, get_array.get_typed_builtin(), get_array.get_typed_class_name(), get_array.get_typed_script());
+					}
+				}
+			}
+
 			if (set_valid) {
 				res->set(name, value);
 			}
@@ -924,14 +921,23 @@ void ResourceLoaderBinary::get_dependencies(Ref<FileAccess> p_f, List<String> *p
 
 	for (int i = 0; i < external_resources.size(); i++) {
 		String dep;
+		String fallback_path;
+
 		if (external_resources[i].uid != ResourceUID::INVALID_ID) {
 			dep = ResourceUID::get_singleton()->id_to_text(external_resources[i].uid);
+			fallback_path = external_resources[i].path; // Used by Dependency Editor, in case uid path fails.
 		} else {
 			dep = external_resources[i].path;
 		}
 
 		if (p_add_types && !external_resources[i].type.is_empty()) {
 			dep += "::" + external_resources[i].type;
+		}
+		if (!fallback_path.is_empty()) {
+			if (!p_add_types) {
+				dep += "::"; // Ensure that path comes third, even if there is no type.
+			}
+			dep += "::" + fallback_path;
 		}
 
 		p_dependencies->push_back(dep);
@@ -1007,6 +1013,10 @@ void ResourceLoaderBinary::open(Ref<FileAccess> p_f, bool p_no_resources, bool p
 	} else {
 		f->get_64(); // skip over uid field
 		uid = ResourceUID::INVALID_ID;
+	}
+
+	if (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_HAS_SCRIPT_CLASS) {
+		script_class = get_unicode_string();
 	}
 
 	for (int i = 0; i < ResourceFormatSaverBinaryInstance::RESERVED_FIELDS; i++) {
@@ -1111,6 +1121,57 @@ String ResourceLoaderBinary::recognize(Ref<FileAccess> p_f) {
 	}
 
 	return get_unicode_string();
+}
+
+String ResourceLoaderBinary::recognize_script_class(Ref<FileAccess> p_f) {
+	error = OK;
+
+	f = p_f;
+	uint8_t header[4];
+	f->get_buffer(header, 4);
+	if (header[0] == 'R' && header[1] == 'S' && header[2] == 'C' && header[3] == 'C') {
+		// Compressed.
+		Ref<FileAccessCompressed> fac;
+		fac.instantiate();
+		error = fac->open_after_magic(f);
+		if (error != OK) {
+			f.unref();
+			return "";
+		}
+		f = fac;
+
+	} else if (header[0] != 'R' || header[1] != 'S' || header[2] != 'R' || header[3] != 'C') {
+		// Not normal.
+		error = ERR_FILE_UNRECOGNIZED;
+		f.unref();
+		return "";
+	}
+
+	bool big_endian = f->get_32();
+	f->get_32(); // use_real64
+
+	f->set_big_endian(big_endian != 0); //read big endian if saved as big endian
+
+	uint32_t ver_major = f->get_32();
+	f->get_32(); // ver_minor
+	uint32_t ver_fmt = f->get_32();
+
+	if (ver_fmt > FORMAT_VERSION || ver_major > VERSION_MAJOR) {
+		f.unref();
+		return "";
+	}
+
+	get_unicode_string(); // type
+
+	f->get_64(); // Metadata offset
+	uint32_t flags = f->get_32();
+	f->get_64(); // UID
+
+	if (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_HAS_SCRIPT_CLASS) {
+		return get_unicode_string();
+	} else {
+		return String();
+	}
 }
 
 Ref<Resource> ResourceFormatLoaderBinary::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
@@ -1295,6 +1356,9 @@ Error ResourceFormatLoaderBinary::rename_dependencies(const String &p_path, cons
 
 	fw->store_32(flags);
 	fw->store_64(uid_data);
+	if (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_HAS_SCRIPT_CLASS) {
+		save_ustring(fw, get_ustring(f));
+	}
 
 	for (int i = 0; i < ResourceFormatSaverBinaryInstance::RESERVED_FIELDS; i++) {
 		fw->store_32(0); // reserved
@@ -1414,6 +1478,18 @@ String ResourceFormatLoaderBinary::get_resource_type(const String &p_path) const
 	loader.res_path = loader.local_path;
 	String r = loader.recognize(f);
 	return ClassDB::get_compatibility_remapped_class(r);
+}
+
+String ResourceFormatLoaderBinary::get_resource_script_class(const String &p_path) const {
+	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
+	if (f.is_null()) {
+		return ""; //could not read
+	}
+
+	ResourceLoaderBinary loader;
+	loader.local_path = ProjectSettings::get_singleton()->localize_path(p_path);
+	loader.res_path = loader.local_path;
+	return loader.recognize_script_class(f);
 }
 
 ResourceUID::ID ResourceFormatLoaderBinary::get_resource_uid(const String &p_path) const {
@@ -1700,9 +1776,9 @@ void ResourceFormatSaverBinaryInstance::write_variant(Ref<FileAccess> f, const V
 		case Variant::OBJECT: {
 			f->store_32(VARIANT_OBJECT);
 			Ref<Resource> res = p_property;
-			if (res.is_null()) {
+			if (res.is_null() || res->get_meta(SNAME("_skip_save_"), false)) {
 				f->store_32(OBJECT_EMPTY);
-				return; // don't save it
+				return; // Don't save it.
 			}
 
 			if (!res->is_built_in()) {
@@ -1867,7 +1943,7 @@ void ResourceFormatSaverBinaryInstance::_find_resources(const Variant &p_variant
 		case Variant::OBJECT: {
 			Ref<Resource> res = p_variant;
 
-			if (res.is_null() || external_resources.has(res)) {
+			if (res.is_null() || external_resources.has(res) || res->get_meta(SNAME("_skip_save_"), false)) {
 				return;
 			}
 
@@ -1885,6 +1961,8 @@ void ResourceFormatSaverBinaryInstance::_find_resources(const Variant &p_variant
 				return;
 			}
 
+			resource_set.insert(res);
+
 			List<PropertyInfo> property_list;
 
 			res->get_property_list(&property_list);
@@ -1893,14 +1971,17 @@ void ResourceFormatSaverBinaryInstance::_find_resources(const Variant &p_variant
 				if (E.usage & PROPERTY_USAGE_STORAGE) {
 					Variant value = res->get(E.name);
 					if (E.usage & PROPERTY_USAGE_RESOURCE_NOT_PERSISTENT) {
+						NonPersistentKey npk;
+						npk.base = res;
+						npk.property = E.name;
+						non_persistent_map[npk] = value;
+
 						Ref<Resource> sres = value;
 						if (sres.is_valid()) {
-							NonPersistentKey npk;
-							npk.base = res;
-							npk.property = E.name;
-							non_persistent_map[npk] = sres;
 							resource_set.insert(sres);
 							saved_resources.push_back(sres);
+						} else {
+							_find_resources(value);
 						}
 					} else {
 						_find_resources(value);
@@ -1908,7 +1989,6 @@ void ResourceFormatSaverBinaryInstance::_find_resources(const Variant &p_variant
 				}
 			}
 
-			resource_set.insert(res);
 			saved_resources.push_back(res);
 
 		} break;
@@ -2033,15 +2113,31 @@ Error ResourceFormatSaverBinaryInstance::save(const String &p_path, const Ref<Re
 
 	save_unicode_string(f, _resource_get_class(p_resource));
 	f->store_64(0); //offset to import metadata
+
+	String script_class;
 	{
 		uint32_t format_flags = FORMAT_FLAG_NAMED_SCENE_IDS | FORMAT_FLAG_UIDS;
 #ifdef REAL_T_IS_DOUBLE
 		format_flags |= FORMAT_FLAG_REAL_T_IS_DOUBLE;
 #endif
+		if (!p_resource->is_class("PackedScene")) {
+			Ref<Script> s = p_resource->get_script();
+			if (s.is_valid()) {
+				script_class = s->get_global_name();
+				if (!script_class.is_empty()) {
+					format_flags |= ResourceFormatSaverBinaryInstance::FORMAT_FLAG_HAS_SCRIPT_CLASS;
+				}
+			}
+		}
+
 		f->store_32(format_flags);
 	}
 	ResourceUID::ID uid = ResourceSaver::get_resource_id_for_path(p_path, true);
 	f->store_64(uid);
+	if (!script_class.is_empty()) {
+		save_unicode_string(f, script_class);
+	}
+
 	for (int i = 0; i < ResourceFormatSaverBinaryInstance::RESERVED_FIELDS; i++) {
 		f->store_32(0); // reserved
 	}
@@ -2293,6 +2389,10 @@ Error ResourceFormatSaverBinaryInstance::set_uid(const String &p_path, ResourceU
 
 	fw->store_32(flags);
 	fw->store_64(p_uid);
+
+	if (flags & ResourceFormatSaverBinaryInstance::FORMAT_FLAG_HAS_SCRIPT_CLASS) {
+		save_ustring(fw, get_ustring(f));
+	}
 
 	//rest of file
 	uint8_t b = f->get_8();

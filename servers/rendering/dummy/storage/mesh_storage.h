@@ -71,7 +71,7 @@ public:
 
 	virtual void mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface) override {
 		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND(!m);
+		ERR_FAIL_NULL(m);
 		m->surfaces.push_back(RS::SurfaceData());
 		RS::SurfaceData *s = &m->surfaces.write[m->surfaces.size() - 1];
 		s->format = p_surface.format;
@@ -99,7 +99,7 @@ public:
 
 	virtual RS::SurfaceData mesh_get_surface(RID p_mesh, int p_surface) const override {
 		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND_V(!m, RS::SurfaceData());
+		ERR_FAIL_NULL_V(m, RS::SurfaceData());
 		ERR_FAIL_INDEX_V(p_surface, m->surfaces.size(), RS::SurfaceData());
 		RS::SurfaceData s = m->surfaces[p_surface];
 		return s;
@@ -107,7 +107,7 @@ public:
 
 	virtual int mesh_get_surface_count(RID p_mesh) const override {
 		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
-		ERR_FAIL_COND_V(!m, 0);
+		ERR_FAIL_NULL_V(m, 0);
 		return m->surfaces.size();
 	}
 
@@ -126,6 +126,7 @@ public:
 	virtual void mesh_instance_set_skeleton(RID p_mesh_instance, RID p_skeleton) override {}
 	virtual void mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int p_shape, float p_weight) override {}
 	virtual void mesh_instance_check_for_update(RID p_mesh_instance) override {}
+	virtual void mesh_instance_set_canvas_item_transform(RID p_mesh_instance, const Transform2D &p_transform) override {}
 	virtual void update_mesh_instances() override {}
 
 	/* MULTIMESH API */

@@ -37,6 +37,7 @@ class AcceptDialog;
 class ButtonGroup;
 class HScrollBar;
 class HSlider;
+class Label;
 class MenuButton;
 class Panel;
 class ScrollContainer;
@@ -90,9 +91,8 @@ class Polygon2DEditor : public AbstractPolygon2DEditor {
 	TextureRect *uv_icon_zoom = nullptr;
 
 	Ref<ViewPanner> uv_panner;
-	void _uv_scroll_callback(Vector2 p_scroll_vec, bool p_alt);
-	void _uv_pan_callback(Vector2 p_scroll_vec);
-	void _uv_zoom_callback(Vector2 p_scroll_vec, Vector2 p_origin, bool p_alt);
+	void _uv_pan_callback(Vector2 p_scroll_vec, Ref<InputEvent> p_event);
+	void _uv_zoom_callback(float p_zoom_factor, Vector2 p_origin, Ref<InputEvent> p_event);
 
 	VBoxContainer *bone_scroll_main_vb = nullptr;
 	ScrollContainer *bone_scroll = nullptr;

@@ -101,9 +101,9 @@ void AudioDriverWeb::_audio_driver_capture(int p_from, int p_samples) {
 }
 
 Error AudioDriverWeb::init() {
-	int latency = GLOBAL_GET("audio/driver/output_latency");
+	int latency = Engine::get_singleton()->get_audio_output_latency();
 	if (!audio_context.inited) {
-		audio_context.mix_rate = GLOBAL_GET("audio/driver/mix_rate");
+		audio_context.mix_rate = _get_configured_mix_rate();
 		audio_context.channel_count = godot_audio_init(&audio_context.mix_rate, latency, &_state_change_callback, &_latency_update_callback);
 		audio_context.inited = true;
 	}
@@ -166,18 +166,18 @@ void AudioDriverWeb::finish() {
 	}
 }
 
-Error AudioDriverWeb::capture_start() {
+Error AudioDriverWeb::input_start() {
 	lock();
 	input_buffer_init(buffer_length);
 	unlock();
-	if (godot_audio_capture_start()) {
+	if (godot_audio_input_start()) {
 		return FAILED;
 	}
 	return OK;
 }
 
-Error AudioDriverWeb::capture_stop() {
-	godot_audio_capture_stop();
+Error AudioDriverWeb::input_stop() {
+	godot_audio_input_stop();
 	lock();
 	input_buffer.clear();
 	unlock();

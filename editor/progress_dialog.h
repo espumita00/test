@@ -85,10 +85,9 @@ class ProgressDialog : public PopupPanel {
 	void _popup();
 
 	void _cancel_pressed();
-	bool cancelled = false;
+	bool canceled = false;
 
 protected:
-	void _notification(int p_what);
 	static void _bind_methods();
 
 public:

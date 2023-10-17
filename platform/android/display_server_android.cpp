@@ -30,19 +30,23 @@
 
 #include "display_server_android.h"
 
-#include "core/config/project_settings.h"
 #include "java_godot_io_wrapper.h"
 #include "java_godot_wrapper.h"
 #include "os_android.h"
 #include "tts_android.h"
 
+#include "core/config/project_settings.h"
+
 #if defined(VULKAN_ENABLED)
+#include "vulkan_context_android.h"
+
 #include "drivers/vulkan/rendering_device_vulkan.h"
-#include "platform/android/vulkan/vulkan_context_android.h"
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #endif
+
 #ifdef GLES3_ENABLED
 #include "drivers/gles3/rasterizer_gles3.h"
+
 #include <EGL/egl.h>
 #endif
 
@@ -105,6 +109,20 @@ void DisplayServerAndroid::tts_resume() {
 
 void DisplayServerAndroid::tts_stop() {
 	TTS_Android::stop();
+}
+
+bool DisplayServerAndroid::is_dark_mode_supported() const {
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL_V(godot_java, false);
+
+	return godot_java->is_dark_mode_supported();
+}
+
+bool DisplayServerAndroid::is_dark_mode() const {
+	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
+	ERR_FAIL_NULL_V(godot_java, false);
+
+	return godot_java->is_dark_mode();
 }
 
 void DisplayServerAndroid::clipboard_set(const String &p_text) {
@@ -212,7 +230,18 @@ float DisplayServerAndroid::screen_get_scale(int p_screen) const {
 	GodotIOJavaWrapper *godot_io_java = OS_Android::get_singleton()->get_godot_io_java();
 	ERR_FAIL_NULL_V(godot_io_java, 1.0f);
 
-	return godot_io_java->get_scaled_density();
+	float screen_scale = godot_io_java->get_scaled_density();
+
+	// Update the scale to avoid cropping.
+	Size2i screen_size = screen_get_size(p_screen);
+	if (screen_size != Size2i()) {
+		float width_scale = screen_size.width / (float)OS_Android::DEFAULT_WINDOW_WIDTH;
+		float height_scale = screen_size.height / (float)OS_Android::DEFAULT_WINDOW_HEIGHT;
+		screen_scale = MIN(screen_scale, MIN(width_scale, height_scale));
+	}
+
+	print_line("Selected screen scale: ", screen_scale);
+	return screen_scale;
 }
 
 float DisplayServerAndroid::screen_get_refresh_rate(int p_screen) const {
@@ -280,13 +309,10 @@ void DisplayServerAndroid::window_set_drop_files_callback(const Callable &p_call
 
 void DisplayServerAndroid::_window_callback(const Callable &p_callable, const Variant &p_arg, bool p_deferred) const {
 	if (!p_callable.is_null()) {
-		const Variant *argp = &p_arg;
-		Variant ret;
-		Callable::CallError ce;
 		if (p_deferred) {
-			p_callable.callp((const Variant **)&argp, 1, ret, ce);
+			p_callable.call(p_arg);
 		} else {
-			p_callable.call_deferredp((const Variant **)&argp, 1);
+			p_callable.call_deferred(p_arg);
 		}
 	}
 }
@@ -438,6 +464,10 @@ void DisplayServerAndroid::window_move_to_foreground(DisplayServer::WindowID p_w
 	// Not supported on Android.
 }
 
+bool DisplayServerAndroid::window_is_focused(WindowID p_window) const {
+	return true;
+}
+
 bool DisplayServerAndroid::window_can_draw(DisplayServer::WindowID p_window) const {
 	return true;
 }
@@ -505,16 +535,9 @@ void DisplayServerAndroid::reset_window() {
 }
 
 void DisplayServerAndroid::notify_surface_changed(int p_width, int p_height) {
-	if (rect_changed_callback.is_null()) {
-		return;
+	if (rect_changed_callback.is_valid()) {
+		rect_changed_callback.call(Rect2i(0, 0, p_width, p_height));
 	}
-
-	const Variant size = Rect2i(0, 0, p_width, p_height);
-	const Variant *sizep = &size;
-	Variant ret;
-	Callable::CallError ce;
-
-	rect_changed_callback.callp(reinterpret_cast<const Variant **>(&sizep), 1, ret, ce);
 }
 
 DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, DisplayServer::WindowMode p_mode, DisplayServer::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error) {
@@ -524,7 +547,7 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 
 #if defined(GLES3_ENABLED)
 	if (rendering_driver == "opengl3") {
-		RasterizerGLES3::make_current();
+		RasterizerGLES3::make_current(false);
 	}
 #endif
 
@@ -645,6 +668,7 @@ void DisplayServerAndroid::_cursor_set_shape_helper(CursorShape p_shape, bool fo
 }
 
 void DisplayServerAndroid::cursor_set_shape(DisplayServer::CursorShape p_shape) {
+	ERR_FAIL_INDEX(p_shape, CURSOR_MAX);
 	_cursor_set_shape_helper(p_shape);
 }
 
@@ -653,6 +677,7 @@ DisplayServer::CursorShape DisplayServerAndroid::cursor_get_shape() const {
 }
 
 void DisplayServerAndroid::cursor_set_custom_image(const Ref<Resource> &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) {
+	ERR_FAIL_INDEX(p_shape, CURSOR_MAX);
 	String cursor_path = p_cursor.is_valid() ? p_cursor->get_path() : "";
 	if (!cursor_path.is_empty()) {
 		cursor_path = ProjectSettings::get_singleton()->globalize_path(cursor_path);
@@ -663,16 +688,19 @@ void DisplayServerAndroid::cursor_set_custom_image(const Ref<Resource> &p_cursor
 
 void DisplayServerAndroid::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_mode, WindowID p_window) {
 #if defined(VULKAN_ENABLED)
-	context_vulkan->set_vsync_mode(p_window, p_vsync_mode);
+	if (context_vulkan) {
+		context_vulkan->set_vsync_mode(p_window, p_vsync_mode);
+	}
 #endif
 }
 
 DisplayServer::VSyncMode DisplayServerAndroid::window_get_vsync_mode(WindowID p_window) const {
 #if defined(VULKAN_ENABLED)
-	return context_vulkan->get_vsync_mode(p_window);
-#else
-	return DisplayServer::VSYNC_ENABLED;
+	if (context_vulkan) {
+		return context_vulkan->get_vsync_mode(p_window);
+	}
 #endif
+	return DisplayServer::VSYNC_ENABLED;
 }
 
 void DisplayServerAndroid::reset_swap_buffers_flag() {

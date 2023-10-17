@@ -33,6 +33,7 @@
 
 #include "core/templates/vset.h"
 #include "scene/3d/collision_object_3d.h"
+#include "scene/scene_string_names.h"
 
 class Area3D : public CollisionObject3D {
 	GDCLASS(Area3D, CollisionObject3D);
@@ -51,7 +52,7 @@ private:
 	Vector3 gravity_vec;
 	real_t gravity = 0.0;
 	bool gravity_is_point = false;
-	real_t gravity_distance_scale = 0.0;
+	real_t gravity_point_unit_distance = 0.0;
 
 	SpaceOverride linear_damp_space_override = SPACE_OVERRIDE_DISABLED;
 	SpaceOverride angular_damp_space_override = SPACE_OVERRIDE_DISABLED;
@@ -134,10 +135,10 @@ private:
 	void _clear_monitoring();
 
 	bool audio_bus_override = false;
-	StringName audio_bus = "Master";
+	StringName audio_bus = SceneStringNames::get_singleton()->Master;
 
 	bool use_reverb_bus = false;
-	StringName reverb_bus = "Master";
+	StringName reverb_bus = SceneStringNames::get_singleton()->Master;
 	float reverb_amount = 0.0;
 	float reverb_uniformity = 0.0;
 
@@ -155,8 +156,8 @@ public:
 	void set_gravity_is_point(bool p_enabled);
 	bool is_gravity_a_point() const;
 
-	void set_gravity_point_distance_scale(real_t p_scale);
-	real_t get_gravity_point_distance_scale() const;
+	void set_gravity_point_unit_distance(real_t p_scale);
+	real_t get_gravity_point_unit_distance() const;
 
 	void set_gravity_point_center(const Vector3 &p_center);
 	const Vector3 &get_gravity_point_center() const;
@@ -179,8 +180,8 @@ public:
 	void set_linear_damp(real_t p_linear_damp);
 	real_t get_linear_damp() const;
 
-	void set_priority(real_t p_priority);
-	real_t get_priority() const;
+	void set_priority(int p_priority);
+	int get_priority() const;
 
 	void set_wind_force_magnitude(real_t p_wind_force_magnitude);
 	real_t get_wind_force_magnitude() const;

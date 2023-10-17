@@ -34,7 +34,6 @@
 #include "core/core_string_names.h"
 #include "core/debugger/engine_debugger.h"
 #include "core/debugger/script_debugger.h"
-#include "core/variant/typed_array.h"
 
 #include <stdint.h>
 
@@ -43,7 +42,7 @@ int ScriptServer::_language_count = 0;
 
 bool ScriptServer::scripting_enabled = true;
 bool ScriptServer::reload_scripts_on_save = false;
-bool ScriptServer::languages_finished = false;
+SafeFlag ScriptServer::languages_finished; // Used until GH-76581 is fixed properly.
 ScriptEditRequestFunction ScriptServer::edit_request_func = nullptr;
 
 void Script::_notification(int p_what) {
@@ -147,6 +146,7 @@ void Script::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_property_default_value", "property"), &Script::_get_property_default_value);
 
 	ClassDB::bind_method(D_METHOD("is_tool"), &Script::is_tool);
+	ClassDB::bind_method(D_METHOD("is_abstract"), &Script::is_abstract);
 
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "source_code", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_source_code", "get_source_code");
 }
@@ -165,22 +165,30 @@ ScriptLanguage *ScriptServer::get_language(int p_idx) {
 	return _languages[p_idx];
 }
 
-void ScriptServer::register_language(ScriptLanguage *p_language) {
-	ERR_FAIL_NULL(p_language);
-	ERR_FAIL_COND(_language_count >= MAX_LANGUAGES);
+Error ScriptServer::register_language(ScriptLanguage *p_language) {
+	ERR_FAIL_NULL_V(p_language, ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V_MSG(_language_count >= MAX_LANGUAGES, ERR_UNAVAILABLE, "Script languages limit has been reach, cannot register more.");
+	for (int i = 0; i < _language_count; i++) {
+		const ScriptLanguage *other_language = _languages[i];
+		ERR_FAIL_COND_V_MSG(other_language->get_extension() == p_language->get_extension(), ERR_ALREADY_EXISTS, "A script language with extension '" + p_language->get_extension() + "' is already registered.");
+		ERR_FAIL_COND_V_MSG(other_language->get_name() == p_language->get_name(), ERR_ALREADY_EXISTS, "A script language with name '" + p_language->get_name() + "' is already registered.");
+		ERR_FAIL_COND_V_MSG(other_language->get_type() == p_language->get_type(), ERR_ALREADY_EXISTS, "A script language with type '" + p_language->get_type() + "' is already registered.");
+	}
 	_languages[_language_count++] = p_language;
+	return OK;
 }
 
-void ScriptServer::unregister_language(const ScriptLanguage *p_language) {
+Error ScriptServer::unregister_language(const ScriptLanguage *p_language) {
 	for (int i = 0; i < _language_count; i++) {
 		if (_languages[i] == p_language) {
 			_language_count--;
 			if (i < _language_count) {
 				SWAP(_languages[i], _languages[_language_count]);
 			}
-			return;
+			return OK;
 		}
 	}
+	return ERR_DOES_NOT_EXIST;
 }
 
 void ScriptServer::init_languages() {
@@ -221,7 +229,7 @@ void ScriptServer::finish_languages() {
 		_languages[i]->finish();
 	}
 	global_classes_clear();
-	languages_finished = true;
+	languages_finished.set();
 }
 
 void ScriptServer::set_reload_scripts_on_save(bool p_enable) {
@@ -233,21 +241,30 @@ bool ScriptServer::is_reload_scripts_on_save_enabled() {
 }
 
 void ScriptServer::thread_enter() {
+	if (!languages_finished.is_set()) {
+		return;
+	}
 	for (int i = 0; i < _language_count; i++) {
 		_languages[i]->thread_enter();
 	}
 }
 
 void ScriptServer::thread_exit() {
+	if (!languages_finished.is_set()) {
+		return;
+	}
 	for (int i = 0; i < _language_count; i++) {
 		_languages[i]->thread_exit();
 	}
 }
 
 HashMap<StringName, ScriptServer::GlobalScriptClass> ScriptServer::global_classes;
+HashMap<StringName, Vector<StringName>> ScriptServer::inheriters_cache;
+bool ScriptServer::inheriters_cache_dirty = true;
 
 void ScriptServer::global_classes_clear() {
 	global_classes.clear();
+	inheriters_cache.clear();
 }
 
 void ScriptServer::add_global_class(const StringName &p_class, const StringName &p_base, const StringName &p_language, const String &p_path) {
@@ -257,16 +274,44 @@ void ScriptServer::add_global_class(const StringName &p_class, const StringName 
 	g.path = p_path;
 	g.base = p_base;
 	global_classes[p_class] = g;
+	inheriters_cache_dirty = true;
 }
 
 void ScriptServer::remove_global_class(const StringName &p_class) {
 	global_classes.erase(p_class);
+	inheriters_cache_dirty = true;
+}
+
+void ScriptServer::get_inheriters_list(const StringName &p_base_type, List<StringName> *r_classes) {
+	if (inheriters_cache_dirty) {
+		inheriters_cache.clear();
+		for (const KeyValue<StringName, GlobalScriptClass> &K : global_classes) {
+			if (!inheriters_cache.has(K.value.base)) {
+				inheriters_cache[K.value.base] = Vector<StringName>();
+			}
+			inheriters_cache[K.value.base].push_back(K.key);
+		}
+		for (KeyValue<StringName, Vector<StringName>> &K : inheriters_cache) {
+			K.value.sort_custom<StringName::AlphCompare>();
+		}
+		inheriters_cache_dirty = false;
+	}
+
+	if (!inheriters_cache.has(p_base_type)) {
+		return;
+	}
+
+	const Vector<StringName> &v = inheriters_cache[p_base_type];
+	for (int i = 0; i < v.size(); i++) {
+		r_classes->push_back(v[i]);
+	}
 }
 
 void ScriptServer::remove_global_class_by_path(const String &p_path) {
 	for (const KeyValue<StringName, GlobalScriptClass> &kv : global_classes) {
 		if (kv.value.path == p_path) {
 			global_classes.erase(kv.key);
+			inheriters_cache_dirty = true;
 			return;
 		}
 	}
@@ -338,41 +383,11 @@ void ScriptServer::save_global_classes() {
 	ProjectSettings::get_singleton()->store_global_class_list(gcarr);
 }
 
+String ScriptServer::get_global_class_cache_file_path() {
+	return ProjectSettings::get_singleton()->get_global_class_list_path();
+}
+
 ////////////////////
-
-Variant ScriptInstance::call_const(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
-	return callp(p_method, p_args, p_argcount, r_error);
-}
-
-void ScriptInstance::get_property_state(List<Pair<StringName, Variant>> &state) {
-	List<PropertyInfo> pinfo;
-	get_property_list(&pinfo);
-	for (const PropertyInfo &E : pinfo) {
-		if (E.usage & PROPERTY_USAGE_STORAGE) {
-			Pair<StringName, Variant> p;
-			p.first = E.name;
-			if (get(p.first, p.second)) {
-				state.push_back(p);
-			}
-		}
-	}
-}
-
-void ScriptInstance::property_set_fallback(const StringName &, const Variant &, bool *r_valid) {
-	if (r_valid) {
-		*r_valid = false;
-	}
-}
-
-Variant ScriptInstance::property_get_fallback(const StringName &, bool *r_valid) {
-	if (r_valid) {
-		*r_valid = false;
-	}
-	return Variant();
-}
-
-ScriptInstance::~ScriptInstance() {
-}
 
 ScriptCodeCompletionCache *ScriptCodeCompletionCache::singleton = nullptr;
 ScriptCodeCompletionCache::ScriptCodeCompletionCache() {
@@ -416,6 +431,52 @@ void ScriptLanguage::get_core_type_words(List<String> *p_core_type_words) const 
 }
 
 void ScriptLanguage::frame() {
+}
+
+TypedArray<int> ScriptLanguage::CodeCompletionOption::get_option_characteristics(const String &p_base) {
+	// Return characacteristics of the match found by order of importance.
+	// Matches will be ranked by a lexicographical order on the vector returned by this function.
+	// The lower values indicate better matches and that they should go before in the order of appearance.
+	if (last_matches == matches) {
+		return charac;
+	}
+	charac.clear();
+	// Ensure base is not empty and at the same time that matches is not empty too.
+	if (p_base.length() == 0) {
+		last_matches = matches;
+		charac.push_back(location);
+		return charac;
+	}
+	charac.push_back(matches.size());
+	charac.push_back((matches[0].first == 0) ? 0 : 1);
+	const char32_t *target_char = &p_base[0];
+	int bad_case = 0;
+	for (const Pair<int, int> &match_segment : matches) {
+		const char32_t *string_to_complete_char = &display[match_segment.first];
+		for (int j = 0; j < match_segment.second; j++, string_to_complete_char++, target_char++) {
+			if (*string_to_complete_char != *target_char) {
+				bad_case++;
+			}
+		}
+	}
+	charac.push_back(bad_case);
+	charac.push_back(location);
+	charac.push_back(matches[0].first);
+	last_matches = matches;
+	return charac;
+}
+
+void ScriptLanguage::CodeCompletionOption::clear_characteristics() {
+	charac = TypedArray<int>();
+}
+
+TypedArray<int> ScriptLanguage::CodeCompletionOption::get_option_cached_characteristics() const {
+	// Only returns the cached value and warns if it was not updated since the last change of matches.
+	if (last_matches != matches) {
+		WARN_PRINT("Characteristics are not up to date.");
+	}
+
+	return charac;
 }
 
 bool PlaceHolderScriptInstance::set(const StringName &p_name, const Variant &p_value) {

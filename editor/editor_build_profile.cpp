@@ -32,12 +32,14 @@
 
 #include "core/io/dir_access.h"
 #include "core/io/json.h"
-#include "editor/editor_file_dialog.h"
 #include "editor/editor_file_system.h"
 #include "editor/editor_node.h"
+#include "editor/editor_paths.h"
 #include "editor/editor_property_name_processor.h"
 #include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
+#include "editor/gui/editor_file_dialog.h"
 
 const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 	// This maps to SCons build options.
@@ -473,7 +475,7 @@ void EditorBuildProfileManager::_find_files(EditorFileSystemDirectory *p_dir, co
 void EditorBuildProfileManager::_detect_classes() {
 	HashMap<String, DetectedFile> previous_file_cache;
 
-	Ref<FileAccess> f = FileAccess::open("res://.godot/editor/used_class_cache", FileAccess::READ);
+	Ref<FileAccess> f = FileAccess::open(EditorPaths::get_singleton()->get_project_settings_dir().path_join("used_class_cache"), FileAccess::READ);
 	if (f.is_valid()) {
 		while (!f->eof_reached()) {
 			String l = f->get_line();
@@ -497,7 +499,7 @@ void EditorBuildProfileManager::_detect_classes() {
 	HashSet<StringName> used_classes;
 
 	// Find classes and update the disk cache in the process.
-	f = FileAccess::open("res://.godot/editor/used_class_cache", FileAccess::WRITE);
+	f = FileAccess::open(EditorPaths::get_singleton()->get_project_settings_dir().path_join("used_class_cache"), FileAccess::WRITE);
 
 	for (const KeyValue<String, DetectedFile> &E : updated_file_cache) {
 		String l = E.key + "::" + itos(E.value.timestamp) + "::" + E.value.md5 + "::";
@@ -599,7 +601,7 @@ void EditorBuildProfileManager::_fill_classes_from(TreeItem *p_parent, const Str
 
 	bool disabled = edited->is_class_disabled(p_class);
 	if (disabled) {
-		class_item->set_custom_color(0, class_list->get_theme_color(SNAME("disabled_font_color"), SNAME("Editor")));
+		class_item->set_custom_color(0, class_list->get_theme_color(SNAME("disabled_font_color"), EditorStringName(Editor)));
 	}
 
 	class_item->set_text(0, text);
@@ -644,24 +646,21 @@ void EditorBuildProfileManager::_class_list_item_selected() {
 
 	Variant md = item->get_metadata(0);
 	if (md.get_type() == Variant::STRING || md.get_type() == Variant::STRING_NAME) {
-		String class_name = md;
-		String class_description;
-
-		DocTools *dd = EditorHelp::get_doc_data();
-		HashMap<String, DocData::ClassDoc>::Iterator E = dd->class_list.find(class_name);
-		if (E) {
-			class_description = DTR(E->value.brief_description);
+		String text = description_bit->get_class_description(md);
+		if (!text.is_empty()) {
+			// Display both class name and description, since the help bit may be displayed
+			// far away from the location (especially if the dialog was resized to be taller).
+			description_bit->set_text(vformat("[b]%s[/b]: %s", md, text));
+			description_bit->get_rich_text()->set_self_modulate(Color(1, 1, 1, 1));
+		} else {
+			// Use nested `vformat()` as translators shouldn't interfere with BBCode tags.
+			description_bit->set_text(vformat(TTR("No description available for %s."), vformat("[b]%s[/b]", md)));
+			description_bit->get_rich_text()->set_self_modulate(Color(1, 1, 1, 0.5));
 		}
-
-		description_bit->set_text(class_description);
 	} else if (md.get_type() == Variant::INT) {
-		int build_option_id = md;
-		String build_option_description = EditorBuildProfile::get_build_option_description(EditorBuildProfile::BuildOption(build_option_id));
-
-		description_bit->set_text(TTRGET(build_option_description));
-		return;
-	} else {
-		return;
+		String build_option_description = EditorBuildProfile::get_build_option_description(EditorBuildProfile::BuildOption((int)md));
+		description_bit->set_text(vformat("[b]%s[/b]: %s", TTR(item->get_text(0)), TTRGET(build_option_description)));
+		description_bit->get_rich_text()->set_self_modulate(Color(1, 1, 1, 1));
 	}
 }
 

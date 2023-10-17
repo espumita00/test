@@ -2,7 +2,7 @@ proto = """
 #define GDVIRTUAL$VER($RET m_name $ARG) \\
 StringName _gdvirtual_##m_name##_sn = #m_name;\\
 mutable bool _gdvirtual_##m_name##_initialized = false;\\
-mutable GDExtensionClassCallVirtual _gdvirtual_##m_name = nullptr;\\
+mutable void* _gdvirtual_##m_name = nullptr;\\
 template<bool required>\\
 _FORCE_INLINE_ bool _gdvirtual_##m_name##_call($CALLARGS) $CONST { \\
 	ScriptInstance *_script_instance = ((Object*)(this))->get_script_instance();\\
@@ -16,15 +16,25 @@ _FORCE_INLINE_ bool _gdvirtual_##m_name##_call($CALLARGS) $CONST { \\
 		}    \\
 	}\\
     if (unlikely(_get_extension() && !_gdvirtual_##m_name##_initialized)) {\\
-        /* TODO: C-style cast because GDExtensionStringNamePtr's const qualifier is broken (see https://github.com/godotengine/godot/pull/67751) */\\
-        _gdvirtual_##m_name = (_get_extension() && _get_extension()->get_virtual) ? _get_extension()->get_virtual(_get_extension()->class_userdata, (GDExtensionStringNamePtr)&_gdvirtual_##m_name##_sn) : (GDExtensionClassCallVirtual) nullptr;\\
+        _gdvirtual_##m_name = nullptr;\\
+        if (_get_extension()->get_virtual_call_data && _get_extension()->call_virtual_with_data) {\\
+            _gdvirtual_##m_name = _get_extension()->get_virtual_call_data(_get_extension()->class_userdata, &_gdvirtual_##m_name##_sn);\\
+        } else if (_get_extension()->get_virtual) {\\
+            _gdvirtual_##m_name = (void *)_get_extension()->get_virtual(_get_extension()->class_userdata, &_gdvirtual_##m_name##_sn);\\
+        }\\
+        GDVIRTUAL_TRACK(_gdvirtual_##m_name, _gdvirtual_##m_name##_initialized); \\
         _gdvirtual_##m_name##_initialized = true;\\
     }\\
 	if (_gdvirtual_##m_name) {\\
 		$CALLPTRARGS\\
 		$CALLPTRRETDEF\\
-		_gdvirtual_##m_name(_get_extension_instance(),$CALLPTRARGPASS,$CALLPTRRETPASS);\\
-		$CALLPTRRET\\
+        if (_get_extension()->get_virtual_call_data && _get_extension()->call_virtual_with_data) {\\
+            _get_extension()->call_virtual_with_data(_get_extension_instance(), &_gdvirtual_##m_name##_sn, _gdvirtual_##m_name, $CALLPTRARGPASS,$CALLPTRRETPASS);\\
+            $CALLPTRRET\\
+        } else {\\
+		    ((GDExtensionClassCallVirtual)_gdvirtual_##m_name)(_get_extension_instance(),$CALLPTRARGPASS,$CALLPTRRETPASS);\\
+            $CALLPTRRET\\
+        }\\
 		return true;\\
 	}\\
 	\\
@@ -41,8 +51,13 @@ _FORCE_INLINE_ bool _gdvirtual_##m_name##_overridden() const { \\
 	    return _script_instance->has_method(_gdvirtual_##m_name##_sn);\\
 	}\\
     if (unlikely(_get_extension() && !_gdvirtual_##m_name##_initialized)) {\\
-        /* TODO: C-style cast because GDExtensionStringNamePtr's const qualifier is broken (see https://github.com/godotengine/godot/pull/67751) */\\
-        _gdvirtual_##m_name = (_get_extension() && _get_extension()->get_virtual) ? _get_extension()->get_virtual(_get_extension()->class_userdata, (GDExtensionStringNamePtr)&_gdvirtual_##m_name##_sn) : (GDExtensionClassCallVirtual) nullptr;\\
+         _gdvirtual_##m_name = nullptr;\\
+        if (_get_extension()->get_virtual_call_data && _get_extension()->call_virtual_with_data) {\\
+             _gdvirtual_##m_name = _get_extension()->get_virtual_call_data(_get_extension()->class_userdata, &_gdvirtual_##m_name##_sn);\\
+        } else if (_get_extension()->get_virtual) {\\
+             _gdvirtual_##m_name = (void *)_get_extension()->get_virtual(_get_extension()->class_userdata, &_gdvirtual_##m_name##_sn);\\
+        }\\
+        GDVIRTUAL_TRACK(_gdvirtual_##m_name, _gdvirtual_##m_name##_initialized); \\
         _gdvirtual_##m_name##_initialized = true;\\
     }\\
 	if (_gdvirtual_##m_name) {\\
@@ -72,6 +87,7 @@ def generate_version(argcount, const=False, returns=False):
         s = s.replace("$RVOID", "(void)r_ret;")  # If required, may lead to uninitialized errors
         s = s.replace("$CALLPTRRETDEF", "PtrToArg<m_ret>::EncodeT ret;")
         method_info += "\tmethod_info.return_val = GetTypeInfo<m_ret>::get_class_info();\\\n"
+        method_info += "\tmethod_info.return_val_metadata = GetTypeInfo<m_ret>::METADATA;\\\n"
     else:
         s = s.replace("$RET", "")
         s = s.replace("$RVOID", "")
@@ -113,6 +129,9 @@ def generate_version(argcount, const=False, returns=False):
         )
         callptrargsptr += "&argval" + str(i + 1)
         method_info += "\tmethod_info.arguments.push_back(GetTypeInfo<m_type" + str(i + 1) + ">::get_class_info());\\\n"
+        method_info += (
+            "\tmethod_info.arguments_metadata.push_back(GetTypeInfo<m_type" + str(i + 1) + ">::METADATA);\\\n"
+        )
 
     if argcount:
         callsiargs += "};\\\n"
@@ -150,18 +169,30 @@ def generate_version(argcount, const=False, returns=False):
 
 
 def run(target, source, env):
-
     max_versions = 12
 
     txt = """
 #ifndef GDVIRTUAL_GEN_H
 #define GDVIRTUAL_GEN_H
 
+#include "core/object/script_instance.h"
+
+#ifdef TOOLS_ENABLED
+#define GDVIRTUAL_TRACK(m_virtual, m_initialized) \\
+    if (_get_extension()->reloadable) {\\
+        VirtualMethodTracker *tracker = memnew(VirtualMethodTracker);\\
+        tracker->method = (void **)&m_virtual;\\
+        tracker->initialized = &m_initialized;\\
+        tracker->next = virtual_method_list;\\
+        virtual_method_list = tracker;\\
+    }
+#else
+#define GDVIRTUAL_TRACK(m_virtual, m_initialized)
+#endif
 
 """
 
     for i in range(max_versions + 1):
-
         txt += "/* " + str(i) + " Arguments */\n\n"
         txt += generate_version(i, False, False)
         txt += generate_version(i, False, True)

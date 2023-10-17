@@ -51,6 +51,7 @@ class CreateDialog : public ConfirmationDialog {
 	Tree *search_options = nullptr;
 
 	String base_type;
+	bool is_base_type_node = false;
 	String icon_fallback;
 	String preferred_search_result_type;
 
@@ -101,8 +102,6 @@ class CreateDialog : public ConfirmationDialog {
 	bool _is_class_disabled_by_feature_profile(const StringName &p_class) const;
 	void _load_favorites_and_history();
 
-	void _update_theme();
-
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
@@ -113,7 +112,7 @@ public:
 	Variant instantiate_selected();
 	String get_selected_type();
 
-	void set_base_type(const String &p_base) { base_type = p_base; }
+	void set_base_type(const String &p_base);
 	String get_base_type() const { return base_type; }
 	void select_base();
 

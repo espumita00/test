@@ -88,14 +88,17 @@ void CapsuleShape2D::draw(const RID &p_to_rid, const Color &p_color) {
 	Vector<Vector2> points = _get_points();
 	Vector<Color> col = { p_color };
 	RenderingServer::get_singleton()->canvas_item_add_polygon(p_to_rid, points, col);
+
 	if (is_collision_outline_enabled()) {
 		points.push_back(points[0]);
+		col = { Color(p_color, 1.0) };
 		RenderingServer::get_singleton()->canvas_item_add_polyline(p_to_rid, points, col);
 	}
 }
 
 Rect2 CapsuleShape2D::get_rect() const {
-	return Rect2(0, 0, radius, height);
+	const Vector2 half_size = Vector2(radius, height * 0.5);
+	return Rect2(-half_size, half_size * 2.0);
 }
 
 real_t CapsuleShape2D::get_enclosing_radius() const {

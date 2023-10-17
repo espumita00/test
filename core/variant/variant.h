@@ -346,6 +346,10 @@ public:
 	bool is_one() const;
 	bool is_null() const;
 
+	// Make sure Variant is not implicitly cast when accessing it with bracket notation (GH-49469).
+	Variant &operator[](const Variant &p_key) = delete;
+	const Variant &operator[](const Variant &p_key) const = delete;
+
 	operator bool() const;
 	operator signed int() const;
 	operator unsigned int() const; // this is the real one
@@ -484,7 +488,7 @@ public:
 	Variant(const IPAddress &p_address);
 
 #define VARIANT_ENUM_CLASS_CONSTRUCTOR(m_enum) \
-	Variant(const m_enum &p_value) {           \
+	Variant(m_enum p_value) {                  \
 		type = INT;                            \
 		_data._int = (int64_t)p_value;         \
 	}
@@ -747,7 +751,9 @@ public:
 	uint32_t hash() const;
 	uint32_t recursive_hash(int recursion_count) const;
 
-	bool hash_compare(const Variant &p_variant, int recursion_count = 0) const;
+	// By default, performs a semantic comparison. Otherwise, numeric/binary comparison (if appropriate).
+	bool hash_compare(const Variant &p_variant, int recursion_count = 0, bool semantic_comparison = true) const;
+	bool identity_compare(const Variant &p_variant) const;
 	bool booleanize() const;
 	String stringify(int recursion_count = 0) const;
 	String to_json_string() const;
@@ -825,6 +831,20 @@ String vformat(const String &p_text, const VarArgs... p_args) {
 	ERR_FAIL_COND_V_MSG(error, String(), fmt);
 
 	return fmt;
+}
+
+template <typename... VarArgs>
+Variant Callable::call(VarArgs... p_args) const {
+	Variant args[sizeof...(p_args) + 1] = { p_args..., 0 }; // +1 makes sure zero sized arrays are also supported.
+	const Variant *argptrs[sizeof...(p_args) + 1];
+	for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+		argptrs[i] = &args[i];
+	}
+
+	Variant ret;
+	CallError ce;
+	callp(sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), ret, ce);
+	return ret;
 }
 
 template <typename... VarArgs>

@@ -51,13 +51,13 @@ bool Area3D::is_gravity_a_point() const {
 	return gravity_is_point;
 }
 
-void Area3D::set_gravity_point_distance_scale(real_t p_scale) {
-	gravity_distance_scale = p_scale;
-	PhysicsServer3D::get_singleton()->area_set_param(get_rid(), PhysicsServer3D::AREA_PARAM_GRAVITY_DISTANCE_SCALE, p_scale);
+void Area3D::set_gravity_point_unit_distance(real_t p_scale) {
+	gravity_point_unit_distance = p_scale;
+	PhysicsServer3D::get_singleton()->area_set_param(get_rid(), PhysicsServer3D::AREA_PARAM_GRAVITY_POINT_UNIT_DISTANCE, p_scale);
 }
 
-real_t Area3D::get_gravity_point_distance_scale() const {
-	return gravity_distance_scale;
+real_t Area3D::get_gravity_point_unit_distance() const {
+	return gravity_point_unit_distance;
 }
 
 void Area3D::set_gravity_point_center(const Vector3 &p_center) {
@@ -123,12 +123,12 @@ real_t Area3D::get_angular_damp() const {
 	return angular_damp;
 }
 
-void Area3D::set_priority(real_t p_priority) {
+void Area3D::set_priority(int p_priority) {
 	priority = p_priority;
 	PhysicsServer3D::get_singleton()->area_set_param(get_rid(), PhysicsServer3D::AREA_PARAM_PRIORITY, p_priority);
 }
 
-real_t Area3D::get_priority() const {
+int Area3D::get_priority() const {
 	return priority;
 }
 
@@ -172,9 +172,11 @@ void Area3D::_initialize_wind() {
 
 	// Overwrite with area-specified info if available
 	if (!wind_source_path.is_empty()) {
-		Node3D *p_wind_source = Object::cast_to<Node3D>(get_node(wind_source_path));
-		ERR_FAIL_NULL(p_wind_source);
-		Transform3D global_transform = p_wind_source->get_transform();
+		Node *wind_source_node = get_node_or_null(wind_source_path);
+		ERR_FAIL_NULL_MSG(wind_source_node, "Path to wind source is invalid: '" + wind_source_path + "'.");
+		Node3D *wind_source_node3d = Object::cast_to<Node3D>(wind_source_node);
+		ERR_FAIL_NULL_MSG(wind_source_node3d, "Path to wind source does not point to a Node3D: '" + wind_source_path + "'.");
+		Transform3D global_transform = wind_source_node3d->get_transform();
 		wind_direction = -global_transform.basis.get_column(Vector3::AXIS_Z).normalized();
 		wind_source = global_transform.origin;
 		temp_magnitude = wind_force_magnitude;
@@ -190,7 +192,7 @@ void Area3D::_initialize_wind() {
 void Area3D::_body_enter_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
+	ERR_FAIL_NULL(node);
 
 	HashMap<ObjectID, BodyState>::Iterator E = body_map.find(p_id);
 	ERR_FAIL_COND(!E);
@@ -206,7 +208,7 @@ void Area3D::_body_enter_tree(ObjectID p_id) {
 void Area3D::_body_exit_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
+	ERR_FAIL_NULL(node);
 	HashMap<ObjectID, BodyState>::Iterator E = body_map.find(p_id);
 	ERR_FAIL_COND(!E);
 	ERR_FAIL_COND(!E->value.in_tree);
@@ -230,6 +232,7 @@ void Area3D::_body_inout(int p_status, const RID &p_body, ObjectID p_instance, i
 		return; //likely removed from the tree
 	}
 
+	lock_callback();
 	locked = true;
 
 	if (body_in) {
@@ -279,6 +282,7 @@ void Area3D::_body_inout(int p_status, const RID &p_body, ObjectID p_instance, i
 	}
 
 	locked = false;
+	unlock_callback();
 }
 
 void Area3D::_clear_monitoring() {
@@ -377,7 +381,7 @@ void Area3D::set_monitoring(bool p_enable) {
 void Area3D::_area_enter_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
+	ERR_FAIL_NULL(node);
 
 	HashMap<ObjectID, AreaState>::Iterator E = area_map.find(p_id);
 	ERR_FAIL_COND(!E);
@@ -393,7 +397,7 @@ void Area3D::_area_enter_tree(ObjectID p_id) {
 void Area3D::_area_exit_tree(ObjectID p_id) {
 	Object *obj = ObjectDB::get_instance(p_id);
 	Node *node = Object::cast_to<Node>(obj);
-	ERR_FAIL_COND(!node);
+	ERR_FAIL_NULL(node);
 	HashMap<ObjectID, AreaState>::Iterator E = area_map.find(p_id);
 	ERR_FAIL_COND(!E);
 	ERR_FAIL_COND(!E->value.in_tree);
@@ -417,6 +421,7 @@ void Area3D::_area_inout(int p_status, const RID &p_area, ObjectID p_instance, i
 		return; //likely removed from the tree
 	}
 
+	lock_callback();
 	locked = true;
 
 	if (area_in) {
@@ -466,6 +471,7 @@ void Area3D::_area_inout(int p_status, const RID &p_area, ObjectID p_instance, i
 	}
 
 	locked = false;
+	unlock_callback();
 }
 
 bool Area3D::is_monitoring() const {
@@ -567,7 +573,7 @@ StringName Area3D::get_audio_bus_name() const {
 			return audio_bus;
 		}
 	}
-	return "Master";
+	return SceneStringNames::get_singleton()->Master;
 }
 
 void Area3D::set_use_reverb_bus(bool p_enable) {
@@ -588,7 +594,7 @@ StringName Area3D::get_reverb_bus_name() const {
 			return reverb_bus;
 		}
 	}
-	return "Master";
+	return SceneStringNames::get_singleton()->Master;
 }
 
 void Area3D::set_reverb_amount(float p_amount) {
@@ -651,8 +657,8 @@ void Area3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_gravity_is_point", "enable"), &Area3D::set_gravity_is_point);
 	ClassDB::bind_method(D_METHOD("is_gravity_a_point"), &Area3D::is_gravity_a_point);
 
-	ClassDB::bind_method(D_METHOD("set_gravity_point_distance_scale", "distance_scale"), &Area3D::set_gravity_point_distance_scale);
-	ClassDB::bind_method(D_METHOD("get_gravity_point_distance_scale"), &Area3D::get_gravity_point_distance_scale);
+	ClassDB::bind_method(D_METHOD("set_gravity_point_unit_distance", "distance_scale"), &Area3D::set_gravity_point_unit_distance);
+	ClassDB::bind_method(D_METHOD("get_gravity_point_unit_distance"), &Area3D::get_gravity_point_unit_distance);
 
 	ClassDB::bind_method(D_METHOD("set_gravity_point_center", "center"), &Area3D::set_gravity_point_center);
 	ClassDB::bind_method(D_METHOD("get_gravity_point_center"), &Area3D::get_gravity_point_center);
@@ -732,12 +738,12 @@ void Area3D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "monitoring"), "set_monitoring", "is_monitoring");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "monitorable"), "set_monitorable", "is_monitorable");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "priority", PROPERTY_HINT_RANGE, "0,128,1"), "set_priority", "get_priority");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "priority", PROPERTY_HINT_RANGE, "0,100000,1,or_greater,or_less"), "set_priority", "get_priority");
 
 	ADD_GROUP("Gravity", "gravity_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "gravity_space_override", PROPERTY_HINT_ENUM, "Disabled,Combine,Combine-Replace,Replace,Replace-Combine", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), "set_gravity_space_override_mode", "get_gravity_space_override_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "gravity_point", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), "set_gravity_is_point", "is_gravity_a_point");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_point_distance_scale", PROPERTY_HINT_RANGE, "0,1024,0.001,or_greater,exp"), "set_gravity_point_distance_scale", "get_gravity_point_distance_scale");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity_point_unit_distance", PROPERTY_HINT_RANGE, "0,1024,0.001,or_greater,exp,suffix:m"), "set_gravity_point_unit_distance", "get_gravity_point_unit_distance");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "gravity_point_center", PROPERTY_HINT_NONE, "suffix:m"), "set_gravity_point_center", "get_gravity_point_center");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "gravity_direction"), "set_gravity_direction", "get_gravity_direction");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "gravity", PROPERTY_HINT_RANGE, U"-32,32,0.001,or_less,or_greater,suffix:m/s\u00B2"), "set_gravity", "get_gravity");

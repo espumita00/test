@@ -43,6 +43,11 @@ void CollisionObject3D::_notification(int p_what) {
 				}
 				_update_debug_shapes();
 			}
+#ifdef TOOLS_ENABLED
+			if (Engine::get_singleton()->is_editor_hint()) {
+				set_notify_local_transform(true); // Used for warnings and only in editor.
+			}
+#endif
 		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
@@ -78,6 +83,10 @@ void CollisionObject3D::_notification(int p_what) {
 			_update_pickable();
 		} break;
 
+		case NOTIFICATION_LOCAL_TRANSFORM_CHANGED: {
+			update_configuration_warnings();
+		} break;
+
 		case NOTIFICATION_TRANSFORM_CHANGED: {
 			if (only_update_transform_changes) {
 				return;
@@ -100,10 +109,14 @@ void CollisionObject3D::_notification(int p_what) {
 			bool disabled = !is_enabled();
 
 			if (!disabled || (disable_mode != DISABLE_MODE_REMOVE)) {
-				if (area) {
-					PhysicsServer3D::get_singleton()->area_set_space(rid, RID());
+				if (callback_lock > 0) {
+					ERR_PRINT("Removing a CollisionObject node during a physics callback is not allowed and will cause undesired behavior. Remove with call_deferred() instead.");
 				} else {
-					PhysicsServer3D::get_singleton()->body_set_space(rid, RID());
+					if (area) {
+						PhysicsServer3D::get_singleton()->area_set_space(rid, RID());
+					} else {
+						PhysicsServer3D::get_singleton()->body_set_space(rid, RID());
+					}
 				}
 			}
 
@@ -223,10 +236,14 @@ void CollisionObject3D::_apply_disabled() {
 	switch (disable_mode) {
 		case DISABLE_MODE_REMOVE: {
 			if (is_inside_tree()) {
-				if (area) {
-					PhysicsServer3D::get_singleton()->area_set_space(rid, RID());
+				if (callback_lock > 0) {
+					ERR_PRINT("Disabling a CollisionObject node during a physics callback is not allowed and will cause undesired behavior. Disable with call_deferred() instead.");
 				} else {
-					PhysicsServer3D::get_singleton()->body_set_space(rid, RID());
+					if (area) {
+						PhysicsServer3D::get_singleton()->area_set_space(rid, RID());
+					} else {
+						PhysicsServer3D::get_singleton()->body_set_space(rid, RID());
+					}
 				}
 			}
 		} break;
@@ -377,11 +394,7 @@ void CollisionObject3D::_update_debug_shapes() {
 				if (s.debug_shape.is_null()) {
 					s.debug_shape = RS::get_singleton()->instance_create();
 					RS::get_singleton()->instance_set_scenario(s.debug_shape, get_world_3d()->get_scenario());
-
-					if (!s.shape->is_connected("changed", callable_mp(this, &CollisionObject3D::_shape_changed))) {
-						s.shape->connect("changed", callable_mp(this, &CollisionObject3D::_shape_changed).bind(s.shape), CONNECT_DEFERRED);
-					}
-
+					s.shape->connect_changed(callable_mp(this, &CollisionObject3D::_shape_changed).bind(s.shape), CONNECT_DEFERRED);
 					++debug_shapes_count;
 				}
 
@@ -405,8 +418,8 @@ void CollisionObject3D::_clear_debug_shapes() {
 			if (s.debug_shape.is_valid()) {
 				RS::get_singleton()->free(s.debug_shape);
 				s.debug_shape = RID();
-				if (s.shape.is_valid() && s.shape->is_connected("changed", callable_mp(this, &CollisionObject3D::_update_shape_data))) {
-					s.shape->disconnect("changed", callable_mp(this, &CollisionObject3D::_update_shape_data));
+				if (s.shape.is_valid()) {
+					s.shape->disconnect_changed(callable_mp(this, &CollisionObject3D::_update_shape_data));
 				}
 			}
 		}
@@ -646,8 +659,8 @@ void CollisionObject3D::shape_owner_remove_shape(uint32_t p_owner, int p_shape) 
 
 	if (s.debug_shape.is_valid()) {
 		RS::get_singleton()->free(s.debug_shape);
-		if (s.shape.is_valid() && s.shape->is_connected("changed", callable_mp(this, &CollisionObject3D::_shape_changed))) {
-			s.shape->disconnect("changed", callable_mp(this, &CollisionObject3D::_shape_changed));
+		if (s.shape.is_valid()) {
+			s.shape->disconnect_changed(callable_mp(this, &CollisionObject3D::_shape_changed));
 		}
 		--debug_shapes_count;
 	}
@@ -714,6 +727,11 @@ PackedStringArray CollisionObject3D::get_configuration_warnings() const {
 
 	if (shapes.is_empty()) {
 		warnings.push_back(RTR("This node has no shape, so it can't collide or interact with other objects.\nConsider adding a CollisionShape3D or CollisionPolygon3D as a child to define its shape."));
+	}
+
+	Vector3 scale = get_transform().get_basis().get_scale();
+	if (!(Math::is_zero_approx(scale.x - scale.y) && Math::is_zero_approx(scale.y - scale.z))) {
+		warnings.push_back(RTR("With a non-uniform scale this node will probably not function as expected.\nPlease make its scale uniform (i.e. the same on all axes), and change the size in children collision shapes instead."));
 	}
 
 	return warnings;

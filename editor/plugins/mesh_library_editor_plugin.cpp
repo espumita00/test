@@ -30,12 +30,14 @@
 
 #include "mesh_library_editor_plugin.h"
 
-#include "editor/editor_file_dialog.h"
+#include "editor/editor_interface.h"
 #include "editor/editor_node.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
+#include "editor/gui/editor_file_dialog.h"
 #include "editor/inspector_dock.h"
+#include "editor/plugins/node_3d_editor_plugin.h"
 #include "main/main.h"
-#include "node_3d_editor_plugin.h"
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/3d/navigation_region_3d.h"
 #include "scene/3d/physics_body_3d.h"
@@ -209,7 +211,7 @@ void MeshLibraryEditor::_import_scene_cbk(const String &p_str) {
 	ERR_FAIL_COND(ps.is_null());
 	Node *scene = ps->instantiate();
 
-	ERR_FAIL_COND_MSG(!scene, "Cannot create an instance from PackedScene '" + p_str + "'.");
+	ERR_FAIL_NULL_MSG(scene, "Cannot create an instance from PackedScene '" + p_str + "'.");
 
 	_import_scene(scene, mesh_library, option == MENU_OPTION_UPDATE_FROM_SCENE, apply_xforms);
 
@@ -232,8 +234,8 @@ void MeshLibraryEditor::_menu_cbk(int p_option) {
 		} break;
 		case MENU_OPTION_REMOVE_ITEM: {
 			String p = InspectorDock::get_inspector_singleton()->get_selected_path();
-			if (p.begins_with("/MeshLibrary/item") && p.get_slice_count("/") >= 3) {
-				to_erase = p.get_slice("/", 3).to_int();
+			if (p.begins_with("item") && p.get_slice_count("/") >= 2) {
+				to_erase = p.get_slice("/", 1).to_int();
 				cd_remove->set_text(vformat(TTR("Remove item %d?"), to_erase));
 				cd_remove->popup_centered(Size2(300, 60));
 			}
@@ -274,7 +276,7 @@ MeshLibraryEditor::MeshLibraryEditor() {
 	Node3DEditor::get_singleton()->add_control_to_menu_panel(menu);
 	menu->set_position(Point2(1, 1));
 	menu->set_text(TTR("MeshLibrary"));
-	menu->set_icon(EditorNode::get_singleton()->get_gui_base()->get_theme_icon(SNAME("MeshLibrary"), SNAME("EditorIcons")));
+	menu->set_icon(EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("MeshLibrary"), EditorStringName(EditorIcons)));
 	menu->get_popup()->add_item(TTR("Add Item"), MENU_OPTION_ADD_ITEM);
 	menu->get_popup()->add_item(TTR("Remove Selected Item"), MENU_OPTION_REMOVE_ITEM);
 	menu->get_popup()->add_separator();
@@ -300,6 +302,7 @@ void MeshLibraryEditorPlugin::edit(Object *p_node) {
 		mesh_library_editor->edit(Object::cast_to<MeshLibrary>(p_node));
 		mesh_library_editor->show();
 	} else {
+		mesh_library_editor->edit(Ref<MeshLibrary>());
 		mesh_library_editor->hide();
 	}
 }

@@ -51,7 +51,9 @@ public:
 	enum AlphaCutMode {
 		ALPHA_CUT_DISABLED,
 		ALPHA_CUT_DISCARD,
-		ALPHA_CUT_OPAQUE_PREPASS
+		ALPHA_CUT_OPAQUE_PREPASS,
+		ALPHA_CUT_HASH,
+		ALPHA_CUT_MAX
 	};
 
 private:
@@ -59,6 +61,9 @@ private:
 	bool flags[FLAG_MAX] = {};
 	AlphaCutMode alpha_cut = ALPHA_CUT_DISABLED;
 	float alpha_scissor_threshold = 0.5;
+	float alpha_hash_scale = 1.0;
+	StandardMaterial3D::AlphaAntiAliasing alpha_antialiasing_mode = StandardMaterial3D::ALPHA_ANTIALIASING_OFF;
+	float alpha_antialiasing_edge = 0.0f;
 
 	AABB aabb;
 
@@ -107,6 +112,7 @@ private:
 	bool uppercase = false;
 
 	TextServer::AutowrapMode autowrap_mode = TextServer::AUTOWRAP_OFF;
+	BitField<TextServer::JustificationFlag> jst_flags = TextServer::JUSTIFICATION_WORD_BOUND | TextServer::JUSTIFICATION_KASHIDA | TextServer::JUSTIFICATION_SKIP_LAST_LINE | TextServer::JUSTIFICATION_DO_NOT_SKIP_SINGLE_LINE;
 	float width = 500.0;
 
 	int font_size = 32;
@@ -210,6 +216,9 @@ public:
 	void set_autowrap_mode(TextServer::AutowrapMode p_mode);
 	TextServer::AutowrapMode get_autowrap_mode() const;
 
+	void set_justification_flags(BitField<TextServer::JustificationFlag> p_flags);
+	BitField<TextServer::JustificationFlag> get_justification_flags() const;
+
 	void set_width(float p_width);
 	float get_width() const;
 
@@ -227,6 +236,15 @@ public:
 
 	void set_alpha_scissor_threshold(float p_threshold);
 	float get_alpha_scissor_threshold() const;
+
+	void set_alpha_hash_scale(float p_hash_scale);
+	float get_alpha_hash_scale() const;
+
+	void set_alpha_antialiasing(BaseMaterial3D::AlphaAntiAliasing p_alpha_aa);
+	BaseMaterial3D::AlphaAntiAliasing get_alpha_antialiasing() const;
+
+	void set_alpha_antialiasing_edge(float p_edge);
+	float get_alpha_antialiasing_edge() const;
 
 	void set_billboard_mode(StandardMaterial3D::BillboardMode p_mode);
 	StandardMaterial3D::BillboardMode get_billboard_mode() const;

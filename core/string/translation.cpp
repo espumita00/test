@@ -82,6 +82,15 @@ void Translation::_set_messages(const Dictionary &p_messages) {
 void Translation::set_locale(const String &p_locale) {
 	locale = TranslationServer::get_singleton()->standardize_locale(p_locale);
 
+	if (Thread::is_main_thread()) {
+		_notify_translation_changed_if_applies();
+	} else {
+		// Avoid calling non-thread-safe functions here.
+		callable_mp(this, &Translation::_notify_translation_changed_if_applies).call_deferred();
+	}
+}
+
+void Translation::_notify_translation_changed_if_applies() {
 	if (OS::get_singleton()->get_main_loop() && TranslationServer::get_singleton()->get_loaded_locales().has(get_locale())) {
 		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_TRANSLATION_CHANGED);
 	}
@@ -712,7 +721,25 @@ String TranslationServer::get_tool_locale() {
 #else
 	{
 #endif
-		return get_locale();
+		// Look for best matching loaded translation.
+		String best_locale = "en";
+		int best_score = 0;
+
+		for (const Ref<Translation> &E : translations) {
+			const Ref<Translation> &t = E;
+			ERR_FAIL_COND_V(t.is_null(), best_locale);
+			String l = t->get_locale();
+
+			int score = compare_locales(locale, l);
+			if (score > 0 && score >= best_score) {
+				best_locale = l;
+				best_score = score;
+				if (score == 10) {
+					break; // Exact match, skip the rest.
+				}
+			}
+		}
+		return best_locale;
 	}
 }
 
@@ -766,6 +793,20 @@ StringName TranslationServer::doc_translate_plural(const StringName &p_message, 
 		return p_message;
 	}
 	return p_message_plural;
+}
+
+void TranslationServer::set_property_translation(const Ref<Translation> &p_translation) {
+	property_translation = p_translation;
+}
+
+StringName TranslationServer::property_translate(const StringName &p_message) const {
+	if (property_translation.is_valid()) {
+		StringName r = property_translation->get_message(p_message);
+		if (r) {
+			return r;
+		}
+	}
+	return p_message;
 }
 
 bool TranslationServer::is_pseudolocalization_enabled() const {
@@ -909,18 +950,11 @@ String TranslationServer::wrap_with_fakebidi_characters(String &p_message) const
 }
 
 String TranslationServer::add_padding(const String &p_message, int p_length) const {
-	String res;
-	String prefix = pseudolocalization_prefix;
-	String suffix;
-	for (int i = 0; i < p_length * expansion_ratio / 2; i++) {
-		prefix += "_";
-		suffix += "_";
-	}
-	suffix += pseudolocalization_suffix;
-	res += prefix;
-	res += p_message;
-	res += suffix;
-	return res;
+	String underscores = String("_").repeat(p_length * expansion_ratio / 2);
+	String prefix = pseudolocalization_prefix + underscores;
+	String suffix = underscores + pseudolocalization_suffix;
+
+	return prefix + p_message + suffix;
 }
 
 const char32_t *TranslationServer::get_accented_version(char32_t p_character) const {

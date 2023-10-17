@@ -14,9 +14,9 @@ namespace Godot.SourceGenerators
         {
             string message =
                 "Missing partial modifier on declaration of type '" +
-                $"{symbol.FullQualifiedNameOmitGlobal()}' which is a subclass of '{GodotClasses.Object}'";
+                $"{symbol.FullQualifiedNameOmitGlobal()}' which is a subclass of '{GodotClasses.GodotObject}'";
 
-            string description = $"{message}. Subclasses of '{GodotClasses.Object}' " +
+            string description = $"{message}. Subclasses of '{GodotClasses.GodotObject}' " +
                                  "must be declared with the partial modifier.";
 
             context.ReportDiagnostic(Diagnostic.Create(
@@ -46,9 +46,9 @@ namespace Godot.SourceGenerators
 
             string message =
                 $"Missing partial modifier on declaration of type '{fullQualifiedName}', " +
-                $"which contains one or more subclasses of '{GodotClasses.Object}'";
+                $"which contains one or more subclasses of '{GodotClasses.GodotObject}'";
 
-            string description = $"{message}. Subclasses of '{GodotClasses.Object}' and their " +
+            string description = $"{message}. Subclasses of '{GodotClasses.GodotObject}' and their " +
                                  "containing types must be declared with the partial modifier.";
 
             context.ReportDiagnostic(Diagnostic.Create(
@@ -184,6 +184,32 @@ namespace Godot.SourceGenerators
 
             context.ReportDiagnostic(Diagnostic.Create(
                 new DiagnosticDescriptor(id: "GD0105",
+                    title: message,
+                    messageFormat: message,
+                    category: "Usage",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true,
+                    description),
+                location,
+                location?.SourceTree?.FilePath));
+        }
+
+        public static void ReportExportedMemberIsExplicitInterfaceImplementation(
+            GeneratorExecutionContext context,
+            ISymbol exportedMemberSymbol
+        )
+        {
+            var locations = exportedMemberSymbol.Locations;
+            var location = locations.FirstOrDefault(l => l.SourceTree != null) ?? locations.FirstOrDefault();
+
+            string message = $"Attempted to export explicit interface property implementation: " +
+                             $"'{exportedMemberSymbol.ToDisplayString()}'";
+
+            string description = $"{message}. Explicit interface implementations can't be exported." +
+                                 " Remove the '[Export]' attribute.";
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(id: "GD0106",
                     title: message,
                     messageFormat: message,
                     category: "Usage",
@@ -357,6 +383,66 @@ namespace Godot.SourceGenerators
                     description),
                 typeArgumentSyntax.GetLocation(),
                 typeArgumentSyntax.SyntaxTree.FilePath));
+        }
+
+        public static readonly DiagnosticDescriptor GlobalClassMustDeriveFromGodotObjectRule =
+            new DiagnosticDescriptor(id: "GD0401",
+                title: "The class must derive from GodotObject or a derived class",
+                messageFormat: "The class '{0}' must derive from GodotObject or a derived class.",
+                category: "Usage",
+                DiagnosticSeverity.Error,
+                isEnabledByDefault: true,
+                "The class must derive from GodotObject or a derived class. Change the base class or remove the '[GlobalClass]' attribute.");
+
+        public static void ReportGlobalClassMustDeriveFromGodotObject(
+            SyntaxNodeAnalysisContext context,
+            SyntaxNode classSyntax,
+            ISymbol typeSymbol)
+        {
+            string message = $"The class '{typeSymbol.ToDisplayString()}' must derive from GodotObject or a derived class";
+
+            string description = $"{message}. Change the base class or remove the '[GlobalClass]' attribute.";
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(id: "GD0401",
+                    title: message,
+                    messageFormat: message,
+                    category: "Usage",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true,
+                    description),
+                classSyntax.GetLocation(),
+                classSyntax.SyntaxTree.FilePath));
+        }
+
+        public static readonly DiagnosticDescriptor GlobalClassMustNotBeGenericRule =
+            new DiagnosticDescriptor(id: "GD0402",
+                title: "The class must not contain generic arguments",
+                messageFormat: "The class '{0}' must not contain generic arguments",
+                category: "Usage",
+                DiagnosticSeverity.Error,
+                isEnabledByDefault: true,
+                "The class must be a non-generic type. Remove the generic arguments or the '[GlobalClass]' attribute.");
+
+        public static void ReportGlobalClassMustNotBeGeneric(
+            SyntaxNodeAnalysisContext context,
+            SyntaxNode classSyntax,
+            ISymbol typeSymbol)
+        {
+            string message = $"The class '{typeSymbol.ToDisplayString()}' must not contain generic arguments";
+
+            string description = $"{message}. Remove the generic arguments or the '[GlobalClass]' attribute.";
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor(id: "GD0402",
+                    title: message,
+                    messageFormat: message,
+                    category: "Usage",
+                    DiagnosticSeverity.Error,
+                    isEnabledByDefault: true,
+                    description),
+                classSyntax.GetLocation(),
+                classSyntax.SyntaxTree.FilePath));
         }
     }
 }

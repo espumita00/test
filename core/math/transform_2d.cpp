@@ -46,7 +46,7 @@ Transform2D Transform2D::inverse() const {
 }
 
 void Transform2D::affine_invert() {
-	real_t det = basis_determinant();
+	real_t det = determinant();
 #ifdef MATH_CHECKS
 	ERR_FAIL_COND(det == 0);
 #endif
@@ -70,12 +70,12 @@ void Transform2D::rotate(const real_t p_angle) {
 }
 
 real_t Transform2D::get_skew() const {
-	real_t det = basis_determinant();
+	real_t det = determinant();
 	return Math::acos(columns[0].normalized().dot(SIGN(det) * columns[1].normalized())) - (real_t)Math_PI * 0.5f;
 }
 
 void Transform2D::set_skew(const real_t p_angle) {
-	real_t det = basis_determinant();
+	real_t det = determinant();
 	columns[1] = SIGN(det) * columns[0].rotated(((real_t)Math_PI * 0.5f + p_angle)).normalized() * columns[1].length();
 }
 
@@ -113,7 +113,7 @@ Transform2D::Transform2D(const real_t p_rot, const Size2 &p_scale, const real_t 
 }
 
 Size2 Transform2D::get_scale() const {
-	real_t det_sign = SIGN(basis_determinant());
+	real_t det_sign = SIGN(determinant());
 	return Size2(columns[0].length(), det_sign * columns[1].length());
 }
 
@@ -151,7 +151,7 @@ void Transform2D::orthonormalize() {
 	Vector2 y = columns[1];
 
 	x.normalize();
-	y = (y - x * (x.dot(y)));
+	y = y - x * x.dot(y);
 	y.normalize();
 
 	columns[0] = x;
@@ -159,9 +159,21 @@ void Transform2D::orthonormalize() {
 }
 
 Transform2D Transform2D::orthonormalized() const {
-	Transform2D on = *this;
-	on.orthonormalize();
-	return on;
+	Transform2D ortho = *this;
+	ortho.orthonormalize();
+	return ortho;
+}
+
+bool Transform2D::is_conformal() const {
+	// Non-flipped case.
+	if (Math::is_equal_approx(columns[0][0], columns[1][1]) && Math::is_equal_approx(columns[0][1], -columns[1][0])) {
+		return true;
+	}
+	// Flipped case.
+	if (Math::is_equal_approx(columns[0][0], -columns[1][1]) && Math::is_equal_approx(columns[0][1], columns[1][0])) {
+		return true;
+	}
+	return false;
 }
 
 bool Transform2D::is_equal_approx(const Transform2D &p_transform) const {
@@ -259,43 +271,16 @@ Transform2D Transform2D::rotated_local(const real_t p_angle) const {
 	return (*this) * Transform2D(p_angle, Vector2()); // Could be optimized, because origin transform can be skipped.
 }
 
-real_t Transform2D::basis_determinant() const {
+real_t Transform2D::determinant() const {
 	return columns[0].x * columns[1].y - columns[0].y * columns[1].x;
 }
 
-Transform2D Transform2D::interpolate_with(const Transform2D &p_transform, const real_t p_c) const {
-	//extract parameters
-	Vector2 p1 = get_origin();
-	Vector2 p2 = p_transform.get_origin();
-
-	real_t r1 = get_rotation();
-	real_t r2 = p_transform.get_rotation();
-
-	Size2 s1 = get_scale();
-	Size2 s2 = p_transform.get_scale();
-
-	//slerp rotation
-	Vector2 v1(Math::cos(r1), Math::sin(r1));
-	Vector2 v2(Math::cos(r2), Math::sin(r2));
-
-	real_t dot = v1.dot(v2);
-
-	dot = CLAMP(dot, (real_t)-1.0, (real_t)1.0);
-
-	Vector2 v;
-
-	if (dot > 0.9995f) {
-		v = v1.lerp(v2, p_c).normalized(); //linearly interpolate to avoid numerical precision issues
-	} else {
-		real_t angle = p_c * Math::acos(dot);
-		Vector2 v3 = (v2 - v1 * dot).normalized();
-		v = v1 * Math::cos(angle) + v3 * Math::sin(angle);
-	}
-
-	//construct matrix
-	Transform2D res(v.angle(), p1.lerp(p2, p_c));
-	res.scale_basis(s1.lerp(s2, p_c));
-	return res;
+Transform2D Transform2D::interpolate_with(const Transform2D &p_transform, const real_t p_weight) const {
+	return Transform2D(
+			Math::lerp_angle(get_rotation(), p_transform.get_rotation(), p_weight),
+			get_scale().lerp(p_transform.get_scale(), p_weight),
+			Math::lerp_angle(get_skew(), p_transform.get_skew(), p_weight),
+			get_origin().lerp(p_transform.get_origin(), p_weight));
 }
 
 void Transform2D::operator*=(const real_t p_val) {

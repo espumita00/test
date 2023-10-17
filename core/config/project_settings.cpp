@@ -36,10 +36,10 @@
 #include "core/io/config_file.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
-#include "core/io/file_access_network.h"
 #include "core/io/file_access_pack.h"
 #include "core/io/marshalls.h"
 #include "core/os/keyboard.h"
+#include "core/variant/typed_array.h"
 #include "core/variant/variant_parser.h"
 #include "core/version.h"
 
@@ -65,14 +65,6 @@ String ProjectSettings::get_project_data_path() const {
 
 String ProjectSettings::get_resource_path() const {
 	return resource_path;
-}
-
-String ProjectSettings::get_safe_project_name() const {
-	String safe_name = OS::get_singleton()->get_safe_dir_name(get("application/config/name"));
-	if (safe_name.is_empty()) {
-		safe_name = "UnnamedProject";
-	}
-	return safe_name;
 }
 
 String ProjectSettings::get_imported_files_path() const {
@@ -154,29 +146,29 @@ const PackedStringArray ProjectSettings::_trim_to_supported_features(const Packe
 #endif // TOOLS_ENABLED
 
 String ProjectSettings::localize_path(const String &p_path) const {
-	if (resource_path.is_empty() || (p_path.is_absolute_path() && !p_path.begins_with(resource_path))) {
-		return p_path.simplify_path();
+	String path = p_path.simplify_path();
+
+	if (resource_path.is_empty() || (path.is_absolute_path() && !path.begins_with(resource_path))) {
+		return path;
 	}
 
 	// Check if we have a special path (like res://) or a protocol identifier.
-	int p = p_path.find("://");
+	int p = path.find("://");
 	bool found = false;
 	if (p > 0) {
 		found = true;
 		for (int i = 0; i < p; i++) {
-			if (!is_ascii_alphanumeric_char(p_path[i])) {
+			if (!is_ascii_alphanumeric_char(path[i])) {
 				found = false;
 				break;
 			}
 		}
 	}
 	if (found) {
-		return p_path.simplify_path();
+		return path;
 	}
 
 	Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
-
-	String path = p_path.replace("\\", "/").simplify_path();
 
 	if (dir->change_dir(path) == OK) {
 		String cwd = dir->get_current_dir();
@@ -195,7 +187,7 @@ String ProjectSettings::localize_path(const String &p_path) const {
 		cwd = cwd.path_join("");
 
 		if (!cwd.begins_with(res_path)) {
-			return p_path;
+			return path;
 		}
 
 		return cwd.replace_first(res_path, "res://");
@@ -221,7 +213,9 @@ String ProjectSettings::localize_path(const String &p_path) const {
 
 void ProjectSettings::set_initial_value(const String &p_name, const Variant &p_value) {
 	ERR_FAIL_COND_MSG(!props.has(p_name), "Request for nonexistent project setting: " + p_name + ".");
-	props[p_name].initial = p_value;
+
+	// Duplicate so that if value is array or dictionary, changing the setting will not change the stored initial value.
+	props[p_name].initial = p_value.duplicate();
 }
 
 void ProjectSettings::set_restart_if_changed(const String &p_name, bool p_restart) {
@@ -253,6 +247,11 @@ bool ProjectSettings::get_ignore_value_in_docs(const String &p_name) const {
 #else
 	return false;
 #endif
+}
+
+void ProjectSettings::add_hidden_prefix(const String &p_prefix) {
+	ERR_FAIL_COND_MSG(hidden_prefixes.find(p_prefix) > -1, vformat("Hidden prefix '%s' already exists.", p_prefix));
+	hidden_prefixes.push_back(p_prefix);
 }
 
 String ProjectSettings::globalize_path(const String &p_path) const {
@@ -289,6 +288,7 @@ bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
 			for (int i = 0; i < custom_feature_array.size(); i++) {
 				custom_features.insert(custom_feature_array[i]);
 			}
+			_queue_changed();
 			return true;
 		}
 
@@ -299,13 +299,13 @@ bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
 
 				for (int i = 1; i < s.size(); i++) {
 					String feature = s[i].strip_edges();
-					Pair<StringName, StringName> fo(feature, p_name);
+					Pair<StringName, StringName> feature_override(feature, p_name);
 
 					if (!feature_overrides.has(s[0])) {
 						feature_overrides[s[0]] = LocalVector<Pair<StringName, StringName>>();
 					}
 
-					feature_overrides[s[0]].push_back(fo);
+					feature_overrides[s[0]].push_back(feature_override);
 				}
 			}
 		}
@@ -330,6 +330,7 @@ bool ProjectSettings::_set(const StringName &p_name, const Variant &p_value) {
 		}
 	}
 
+	_queue_changed();
 	return true;
 }
 
@@ -392,10 +393,25 @@ void ProjectSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 		vc.name = E.key;
 		vc.order = v->order;
 		vc.type = v->variant.get_type();
-		if (v->internal || vc.name.begins_with("input/") || vc.name.begins_with("importer_defaults/") || vc.name.begins_with("import/") || vc.name.begins_with("autoload/") || vc.name.begins_with("editor_plugins/") || vc.name.begins_with("shader_globals/")) {
+
+		bool internal = v->internal;
+		if (!internal) {
+			for (const String &F : hidden_prefixes) {
+				if (vc.name.begins_with(F)) {
+					internal = true;
+					break;
+				}
+			}
+		}
+
+		if (internal) {
 			vc.flags = PROPERTY_USAGE_STORAGE;
 		} else {
 			vc.flags = PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE;
+		}
+
+		if (v->internal) {
+			vc.flags |= PROPERTY_USAGE_INTERNAL;
 		}
 
 		if (v->basic) {
@@ -424,6 +440,22 @@ void ProjectSettings::_get_property_list(List<PropertyInfo> *p_list) const {
 			p_list->push_back(PropertyInfo(E.type, E.name, PROPERTY_HINT_NONE, "", E.flags));
 		}
 	}
+}
+
+void ProjectSettings::_queue_changed() {
+	if (is_changed || !MessageQueue::get_singleton() || MessageQueue::get_singleton()->get_max_buffer_usage() == 0) {
+		return;
+	}
+	is_changed = true;
+	callable_mp(this, &ProjectSettings::_emit_changed).call_deferred();
+}
+
+void ProjectSettings::_emit_changed() {
+	if (!is_changed) {
+		return;
+	}
+	is_changed = false;
+	emit_signal("settings_changed");
 }
 
 bool ProjectSettings::_load_resource_pack(const String &p_pack, bool p_replace_files, int p_offset) {
@@ -493,17 +525,6 @@ Error ProjectSettings::_setup(const String &p_path, const String &p_main_pack, b
 		if (!resource_path.is_empty() && resource_path[resource_path.length() - 1] == '/') {
 			resource_path = resource_path.substr(0, resource_path.length() - 1); // Chop end.
 		}
-	}
-
-	// If looking for files in a network client, use it directly
-
-	if (FileAccessNetworkClient::get_singleton()) {
-		Error err = _load_settings_text_or_binary("res://project.godot", "res://project.binary");
-		if (err == OK && !p_ignore_override) {
-			// Optional, we don't mind if it fails
-			_load_settings_text("res://override.cfg");
-		}
-		return err;
 	}
 
 	// Attempt with a user-defined main pack first
@@ -633,7 +654,7 @@ Error ProjectSettings::_setup(const String &p_path, const String &p_main_pack, b
 
 Error ProjectSettings::setup(const String &p_path, const String &p_main_pack, bool p_upwards, bool p_ignore_override) {
 	Error err = _setup(p_path, p_main_pack, p_upwards, p_ignore_override);
-	if (err == OK) {
+	if (err == OK && !p_ignore_override) {
 		String custom_settings = GLOBAL_GET("application/config/project_settings_override");
 		if (!custom_settings.is_empty()) {
 			_load_settings_text(custom_settings);
@@ -653,6 +674,7 @@ Error ProjectSettings::setup(const String &p_path, const String &p_main_pack, bo
 
 	Compression::gzip_level = GLOBAL_GET("compression/formats/gzip/compression_level");
 
+	project_loaded = err == OK;
 	return err;
 }
 
@@ -934,9 +956,26 @@ Error ProjectSettings::_save_settings_text(const String &p_file, const RBMap<Str
 }
 
 Error ProjectSettings::_save_custom_bnd(const String &p_file) { // add other params as dictionary and array?
-
 	return save_custom(p_file);
 }
+
+#ifdef TOOLS_ENABLED
+bool _csproj_exists(String p_root_dir) {
+	Ref<DirAccess> dir = DirAccess::open(p_root_dir);
+	ERR_FAIL_COND_V(dir.is_null(), false);
+
+	dir->list_dir_begin();
+	String file_name = dir->_get_next();
+	while (file_name != "") {
+		if (!dir->current_is_dir() && file_name.get_extension() == "csproj") {
+			return true;
+		}
+		file_name = dir->_get_next();
+	}
+
+	return false;
+}
+#endif // TOOLS_ENABLED
 
 Error ProjectSettings::save_custom(const String &p_path, const CustomMap &p_custom, const Vector<String> &p_custom_features, bool p_merge_with_current) {
 	ERR_FAIL_COND_V_MSG(p_path.is_empty(), ERR_INVALID_PARAMETER, "Project settings save path cannot be empty.");
@@ -956,7 +995,7 @@ Error ProjectSettings::save_custom(const String &p_path, const CustomMap &p_cust
 		}
 	}
 	// Check for the existence of a csproj file.
-	if (FileAccess::exists(get_resource_path().path_join(get_safe_project_name() + ".csproj"))) {
+	if (_csproj_exists(get_resource_path())) {
 		// If there is a csproj file, add the C# feature if it doesn't already exist.
 		if (!project_features.has("C#")) {
 			project_features.append("C#");
@@ -1103,6 +1142,10 @@ bool ProjectSettings::is_using_datapack() const {
 	return using_datapack;
 }
 
+bool ProjectSettings::is_project_loaded() const {
+	return project_loaded;
+}
+
 bool ProjectSettings::_property_can_revert(const StringName &p_name) const {
 	if (!props.has(p_name)) {
 		return false;
@@ -1116,7 +1159,9 @@ bool ProjectSettings::_property_get_revert(const StringName &p_name, Variant &r_
 		return false;
 	}
 
-	r_property = props[p_name].initial;
+	// Duplicate so that if value is array or dictionary, changing the setting will not change the stored initial value.
+	r_property = props[p_name].initial.duplicate();
+
 	return true;
 }
 
@@ -1132,27 +1177,40 @@ Variant ProjectSettings::get_setting(const String &p_setting, const Variant &p_d
 	}
 }
 
-Array ProjectSettings::get_global_class_list() {
-	Array script_classes;
+TypedArray<Dictionary> ProjectSettings::get_global_class_list() {
+	if (is_global_class_list_loaded) {
+		return global_class_list;
+	}
 
 	Ref<ConfigFile> cf;
 	cf.instantiate();
-	if (cf->load(get_project_data_path().path_join("global_script_class_cache.cfg")) == OK) {
-		script_classes = cf->get_value("", "list");
+	if (cf->load(get_global_class_list_path()) == OK) {
+		global_class_list = cf->get_value("", "list", Array());
 	} else {
 #ifndef TOOLS_ENABLED
 		// Script classes can't be recreated in exported project, so print an error.
 		ERR_PRINT("Could not load global script cache.");
 #endif
 	}
-	return script_classes;
+
+	// File read succeeded or failed. If it failed, assume everything is still okay.
+	// We will later receive updated class data in store_global_class_list().
+	is_global_class_list_loaded = true;
+
+	return global_class_list;
+}
+
+String ProjectSettings::get_global_class_list_path() const {
+	return get_project_data_path().path_join("global_script_class_cache.cfg");
 }
 
 void ProjectSettings::store_global_class_list(const Array &p_classes) {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
 	cf->set_value("", "list", p_classes);
-	cf->save(get_project_data_path().path_join("global_script_class_cache.cfg"));
+	cf->save(get_global_class_list_path());
+
+	global_class_list = p_classes;
 }
 
 bool ProjectSettings::has_custom_feature(const String &p_feature) const {
@@ -1187,9 +1245,12 @@ void ProjectSettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_setting", "name", "value"), &ProjectSettings::set_setting);
 	ClassDB::bind_method(D_METHOD("get_setting", "name", "default_value"), &ProjectSettings::get_setting, DEFVAL(Variant()));
 	ClassDB::bind_method(D_METHOD("get_setting_with_override", "name"), &ProjectSettings::get_setting_with_override);
+	ClassDB::bind_method(D_METHOD("get_global_class_list"), &ProjectSettings::get_global_class_list);
 	ClassDB::bind_method(D_METHOD("set_order", "name", "position"), &ProjectSettings::set_order);
 	ClassDB::bind_method(D_METHOD("get_order", "name"), &ProjectSettings::get_order);
 	ClassDB::bind_method(D_METHOD("set_initial_value", "name", "value"), &ProjectSettings::set_initial_value);
+	ClassDB::bind_method(D_METHOD("set_as_basic", "name", "basic"), &ProjectSettings::set_as_basic);
+	ClassDB::bind_method(D_METHOD("set_as_internal", "name", "internal"), &ProjectSettings::set_as_internal);
 	ClassDB::bind_method(D_METHOD("add_property_info", "hint"), &ProjectSettings::_add_property_info_bind);
 	ClassDB::bind_method(D_METHOD("set_restart_if_changed", "name", "restart"), &ProjectSettings::set_restart_if_changed);
 	ClassDB::bind_method(D_METHOD("clear", "name"), &ProjectSettings::clear);
@@ -1199,6 +1260,8 @@ void ProjectSettings::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("load_resource_pack", "pack", "replace_files", "offset"), &ProjectSettings::_load_resource_pack, DEFVAL(true), DEFVAL(0));
 
 	ClassDB::bind_method(D_METHOD("save_custom", "file"), &ProjectSettings::_save_custom_bnd);
+
+	ADD_SIGNAL(MethodInfo("settings_changed"));
 }
 
 void ProjectSettings::_add_builtin_input_map() {
@@ -1218,7 +1281,7 @@ void ProjectSettings::_add_builtin_input_map() {
 			action["events"] = events;
 
 			String action_name = "input/" + E.key;
-			GLOBAL_DEF_INTERNAL(action_name, action);
+			GLOBAL_DEF(action_name, action);
 			input_presets.push_back(action_name);
 		}
 	}
@@ -1232,12 +1295,11 @@ ProjectSettings::ProjectSettings() {
 	singleton = this;
 
 	GLOBAL_DEF_BASIC("application/config/name", "");
-	GLOBAL_DEF_BASIC("application/config/name_localized", Dictionary());
-	custom_prop_info["application/config/name_localized"] = PropertyInfo(Variant::DICTIONARY, "application/config/name_localized", PROPERTY_HINT_LOCALIZABLE_STRING);
-	GLOBAL_DEF_BASIC("application/config/description", "");
-	custom_prop_info["application/config/description"] = PropertyInfo(Variant::STRING, "application/config/description", PROPERTY_HINT_MULTILINE_TEXT);
-	GLOBAL_DEF_BASIC("application/run/main_scene", "");
-	custom_prop_info["application/run/main_scene"] = PropertyInfo(Variant::STRING, "application/run/main_scene", PROPERTY_HINT_FILE, "*.tscn,*.scn,*.res");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::DICTIONARY, "application/config/name_localized", PROPERTY_HINT_LOCALIZABLE_STRING), Dictionary());
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "application/config/description", PROPERTY_HINT_MULTILINE_TEXT), "");
+	GLOBAL_DEF_BASIC("application/config/version", "");
+	GLOBAL_DEF_INTERNAL(PropertyInfo(Variant::STRING, "application/config/tags"), PackedStringArray());
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "application/run/main_scene", PROPERTY_HINT_FILE, "*.tscn,*.scn,*.res"), "");
 	GLOBAL_DEF("application/run/disable_stdout", false);
 	GLOBAL_DEF("application/run/disable_stderr", false);
 	GLOBAL_DEF_RST("application/config/use_hidden_project_data_directory", true);
@@ -1245,26 +1307,23 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF("application/config/custom_user_dir_name", "");
 	GLOBAL_DEF("application/config/project_settings_override", "");
 
+	GLOBAL_DEF("application/run/main_loop_type", "SceneTree");
+	GLOBAL_DEF("application/config/auto_accept_quit", true);
+	GLOBAL_DEF("application/config/quit_on_go_back", true);
+
 	// The default window size is tuned to:
 	// - Have a 16:9 aspect ratio,
 	// - Have both dimensions divisible by 8 to better play along with video recording,
 	// - Be displayable correctly in windowed mode on a 1366×768 display (tested on Windows 10 with default settings).
-	GLOBAL_DEF_BASIC("display/window/size/viewport_width", 1152);
-	custom_prop_info["display/window/size/viewport_width"] = PropertyInfo(Variant::INT, "display/window/size/viewport_width", PROPERTY_HINT_RANGE, "0,7680,1,or_greater"); // 8K resolution
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "display/window/size/viewport_width", PROPERTY_HINT_RANGE, "0,7680,1,or_greater"), 1152); // 8K resolution
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "display/window/size/viewport_height", PROPERTY_HINT_RANGE, "0,4320,1,or_greater"), 648); // 8K resolution
 
-	GLOBAL_DEF_BASIC("display/window/size/viewport_height", 648);
-	custom_prop_info["display/window/size/viewport_height"] = PropertyInfo(Variant::INT, "display/window/size/viewport_height", PROPERTY_HINT_RANGE, "0,4320,1,or_greater"); // 8K resolution
-
-	GLOBAL_DEF_BASIC("display/window/size/mode", 0);
-	custom_prop_info["display/window/size/mode"] = PropertyInfo(Variant::INT, "display/window/size/mode", PROPERTY_HINT_ENUM, "Windowed,Minimized,Maximized,Fullscreen,Exclusive Fullscreen");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "display/window/size/mode", PROPERTY_HINT_ENUM, "Windowed,Minimized,Maximized,Fullscreen,Exclusive Fullscreen"), 0);
 
 	// Keep the enum values in sync with the `DisplayServer::SCREEN_` enum.
-	GLOBAL_DEF_BASIC("display/window/size/initial_screen", -2);
-	String screen_hints = "Primary Monitor:-2"; // Note: Main Window Monitor:-1 is not used for the main window, skip it.
-	for (int i = 0; i < 64; i++) {
-		screen_hints += ",Monitor " + itos(i + 1) + ":" + itos(i);
-	}
-	custom_prop_info["display/window/size/initial_screen"] = PropertyInfo(Variant::INT, "display/window/size/initial_screen", PROPERTY_HINT_ENUM, screen_hints);
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "display/window/size/initial_position_type", PROPERTY_HINT_ENUM, "Absolute,Center of Primary Screen,Center of Other Screen,Center of Screen With Mouse Pointer,Center of Screen With Keyboard Focus"), 1);
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::VECTOR2I, "display/window/size/initial_position"), Vector2i());
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "display/window/size/initial_screen", PROPERTY_HINT_RANGE, "0,64,1,or_greater"), 0);
 
 	GLOBAL_DEF_BASIC("display/window/size/resizable", true);
 	GLOBAL_DEF_BASIC("display/window/size/borderless", false);
@@ -1273,20 +1332,19 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF("display/window/size/extend_to_title", false);
 	GLOBAL_DEF("display/window/size/no_focus", false);
 
-	GLOBAL_DEF("display/window/size/window_width_override", 0);
-	custom_prop_info["display/window/size/window_width_override"] = PropertyInfo(Variant::INT, "display/window/size/window_width_override", PROPERTY_HINT_RANGE, "0,7680,1,or_greater"); // 8K resolution
-	GLOBAL_DEF("display/window/size/window_height_override", 0);
-	custom_prop_info["display/window/size/window_height_override"] = PropertyInfo(Variant::INT, "display/window/size/window_height_override", PROPERTY_HINT_RANGE, "0,4320,1,or_greater"); // 8K resolution
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "display/window/size/window_width_override", PROPERTY_HINT_RANGE, "0,7680,1,or_greater"), 0); // 8K resolution
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "display/window/size/window_height_override", PROPERTY_HINT_RANGE, "0,4320,1,or_greater"), 0); // 8K resolution
 
 	GLOBAL_DEF("display/window/energy_saving/keep_screen_on", true);
 	GLOBAL_DEF("display/window/energy_saving/keep_screen_on.editor", false);
 
-	GLOBAL_DEF_BASIC("audio/buses/default_bus_layout", "res://default_bus_layout.tres");
-	custom_prop_info["audio/buses/default_bus_layout"] = PropertyInfo(Variant::STRING, "audio/buses/default_bus_layout", PROPERTY_HINT_FILE, "*.tres");
-	GLOBAL_DEF_RST("audio/general/2d_panning_strength", 0.5f);
-	custom_prop_info["audio/general/2d_panning_strength"] = PropertyInfo(Variant::FLOAT, "audio/general/2d_panning_strength", PROPERTY_HINT_RANGE, "0,2,0.01");
-	GLOBAL_DEF_RST("audio/general/3d_panning_strength", 0.5f);
-	custom_prop_info["audio/general/3d_panning_strength"] = PropertyInfo(Variant::FLOAT, "audio/general/3d_panning_strength", PROPERTY_HINT_RANGE, "0,2,0.01");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "audio/buses/default_bus_layout", PROPERTY_HINT_FILE, "*.tres"), "res://default_bus_layout.tres");
+	GLOBAL_DEF_RST("audio/general/text_to_speech", false);
+	GLOBAL_DEF_RST(PropertyInfo(Variant::FLOAT, "audio/general/2d_panning_strength", PROPERTY_HINT_RANGE, "0,2,0.01"), 0.5f);
+	GLOBAL_DEF_RST(PropertyInfo(Variant::FLOAT, "audio/general/3d_panning_strength", PROPERTY_HINT_RANGE, "0,2,0.01"), 0.5f);
+
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "audio/general/ios/session_category", PROPERTY_HINT_ENUM, "Ambient,Multi Route,Play and Record,Playback,Record,Solo Ambient"), 0);
+	GLOBAL_DEF("audio/general/ios/mix_with_others", false);
 
 	PackedStringArray extensions;
 	extensions.push_back("gd");
@@ -1295,39 +1353,31 @@ ProjectSettings::ProjectSettings() {
 	}
 	extensions.push_back("gdshader");
 
-	GLOBAL_DEF("editor/run/main_run_args", "");
-
-	GLOBAL_DEF("editor/script/search_in_file_extensions", extensions);
-	custom_prop_info["editor/script/search_in_file_extensions"] = PropertyInfo(Variant::PACKED_STRING_ARRAY, "editor/script/search_in_file_extensions");
-
-	GLOBAL_DEF("editor/script/templates_search_path", "res://script_templates");
-	custom_prop_info["editor/script/templates_search_path"] = PropertyInfo(Variant::STRING, "editor/script/templates_search_path", PROPERTY_HINT_DIR);
+	GLOBAL_DEF(PropertyInfo(Variant::PACKED_STRING_ARRAY, "editor/script/search_in_file_extensions"), extensions);
 
 	_add_builtin_input_map();
 
 	// Keep the enum values in sync with the `DisplayServer::ScreenOrientation` enum.
 	custom_prop_info["display/window/handheld/orientation"] = PropertyInfo(Variant::INT, "display/window/handheld/orientation", PROPERTY_HINT_ENUM, "Landscape,Portrait,Reverse Landscape,Reverse Portrait,Sensor Landscape,Sensor Portrait,Sensor");
+	GLOBAL_DEF("display/window/subwindows/embed_subwindows", true);
 	// Keep the enum values in sync with the `DisplayServer::VSyncMode` enum.
 	custom_prop_info["display/window/vsync/vsync_mode"] = PropertyInfo(Variant::INT, "display/window/vsync/vsync_mode", PROPERTY_HINT_ENUM, "Disabled,Enabled,Adaptive,Mailbox");
 	custom_prop_info["rendering/driver/threads/thread_model"] = PropertyInfo(Variant::INT, "rendering/driver/threads/thread_model", PROPERTY_HINT_ENUM, "Single-Unsafe,Single-Safe,Multi-Threaded");
 	GLOBAL_DEF("physics/2d/run_on_separate_thread", false);
 	GLOBAL_DEF("physics/3d/run_on_separate_thread", false);
 
-	GLOBAL_DEF("debug/settings/profiler/max_functions", 16384);
-	custom_prop_info["debug/settings/profiler/max_functions"] = PropertyInfo(Variant::INT, "debug/settings/profiler/max_functions", PROPERTY_HINT_RANGE, "128,65535,1");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "display/window/stretch/mode", PROPERTY_HINT_ENUM, "disabled,canvas_items,viewport"), "disabled");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "display/window/stretch/aspect", PROPERTY_HINT_ENUM, "ignore,keep,keep_width,keep_height,expand"), "keep");
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::FLOAT, "display/window/stretch/scale", PROPERTY_HINT_RANGE, "0.5,8.0,0.01"), 1.0);
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::STRING, "display/window/stretch/scale_mode", PROPERTY_HINT_ENUM, "fractional,integer"), "fractional");
 
-	GLOBAL_DEF("compression/formats/zstd/long_distance_matching", Compression::zstd_long_distance_matching);
-	custom_prop_info["compression/formats/zstd/long_distance_matching"] = PropertyInfo(Variant::BOOL, "compression/formats/zstd/long_distance_matching");
-	GLOBAL_DEF("compression/formats/zstd/compression_level", Compression::zstd_level);
-	custom_prop_info["compression/formats/zstd/compression_level"] = PropertyInfo(Variant::INT, "compression/formats/zstd/compression_level", PROPERTY_HINT_RANGE, "1,22,1");
-	GLOBAL_DEF("compression/formats/zstd/window_log_size", Compression::zstd_window_log_size);
-	custom_prop_info["compression/formats/zstd/window_log_size"] = PropertyInfo(Variant::INT, "compression/formats/zstd/window_log_size", PROPERTY_HINT_RANGE, "10,30,1");
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "debug/settings/profiler/max_functions", PROPERTY_HINT_RANGE, "128,65535,1"), 16384);
 
-	GLOBAL_DEF("compression/formats/zlib/compression_level", Compression::zlib_level);
-	custom_prop_info["compression/formats/zlib/compression_level"] = PropertyInfo(Variant::INT, "compression/formats/zlib/compression_level", PROPERTY_HINT_RANGE, "-1,9,1");
-
-	GLOBAL_DEF("compression/formats/gzip/compression_level", Compression::gzip_level);
-	custom_prop_info["compression/formats/gzip/compression_level"] = PropertyInfo(Variant::INT, "compression/formats/gzip/compression_level", PROPERTY_HINT_RANGE, "-1,9,1");
+	GLOBAL_DEF(PropertyInfo(Variant::BOOL, "compression/formats/zstd/long_distance_matching"), Compression::zstd_long_distance_matching);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "compression/formats/zstd/compression_level", PROPERTY_HINT_RANGE, "1,22,1"), Compression::zstd_level);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "compression/formats/zstd/window_log_size", PROPERTY_HINT_RANGE, "10,30,1"), Compression::zstd_window_log_size);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "compression/formats/zlib/compression_level", PROPERTY_HINT_RANGE, "-1,9,1"), Compression::zlib_level);
+	GLOBAL_DEF(PropertyInfo(Variant::INT, "compression/formats/gzip/compression_level", PROPERTY_HINT_RANGE, "-1,9,1"), Compression::gzip_level);
 
 	GLOBAL_DEF("debug/settings/crash_handler/message",
 			String("Please include this when reporting the bug to the project developer."));
@@ -1336,18 +1386,31 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/occlusion_culling/bvh_build_quality", PROPERTY_HINT_ENUM, "Low,Medium,High"), 2);
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "memory/limits/multithreaded_server/rid_pool_prealloc", PROPERTY_HINT_RANGE, "0,500,1"), 60); // No negative and limit to 500 due to crashes.
 	GLOBAL_DEF_RST("internationalization/rendering/force_right_to_left_layout_direction", false);
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "internationalization/rendering/root_node_layout_direction", PROPERTY_HINT_ENUM, "Based on Locale,Left-to-Right,Right-to-Left"), 0);
 
 	GLOBAL_DEF(PropertyInfo(Variant::INT, "gui/timers/incremental_search_max_interval_msec", PROPERTY_HINT_RANGE, "0,10000,1,or_greater"), 2000);
+
+	GLOBAL_DEF_BASIC("gui/common/snap_controls_to_pixels", true);
+	GLOBAL_DEF_BASIC("gui/fonts/dynamic_fonts/use_oversampling", true);
 
 	GLOBAL_DEF("rendering/rendering_device/staging_buffer/block_size_kb", 256);
 	GLOBAL_DEF("rendering/rendering_device/staging_buffer/max_size_mb", 128);
 	GLOBAL_DEF("rendering/rendering_device/staging_buffer/texture_upload_region_size_px", 64);
+	GLOBAL_DEF("rendering/rendering_device/pipeline_cache/save_chunk_size_mb", 3.0);
 	GLOBAL_DEF("rendering/rendering_device/vulkan/max_descriptors_per_pool", 64);
 
-	// These properties will not show up in the dialog nor in the documentation. If you want to exclude whole groups, see _get_property_list() method.
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "rendering/textures/canvas_textures/default_texture_filter", PROPERTY_HINT_ENUM, "Nearest,Linear,Linear Mipmap,Nearest Mipmap"), 1);
+	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "rendering/textures/canvas_textures/default_texture_repeat", PROPERTY_HINT_ENUM, "Disable,Enable,Mirror"), 0);
+
+	GLOBAL_DEF("collada/use_ambient", false);
+
+	// These properties will not show up in the dialog. If you want to exclude whole groups, use add_hidden_prefix().
 	GLOBAL_DEF_INTERNAL("application/config/features", PackedStringArray());
 	GLOBAL_DEF_INTERNAL("internationalization/locale/translation_remaps", PackedStringArray());
 	GLOBAL_DEF_INTERNAL("internationalization/locale/translations", PackedStringArray());
+	GLOBAL_DEF_INTERNAL("internationalization/locale/translations_pot_files", PackedStringArray());
+
+	ProjectSettings::get_singleton()->add_hidden_prefix("input/");
 }
 
 ProjectSettings::~ProjectSettings() {

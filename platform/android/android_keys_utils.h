@@ -31,8 +31,9 @@
 #ifndef ANDROID_KEYS_UTILS_H
 #define ANDROID_KEYS_UTILS_H
 
+#include "core/os/keyboard.h"
+
 #include <android/input.h>
-#include <core/os/keyboard.h>
 
 #define AKEYCODE_MAX 0xFFFF
 
@@ -60,6 +61,7 @@ static AndroidGodotCodePair android_godot_code_pairs[] = {
 	{ AKEYCODE_DPAD_DOWN, Key::DOWN }, // (20) Directional Pad Down key.
 	{ AKEYCODE_DPAD_LEFT, Key::LEFT }, // (21) Directional Pad Left key.
 	{ AKEYCODE_DPAD_RIGHT, Key::RIGHT }, // (22) Directional Pad Right key.
+	{ AKEYCODE_DPAD_CENTER, Key::ENTER }, // (23) Directional Pad Center key.
 	{ AKEYCODE_VOLUME_UP, Key::VOLUMEUP }, // (24) Volume Up key.
 	{ AKEYCODE_VOLUME_DOWN, Key::VOLUMEDOWN }, // (25) Volume Down key.
 	{ AKEYCODE_POWER, Key::STANDBY }, // (26) Power key.
@@ -165,13 +167,14 @@ static AndroidGodotCodePair android_godot_code_pairs[] = {
 	{ AKEYCODE_NUMPAD_DOT, Key::KP_PERIOD }, // (158) Numeric keypad '.' key (for decimals or digit grouping).
 	{ AKEYCODE_NUMPAD_ENTER, Key::KP_ENTER }, // (160) Numeric keypad Enter key.
 	{ AKEYCODE_VOLUME_MUTE, Key::VOLUMEMUTE }, // (164) Volume Mute key.
+	{ AKEYCODE_EISU, Key::JIS_EISU }, // (212) JIS EISU key.
 	{ AKEYCODE_YEN, Key::YEN }, // (216) Japanese Yen key.
+	{ AKEYCODE_KANA, Key::JIS_KANA }, // (218) JIS KANA key.
 	{ AKEYCODE_HELP, Key::HELP }, // (259) Help key.
 	{ AKEYCODE_REFRESH, Key::REFRESH }, // (285) Refresh key.
 	{ AKEYCODE_MAX, Key::UNKNOWN }
 };
 
 Key godot_code_from_android_code(unsigned int p_code);
-Key godot_code_from_unicode(unsigned int p_code);
 
 #endif // ANDROID_KEYS_UTILS_H

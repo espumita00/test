@@ -84,6 +84,7 @@ public:
 private:
 	BitField<MouseButtonMask> mouse_button_mask;
 
+	RBSet<Key> key_label_pressed;
 	RBSet<Key> physical_keys_pressed;
 	RBSet<Key> keys_pressed;
 	RBSet<JoyButton> joy_buttons_pressed;
@@ -95,14 +96,18 @@ private:
 	Vector3 gyroscope;
 	Vector2 mouse_pos;
 	int64_t mouse_window = 0;
+	bool legacy_just_pressed_behavior = false;
 
 	struct Action {
-		uint64_t physics_frame;
-		uint64_t process_frame;
-		bool pressed;
-		bool exact;
-		float strength;
-		float raw_strength;
+		uint64_t pressed_physics_frame = UINT64_MAX;
+		uint64_t pressed_process_frame = UINT64_MAX;
+		uint64_t released_physics_frame = UINT64_MAX;
+		uint64_t released_process_frame = UINT64_MAX;
+		int pressed = 0;
+		bool axis_pressed = false;
+		bool exact = true;
+		float strength = 0.0f;
+		float raw_strength = 0.0f;
 	};
 
 	HashMap<StringName, Action> action_state;
@@ -145,11 +150,15 @@ private:
 		HatMask last_hat = HatMask::CENTER;
 		int mapping = -1;
 		int hat_current = 0;
+		Dictionary info;
 	};
 
 	VelocityTrack mouse_velocity_track;
 	HashMap<int, VelocityTrack> touch_velocity_track;
 	HashMap<int, Joypad> joy_names;
+
+	HashSet<uint32_t> ignored_device_ids;
+
 	int fallback_mapping = -1;
 
 	CursorShape default_shape = CURSOR_ARROW;
@@ -222,6 +231,10 @@ private:
 	void _parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_emulated);
 
 	List<Ref<InputEvent>> buffered_events;
+#ifdef DEBUG_ENABLED
+	HashSet<Ref<InputEvent>> frame_parsed_events;
+	uint64_t last_parsed_frame = UINT64_MAX;
+#endif
 
 	friend class DisplayServer;
 
@@ -247,6 +260,7 @@ public:
 	bool is_anything_pressed() const;
 	bool is_key_pressed(Key p_keycode) const;
 	bool is_physical_key_pressed(Key p_keycode) const;
+	bool is_key_label_pressed(Key p_keycode) const;
 	bool is_mouse_button_pressed(MouseButton p_button) const;
 	bool is_joy_button_pressed(int p_device, JoyButton p_button) const;
 	bool is_action_pressed(const StringName &p_action, bool p_exact = false) const;
@@ -264,7 +278,7 @@ public:
 	Vector2 get_joy_vibration_strength(int p_device);
 	float get_joy_vibration_duration(int p_device);
 	uint64_t get_joy_vibration_timestamp(int p_device);
-	void joy_connection_changed(int p_idx, bool p_connected, String p_name, String p_guid = "");
+	void joy_connection_changed(int p_idx, bool p_connected, String p_name, String p_guid = "", Dictionary p_joypad_info = Dictionary());
 
 	Vector3 get_gravity() const;
 	Vector3 get_accelerometer() const;
@@ -319,6 +333,8 @@ public:
 
 	bool is_joy_known(int p_device);
 	String get_joy_guid(int p_device) const;
+	bool should_ignore_device(int p_vendor_id, int p_product_id) const;
+	Dictionary get_joy_info(int p_device) const;
 	void set_fallback_mapping(String p_guid);
 
 	void flush_buffered_events();

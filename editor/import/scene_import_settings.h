@@ -35,10 +35,13 @@
 #include "scene/3d/camera_3d.h"
 #include "scene/3d/light_3d.h"
 #include "scene/3d/mesh_instance_3d.h"
+#include "scene/3d/skeleton_3d.h"
 #include "scene/gui/dialogs.h"
 #include "scene/gui/item_list.h"
 #include "scene/gui/menu_button.h"
 #include "scene/gui/option_button.h"
+#include "scene/gui/panel_container.h"
+#include "scene/gui/slider.h"
 #include "scene/gui/split_container.h"
 #include "scene/gui/subviewport_container.h"
 #include "scene/gui/tab_container.h"
@@ -85,6 +88,15 @@ class SceneImportSettings : public ConfirmationDialog {
 	MeshInstance3D *mesh_preview = nullptr;
 	Ref<SphereMesh> material_preview;
 
+	AnimationPlayer *animation_player = nullptr;
+	List<Skeleton3D *> skeletons;
+	PanelContainer *animation_preview = nullptr;
+	HSlider *animation_slider = nullptr;
+	Button *animation_play_button = nullptr;
+	Button *animation_stop_button = nullptr;
+	Animation::LoopMode animation_loop_mode = Animation::LOOP_NONE;
+	bool animation_pingpong = false;
+
 	Ref<StandardMaterial3D> collider_mat;
 
 	float cam_rot_x = 0.0f;
@@ -107,6 +119,7 @@ class SceneImportSettings : public ConfirmationDialog {
 		HashMap<StringName, Variant> settings;
 	};
 	HashMap<String, MaterialData> material_map;
+	HashMap<Ref<Material>, String> unnamed_material_name_map;
 
 	struct MeshData {
 		bool has_import_id;
@@ -141,7 +154,6 @@ class SceneImportSettings : public ConfirmationDialog {
 	void _fill_scene(Node *p_node, TreeItem *p_parent_item);
 
 	HashSet<Ref<Mesh>> mesh_set;
-	HashSet<Ref<Material>> material_set;
 
 	String selected_type;
 	String selected_id;
@@ -151,9 +163,17 @@ class SceneImportSettings : public ConfirmationDialog {
 	void _update_view_gizmos();
 	void _update_camera();
 	void _select(Tree *p_from, String p_type, String p_id);
+	void _inspector_property_edited(const String &p_name);
+	void _reset_bone_transforms();
+	void _play_animation();
+	void _stop_current_animation();
+	void _reset_animation(const String &p_animation_name = "");
+	void _animation_slider_value_changed(double p_value);
+	void _animation_finished(const StringName &p_name);
 	void _material_tree_selected();
 	void _mesh_tree_selected();
 	void _scene_tree_selected();
+	void _cleanup();
 
 	void _viewport_input(const Ref<InputEvent> &p_input);
 
@@ -191,6 +211,7 @@ class SceneImportSettings : public ConfirmationDialog {
 	void _load_default_subresource_settings(HashMap<StringName, Variant> &settings, const String &p_type, const String &p_import_id, ResourceImporterScene::InternalImportCategory p_category);
 
 	bool editing_animation = false;
+	bool generate_collider = false;
 
 	Timer *update_view_timer = nullptr;
 
@@ -199,6 +220,7 @@ protected:
 
 public:
 	bool is_editing_animation() const { return editing_animation; }
+	void request_generate_collider();
 	void update_view();
 	void open_settings(const String &p_path, bool p_for_animation = false);
 	static SceneImportSettings *get_singleton();

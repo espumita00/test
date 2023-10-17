@@ -344,7 +344,7 @@ static const _BuiltinActionDisplayName _builtin_action_display_names[] = {
     { "ui_text_add_selection_for_next_occurrence",     TTRC("Add Selection for Next Occurrence") },
     { "ui_text_clear_carets_and_selection",            TTRC("Clear Carets and Selection") },
     { "ui_text_toggle_insert_mode",                    TTRC("Toggle Insert Mode") },
-    { "ui_text_submit",                                TTRC("Text Submitted") },
+    { "ui_text_submit",                                TTRC("Submit Text") },
     { "ui_graph_duplicate",                            TTRC("Duplicate Nodes") },
     { "ui_graph_delete",                               TTRC("Delete Nodes") },
     { "ui_filedialog_up_one_level",                    TTRC("Go Up One Level") },
@@ -399,21 +399,25 @@ const HashMap<String, List<Ref<InputEvent>>> &InputMap::get_builtins() {
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::LEFT));
 	inputs.push_back(InputEventJoypadButton::create_reference(JoyButton::DPAD_LEFT));
+	inputs.push_back(InputEventJoypadMotion::create_reference(JoyAxis::LEFT_X, -1.0));
 	default_builtin_cache.insert("ui_left", inputs);
 
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::RIGHT));
 	inputs.push_back(InputEventJoypadButton::create_reference(JoyButton::DPAD_RIGHT));
+	inputs.push_back(InputEventJoypadMotion::create_reference(JoyAxis::LEFT_X, 1.0));
 	default_builtin_cache.insert("ui_right", inputs);
 
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::UP));
 	inputs.push_back(InputEventJoypadButton::create_reference(JoyButton::DPAD_UP));
+	inputs.push_back(InputEventJoypadMotion::create_reference(JoyAxis::LEFT_Y, -1.0));
 	default_builtin_cache.insert("ui_up", inputs);
 
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::DOWN));
 	inputs.push_back(InputEventJoypadButton::create_reference(JoyButton::DPAD_DOWN));
+	inputs.push_back(InputEventJoypadMotion::create_reference(JoyAxis::LEFT_Y, 1.0));
 	default_builtin_cache.insert("ui_down", inputs);
 
 	inputs = List<Ref<InputEvent>>();
@@ -667,6 +671,10 @@ const HashMap<String, List<Ref<InputEvent>>> &InputMap::get_builtins() {
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::G | KeyModifierMask::ALT));
 	default_builtin_cache.insert("ui_text_select_word_under_caret", inputs);
+
+	inputs = List<Ref<InputEvent>>();
+	inputs.push_back(InputEventKey::create_reference(Key::G | KeyModifierMask::CTRL | KeyModifierMask::META));
+	default_builtin_cache.insert("ui_text_select_word_under_caret.macos", inputs);
 
 	inputs = List<Ref<InputEvent>>();
 	inputs.push_back(InputEventKey::create_reference(Key::D | KeyModifierMask::CMD_OR_CTRL));

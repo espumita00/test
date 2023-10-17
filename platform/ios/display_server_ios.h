@@ -35,23 +35,27 @@
 #include "servers/display_server.h"
 
 #if defined(VULKAN_ENABLED)
+#import "vulkan_context_ios.h"
+
 #include "drivers/vulkan/rendering_device_vulkan.h"
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
-
-#include "vulkan_context_ios.h"
 
 #ifdef USE_VOLK
 #include <volk.h>
 #else
 #include <vulkan/vulkan.h>
 #endif
-#endif
+#endif // VULKAN_ENABLED
+
+#if defined(GLES3_ENABLED)
+#include "drivers/gles3/rasterizer_gles3.h"
+#endif // GLES3_ENABLED
 
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 class DisplayServerIOS : public DisplayServer {
-	GDCLASS(DisplayServerIOS, DisplayServer)
+	// No need to register with GDCLASS, it's platform-specific and nothing is added.
 
 	_THREAD_SAFE_CLASS_
 
@@ -109,11 +113,12 @@ public:
 
 	void touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click);
 	void touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt);
-	void touches_cancelled(int p_idx);
+	void touches_canceled(int p_idx);
 
 	// MARK: Keyboard
 
-	void key(Key p_key, char32_t p_char, bool p_pressed);
+	void key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed);
+	bool is_keyboard_active() const;
 
 	// MARK: Motion
 
@@ -135,6 +140,9 @@ public:
 	virtual void tts_pause() override;
 	virtual void tts_resume() override;
 	virtual void tts_stop() override;
+
+	virtual bool is_dark_mode_supported() const override;
+	virtual bool is_dark_mode() const override;
 
 	virtual Rect2i get_display_safe_area() const override;
 
@@ -188,6 +196,7 @@ public:
 
 	virtual void window_request_attention(WindowID p_window = MAIN_WINDOW_ID) override;
 	virtual void window_move_to_foreground(WindowID p_window = MAIN_WINDOW_ID) override;
+	virtual bool window_is_focused(WindowID p_window = MAIN_WINDOW_ID) const override;
 
 	virtual float screen_get_max_scale() const override;
 
@@ -216,6 +225,7 @@ public:
 	virtual bool screen_is_kept_on() const override;
 
 	void resize_window(CGSize size);
+	virtual void swap_buffers() override {}
 };
 
 #endif // DISPLAY_SERVER_IOS_H

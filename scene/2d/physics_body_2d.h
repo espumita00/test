@@ -212,6 +212,8 @@ private:
 	static void _body_state_changed_callback(void *p_instance, PhysicsDirectBodyState2D *p_state);
 	void _body_state_changed(PhysicsDirectBodyState2D *p_state);
 
+	void _sync_body_state(PhysicsDirectBodyState2D *p_state);
+
 protected:
 	void _notification(int p_what);
 	static void _bind_methods();
@@ -337,6 +339,7 @@ public:
 		PLATFORM_ON_LEAVE_DO_NOTHING,
 	};
 	bool move_and_slide();
+	void apply_floor_snap();
 
 	const Vector2 &get_velocity() const;
 	void set_velocity(const Vector2 &p_velocity);
@@ -446,6 +449,7 @@ private:
 	void set_up_direction(const Vector2 &p_up_direction);
 	void _set_collision_direction(const PhysicsServer2D::MotionResult &p_result);
 	void _set_platform_data(const PhysicsServer2D::MotionResult &p_result);
+	void _apply_floor_snap(bool p_wall_as_floor = false);
 	void _snap_on_floor(bool p_was_on_floor, bool p_vel_dir_facing_up, bool p_wall_as_floor = false);
 
 protected:

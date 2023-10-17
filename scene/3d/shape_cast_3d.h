@@ -34,11 +34,15 @@
 #include "scene/3d/node_3d.h"
 #include "scene/resources/shape_3d.h"
 
+class CollisionObject3D;
+
 class ShapeCast3D : public Node3D {
 	GDCLASS(ShapeCast3D, Node3D);
 
 	bool enabled = true;
+#ifndef DISABLE_DEPRECATED
 	void resource_changed(Ref<Resource> p_res);
+#endif
 
 	Ref<Shape3D> shape;
 	RID shape_rid;
@@ -71,8 +75,6 @@ class ShapeCast3D : public Node3D {
 	real_t collision_unsafe_fraction = 1.0;
 
 	Array _get_collision_result() const;
-
-	~ShapeCast3D();
 
 protected:
 	void _notification(int p_what);
@@ -133,9 +135,9 @@ public:
 	bool is_colliding() const;
 
 	void add_exception_rid(const RID &p_rid);
-	void add_exception(const Object *p_object);
+	void add_exception(const CollisionObject3D *p_node);
 	void remove_exception_rid(const RID &p_rid);
-	void remove_exception(const Object *p_object);
+	void remove_exception(const CollisionObject3D *p_node);
 	void clear_exceptions();
 
 	virtual PackedStringArray get_configuration_warnings() const override;

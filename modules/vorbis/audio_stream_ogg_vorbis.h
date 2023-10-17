@@ -34,7 +34,8 @@
 #include "core/variant/variant.h"
 #include "modules/ogg/ogg_packet_sequence.h"
 #include "servers/audio/audio_stream.h"
-#include "thirdparty/libvorbis/vorbis/codec.h"
+
+#include <vorbis/codec.h>
 
 class AudioStreamOggVorbis;
 
@@ -106,9 +107,9 @@ class AudioStreamOggVorbis : public AudioStream {
 	friend class AudioStreamPlaybackOggVorbis;
 
 	int channels = 1;
-	float length = 0.0;
+	double length = 0.0;
 	bool loop = false;
-	float loop_offset = 0.0;
+	double loop_offset = 0.0;
 
 	// Performs a seek to the beginning of the stream, should not be called during playback!
 	// Also causes allocation and deallocation.
@@ -124,6 +125,8 @@ protected:
 	static void _bind_methods();
 
 public:
+	static Ref<AudioStreamOggVorbis> load_from_file(const String &p_path);
+	static Ref<AudioStreamOggVorbis> load_from_buffer(const Vector<uint8_t> &file_data);
 	void set_loop(bool p_enable);
 	virtual bool has_loop() const override;
 

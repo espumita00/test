@@ -94,10 +94,14 @@ void CollisionObject2D::_notification(int p_what) {
 			bool disabled = !is_enabled();
 
 			if (!disabled || (disable_mode != DISABLE_MODE_REMOVE)) {
-				if (area) {
-					PhysicsServer2D::get_singleton()->area_set_space(rid, RID());
+				if (callback_lock > 0) {
+					ERR_PRINT("Removing a CollisionObject node during a physics callback is not allowed and will cause undesired behavior. Remove with call_deferred() instead.");
 				} else {
-					PhysicsServer2D::get_singleton()->body_set_space(rid, RID());
+					if (area) {
+						PhysicsServer2D::get_singleton()->area_set_space(rid, RID());
+					} else {
+						PhysicsServer2D::get_singleton()->body_set_space(rid, RID());
+					}
 				}
 			}
 
@@ -111,6 +115,15 @@ void CollisionObject2D::_notification(int p_what) {
 				PhysicsServer2D::get_singleton()->area_attach_canvas_instance_id(rid, ObjectID());
 			} else {
 				PhysicsServer2D::get_singleton()->body_attach_canvas_instance_id(rid, ObjectID());
+			}
+		} break;
+
+		case NOTIFICATION_WORLD_2D_CHANGED: {
+			RID space = get_world_2d()->get_space();
+			if (area) {
+				PhysicsServer2D::get_singleton()->area_set_space(rid, space);
+			} else {
+				PhysicsServer2D::get_singleton()->body_set_space(rid, space);
 			}
 		} break;
 
@@ -225,10 +238,14 @@ void CollisionObject2D::_apply_disabled() {
 	switch (disable_mode) {
 		case DISABLE_MODE_REMOVE: {
 			if (is_inside_tree()) {
-				if (area) {
-					PhysicsServer2D::get_singleton()->area_set_space(rid, RID());
+				if (callback_lock > 0) {
+					ERR_PRINT("Disabling a CollisionObject node during a physics callback is not allowed and will cause undesired behavior. Disable with call_deferred() instead.");
 				} else {
-					PhysicsServer2D::get_singleton()->body_set_space(rid, RID());
+					if (area) {
+						PhysicsServer2D::get_singleton()->area_set_space(rid, RID());
+					} else {
+						PhysicsServer2D::get_singleton()->body_set_space(rid, RID());
+					}
 				}
 			}
 		} break;
@@ -643,6 +660,7 @@ CollisionObject2D::CollisionObject2D(RID p_rid, bool p_area) {
 	area = p_area;
 	pickable = true;
 	set_notify_transform(true);
+	set_hide_clip_children(true);
 	total_subshapes = 0;
 	only_update_transform_changes = false;
 

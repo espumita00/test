@@ -37,9 +37,15 @@
 #include "core/templates/local_vector.h"
 #include "core/templates/rb_set.h"
 
+template <typename T>
+class TypedArray;
+
 class ProjectSettings : public Object {
 	GDCLASS(ProjectSettings, Object);
 	_THREAD_SAFE_CLASS_
+	friend class TestProjectSettingsInternalsAccessor;
+
+	bool is_changed = false;
 
 public:
 	typedef HashMap<String, Variant> CustomMap;
@@ -92,12 +98,17 @@ protected:
 	String resource_path;
 	HashMap<StringName, PropertyInfo> custom_prop_info;
 	bool using_datapack = false;
+	bool project_loaded = false;
 	List<String> input_presets;
 
 	HashSet<String> custom_features;
 	HashMap<StringName, LocalVector<Pair<StringName, StringName>>> feature_overrides;
 
+	LocalVector<String> hidden_prefixes;
 	HashMap<StringName, AutoloadInfo> autoloads;
+
+	Array global_class_list;
+	bool is_global_class_list_loaded = false;
 
 	String project_data_dir_name;
 
@@ -106,6 +117,9 @@ protected:
 	void _get_property_list(List<PropertyInfo> *p_list) const;
 	bool _property_can_revert(const StringName &p_name) const;
 	bool _property_get_revert(const StringName &p_name, Variant &r_property) const;
+
+	void _queue_changed();
+	void _emit_changed();
 
 	static ProjectSettings *singleton;
 
@@ -141,8 +155,9 @@ public:
 
 	void set_setting(const String &p_setting, const Variant &p_value);
 	Variant get_setting(const String &p_setting, const Variant &p_default_value = Variant()) const;
-	Array get_global_class_list();
+	TypedArray<Dictionary> get_global_class_list();
 	void store_global_class_list(const Array &p_classes);
+	String get_global_class_list_path() const;
 
 	bool has_setting(String p_var) const;
 	String localize_path(const String &p_path) const;
@@ -154,11 +169,11 @@ public:
 	void set_restart_if_changed(const String &p_name, bool p_restart);
 	void set_ignore_value_in_docs(const String &p_name, bool p_ignore);
 	bool get_ignore_value_in_docs(const String &p_name) const;
+	void add_hidden_prefix(const String &p_prefix);
 
 	String get_project_data_dir_name() const;
 	String get_project_data_path() const;
 	String get_resource_path() const;
-	String get_safe_project_name() const;
 	String get_imported_files_path() const;
 
 	static ProjectSettings *get_singleton();
@@ -183,6 +198,7 @@ public:
 	Variant get_setting_with_override(const StringName &p_name) const;
 
 	bool is_using_datapack() const;
+	bool is_project_loaded() const;
 
 	bool has_custom_feature(const String &p_feature) const;
 

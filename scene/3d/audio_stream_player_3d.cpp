@@ -35,6 +35,7 @@
 #include "scene/3d/audio_listener_3d.h"
 #include "scene/3d/camera_3d.h"
 #include "scene/main/viewport.h"
+#include "scene/scene_string_names.h"
 
 // Based on "A Novel Multichannel Panning Method for Standard and Arbitrary Loudspeaker Configurations" by Ramy Sadek and Chris Kyriakakis (2004)
 // Speaker-Placement Correction Amplitude Panning (SPCAP)
@@ -162,12 +163,10 @@ void AudioStreamPlayer3D::_calc_reverb_vol(Area3D *area, Vector3 listener_area_p
 			rev_pos.y = 0;
 			rev_pos.normalize();
 
-			if (channel_count >= 1) {
-				// Stereo pair
-				float c = rev_pos.x * 0.5 + 0.5;
-				reverb_vol.write[0].l = 1.0 - c;
-				reverb_vol.write[0].r = c;
-			}
+			// Stereo pair.
+			float c = rev_pos.x * 0.5 + 0.5;
+			reverb_vol.write[0].l = 1.0 - c;
+			reverb_vol.write[0].r = c;
 
 			if (channel_count >= 3) {
 				// Center pair + Side pair
@@ -183,7 +182,6 @@ void AudioStreamPlayer3D::_calc_reverb_vol(Area3D *area, Vector3 listener_area_p
 			if (channel_count >= 4) {
 				// Rear pair
 				// FIXME: Not sure what math should be done here
-				float c = rev_pos.x * 0.5 + 0.5;
 				reverb_vol.write[3].l = 1.0 - c;
 				reverb_vol.write[3].r = c;
 			}
@@ -284,14 +282,12 @@ void AudioStreamPlayer3D::_notification(int p_what) {
 				volume_vector = _update_panning();
 			}
 
-			if (setplay.get() >= 0 && stream.is_valid()) {
+			if (setplayback.is_valid() && setplay.get() >= 0) {
 				active.set();
-				Ref<AudioStreamPlayback> new_playback = stream->instantiate_playback();
-				ERR_FAIL_COND_MSG(new_playback.is_null(), "Failed to instantiate playback.");
 				HashMap<StringName, Vector<AudioFrame>> bus_map;
 				bus_map[_get_actual_bus()] = volume_vector;
-				AudioServer::get_singleton()->start_playback_stream(new_playback, bus_map, setplay.get(), actual_pitch_scale, linear_attenuation, attenuation_filter_cutoff_hz);
-				stream_playbacks.push_back(new_playback);
+				AudioServer::get_singleton()->start_playback_stream(setplayback, bus_map, setplay.get(), actual_pitch_scale, linear_attenuation, attenuation_filter_cutoff_hz);
+				setplayback.unref();
 				setplay.set(-1);
 			}
 
@@ -564,7 +560,7 @@ float AudioStreamPlayer3D::get_max_db() const {
 }
 
 void AudioStreamPlayer3D::set_pitch_scale(float p_pitch_scale) {
-	ERR_FAIL_COND(p_pitch_scale <= 0.0);
+	ERR_FAIL_COND(!(p_pitch_scale > 0.0));
 	pitch_scale = p_pitch_scale;
 }
 
@@ -580,14 +576,21 @@ void AudioStreamPlayer3D::play(float p_from_pos) {
 	if (stream->is_monophonic() && is_playing()) {
 		stop();
 	}
+	Ref<AudioStreamPlayback> stream_playback = stream->instantiate_playback();
+	ERR_FAIL_COND_MSG(stream_playback.is_null(), "Failed to instantiate playback.");
+
+	stream_playbacks.push_back(stream_playback);
+	setplayback = stream_playback;
 	setplay.set(p_from_pos);
 	active.set();
 	set_physics_process_internal(true);
 }
 
 void AudioStreamPlayer3D::seek(float p_seconds) {
-	stop();
-	play(p_seconds);
+	if (is_playing()) {
+		stop();
+		play(p_seconds);
+	}
 }
 
 void AudioStreamPlayer3D::stop() {
@@ -633,7 +636,7 @@ StringName AudioStreamPlayer3D::get_bus() const {
 			return bus;
 		}
 	}
-	return SNAME("Master");
+	return SceneStringNames::get_singleton()->Master;
 }
 
 void AudioStreamPlayer3D::set_autoplay(bool p_enable) {
@@ -669,10 +672,6 @@ void AudioStreamPlayer3D::_validate_property(PropertyInfo &p_property) const {
 
 		p_property.hint_string = options;
 	}
-}
-
-void AudioStreamPlayer3D::_bus_layout_changed() {
-	notify_property_list_changed();
 }
 
 void AudioStreamPlayer3D::set_max_distance(float p_metres) {
@@ -783,11 +782,13 @@ bool AudioStreamPlayer3D::get_stream_paused() const {
 	return false;
 }
 
+bool AudioStreamPlayer3D::has_stream_playback() {
+	return !stream_playbacks.is_empty();
+}
+
 Ref<AudioStreamPlayback> AudioStreamPlayer3D::get_stream_playback() {
-	if (!stream_playbacks.is_empty()) {
-		return stream_playbacks[stream_playbacks.size() - 1];
-	}
-	return nullptr;
+	ERR_FAIL_COND_V_MSG(stream_playbacks.is_empty(), Ref<AudioStreamPlayback>(), "Player is inactive. Call play() before requesting get_stream_playback().");
+	return stream_playbacks[stream_playbacks.size() - 1];
 }
 
 void AudioStreamPlayer3D::set_max_polyphony(int p_max_polyphony) {
@@ -807,6 +808,14 @@ void AudioStreamPlayer3D::set_panning_strength(float p_panning_strength) {
 
 float AudioStreamPlayer3D::get_panning_strength() const {
 	return panning_strength;
+}
+
+void AudioStreamPlayer3D::_on_bus_layout_changed() {
+	notify_property_list_changed();
+}
+
+void AudioStreamPlayer3D::_on_bus_renamed(int p_bus_index, const StringName &p_old_name, const StringName &p_new_name) {
+	notify_property_list_changed();
 }
 
 void AudioStreamPlayer3D::_bind_methods() {
@@ -841,7 +850,7 @@ void AudioStreamPlayer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_set_playing", "enable"), &AudioStreamPlayer3D::_set_playing);
 	ClassDB::bind_method(D_METHOD("_is_active"), &AudioStreamPlayer3D::_is_active);
 
-	ClassDB::bind_method(D_METHOD("set_max_distance", "metres"), &AudioStreamPlayer3D::set_max_distance);
+	ClassDB::bind_method(D_METHOD("set_max_distance", "meters"), &AudioStreamPlayer3D::set_max_distance);
 	ClassDB::bind_method(D_METHOD("get_max_distance"), &AudioStreamPlayer3D::get_max_distance);
 
 	ClassDB::bind_method(D_METHOD("set_area_mask", "mask"), &AudioStreamPlayer3D::set_area_mask);
@@ -877,6 +886,7 @@ void AudioStreamPlayer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_panning_strength", "panning_strength"), &AudioStreamPlayer3D::set_panning_strength);
 	ClassDB::bind_method(D_METHOD("get_panning_strength"), &AudioStreamPlayer3D::get_panning_strength);
 
+	ClassDB::bind_method(D_METHOD("has_stream_playback"), &AudioStreamPlayer3D::has_stream_playback);
 	ClassDB::bind_method(D_METHOD("get_stream_playback"), &AudioStreamPlayer3D::get_stream_playback);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "stream", PROPERTY_HINT_RESOURCE_TYPE, "AudioStream"), "set_stream", "get_stream");
@@ -917,7 +927,8 @@ void AudioStreamPlayer3D::_bind_methods() {
 
 AudioStreamPlayer3D::AudioStreamPlayer3D() {
 	velocity_tracker.instantiate();
-	AudioServer::get_singleton()->connect("bus_layout_changed", callable_mp(this, &AudioStreamPlayer3D::_bus_layout_changed));
+	AudioServer::get_singleton()->connect("bus_layout_changed", callable_mp(this, &AudioStreamPlayer3D::_on_bus_layout_changed));
+	AudioServer::get_singleton()->connect("bus_renamed", callable_mp(this, &AudioStreamPlayer3D::_on_bus_renamed));
 	set_disable_scale(true);
 	cached_global_panning_strength = GLOBAL_GET("audio/general/3d_panning_strength");
 }
