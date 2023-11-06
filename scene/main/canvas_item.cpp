@@ -682,13 +682,9 @@ void CanvasItem::draw_rect(const Rect2 &p_rect, const Color &p_color, bool p_fil
 			WARN_PRINT("The draw_rect() \"width\" argument has no effect when \"filled\" is \"true\".");
 		}
 
-		if (p_antialiased) {
-			WARN_PRINT("The draw_rect() \"antialiased\" argument has no effect when \"filled\" is \"true\".");
-		}
-
-		RenderingServer::get_singleton()->canvas_item_add_rect(canvas_item, rect, p_color);
+		RenderingServer::get_singleton()->canvas_item_add_rect(canvas_item, rect, p_color, p_antialiased);
 	} else if (p_width >= rect.size.width || p_width >= rect.size.height) {
-		RenderingServer::get_singleton()->canvas_item_add_rect(canvas_item, rect.grow(0.5f * p_width), p_color);
+		RenderingServer::get_singleton()->canvas_item_add_rect(canvas_item, rect.grow(0.5f * p_width), p_color, p_antialiased);
 	} else {
 		Vector<Vector2> points;
 		points.resize(5);
@@ -713,13 +709,9 @@ void CanvasItem::draw_circle(const Point2 &p_pos, real_t p_radius, const Color &
 			WARN_PRINT("The draw_circle() \"width\" argument has no effect when \"filled\" is \"true\".");
 		}
 
-		if (p_antialiased) {
-			WARN_PRINT("The draw_circle() \"antialiased\" argument has no effect when \"filled\" is \"true\".");
-		}
-
-		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius, p_color);
+		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius, p_color, p_antialiased);
 	} else if (p_width >= 2.0 * p_radius) {
-		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius + 0.5 * p_width, p_color);
+		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius + 0.5 * p_width, p_color, p_antialiased);
 	} else {
 		// Tessellation count hardcoded. Keep in sync with the same variable in 'RendererCanvasCull::canvas_item_add_circle()'
 		const int circle_points = 64;
