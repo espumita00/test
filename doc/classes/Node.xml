@@ -287,6 +287,12 @@
 				[b]Note:[/b] To find a single descendant node matching a pattern, see [method find_child].
 			</description>
 		</method>
+		<method name="find_exposed_children" qualifiers="const">
+			<return type="Node[]" />
+			<param index="0" name="recursive" type="bool" default="true" />
+			<description>
+			</description>
+		</method>
 		<method name="find_parent" qualifiers="const">
 			<return type="Node" />
 			<param index="0" name="pattern" type="String" />
@@ -976,6 +982,8 @@
 		</member>
 		<member name="editor_description" type="String" setter="set_editor_description" getter="get_editor_description" default="&quot;&quot;">
 			An optional description to the node. It will be displayed as a tooltip when hovering over the node in the editor's Scene dock.
+		</member>
+		<member name="exposed_in_owner" type="bool" setter="set_exposed_in_owner" getter="is_exposed_in_owner" default="false">
 		</member>
 		<member name="multiplayer" type="MultiplayerAPI" setter="" getter="get_multiplayer">
 			The [MultiplayerAPI] instance associated with this node. See [method SceneTree.get_multiplayer].
