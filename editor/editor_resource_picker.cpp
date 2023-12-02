@@ -32,7 +32,6 @@
 
 #include "editor/audio_stream_preview.h"
 #include "editor/editor_node.h"
-#include "editor/editor_quick_open.h"
 #include "editor/editor_resource_preview.h"
 #include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
@@ -41,6 +40,7 @@
 #include "editor/gui/editor_file_dialog.h"
 #include "editor/plugins/editor_resource_conversion_plugin.h"
 #include "editor/plugins/script_editor_plugin.h"
+#include "editor/quick_open_dialog.h"
 #include "editor/scene_tree_dock.h"
 #include "scene/gui/button.h"
 #include "scene/gui/texture_rect.h"
@@ -168,10 +168,6 @@ void EditorResourcePicker::_file_selected(const String &p_path) {
 	edited_resource = loaded_resource;
 	emit_signal(SNAME("resource_changed"), edited_resource);
 	_update_resource();
-}
-
-void EditorResourcePicker::_file_quick_selected() {
-	_file_selected(quick_open->get_selected());
 }
 
 void EditorResourcePicker::_update_menu() {
@@ -328,14 +324,14 @@ void EditorResourcePicker::_edit_menu_cbk(int p_which) {
 		} break;
 
 		case OBJ_MENU_QUICKLOAD: {
-			if (!quick_open) {
-				quick_open = memnew(EditorQuickOpen);
-				add_child(quick_open);
-				quick_open->connect("quick_open", callable_mp(this, &EditorResourcePicker::_file_quick_selected));
+			const Vector<String> &base_types_string = base_type.split(",");
+
+			Vector<StringName> base_types;
+			for (const String &type : base_types_string) {
+				base_types.push_back(type);
 			}
 
-			quick_open->popup_dialog(base_type);
-			quick_open->set_title(TTR("Resource"));
+			EditorNode::get_singleton()->get_quick_open_dialog()->popup_dialog(base_types, callable_mp(this, &EditorResourcePicker::_file_selected));
 		} break;
 
 		case OBJ_MENU_INSPECT: {

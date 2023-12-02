@@ -87,7 +87,6 @@ class EditorLayoutsDialog;
 class EditorLog;
 class EditorNativeShaderSourceVisualizer;
 class EditorPluginList;
-class EditorQuickOpen;
 class EditorPropertyResource;
 class EditorResourcePreview;
 class EditorResourceConversionPlugin;
@@ -115,6 +114,7 @@ class SceneImportSettings;
 class ScriptCreateDialog;
 class SurfaceUpgradeTool;
 class SurfaceUpgradeDialog;
+class QuickOpenDialog;
 class WindowWrapper;
 
 class EditorNode : public Node {
@@ -273,6 +273,7 @@ private:
 	EditorSelectionHistory editor_history;
 
 	EditorCommandPalette *command_palette = nullptr;
+	QuickOpenDialog *quick_open_dialog = nullptr;
 	EditorExport *editor_export = nullptr;
 	EditorLog *log = nullptr;
 	EditorNativeShaderSourceVisualizer *native_shader_source_visualizer = nullptr;
@@ -280,7 +281,6 @@ private:
 	EditorPluginList *editor_plugins_force_input_forwarding = nullptr;
 	EditorPluginList *editor_plugins_force_over = nullptr;
 	EditorPluginList *editor_plugins_over = nullptr;
-	EditorQuickOpen *quick_open = nullptr;
 	EditorResourcePreview *resource_preview = nullptr;
 	EditorSelection *editor_selection = nullptr;
 	EditorSettingsDialog *editor_settings_dialog = nullptr;
@@ -595,7 +595,7 @@ private:
 	void _inherit_request(String p_file);
 	void _instantiate_request(const Vector<String> &p_files);
 
-	void _quick_opened();
+	void _quick_opened(const String &p_file_path);
 	void _open_command_palette();
 
 	void _project_run_started();
@@ -908,6 +908,8 @@ public:
 	void reload_instances_with_path_in_edited_scenes(const String &p_path);
 
 	bool is_exiting() const { return exiting; }
+
+	QuickOpenDialog *get_quick_open_dialog() { return quick_open_dialog; }
 
 	Button *add_bottom_panel_item(String p_text, Control *p_item);
 	void make_bottom_panel_item_visible(Control *p_item);
