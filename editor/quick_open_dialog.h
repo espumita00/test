@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  editor_quick_open.h                                                   */
+/*  quick_open_dialog.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,64 +28,32 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef EDITOR_QUICK_OPEN_H
-#define EDITOR_QUICK_OPEN_H
+#ifndef QUICK_OPEN_DIALOG_H
+#define QUICK_OPEN_DIALOG_H
 
-#include "core/templates/oa_hash_map.h"
-#include "editor/editor_file_system.h"
 #include "scene/gui/dialogs.h"
-#include "scene/gui/tree.h"
 
-class EditorQuickOpen : public ConfirmationDialog {
-	GDCLASS(EditorQuickOpen, ConfirmationDialog);
+class LineEdit;
+class QuickOpenResultContainer;
 
-	static Rect2i prev_rect;
-	static bool was_showed;
-
-	LineEdit *search_box = nullptr;
-	Tree *search_options = nullptr;
-	String base_type;
-	bool allow_multi_select = false;
-
-	Vector<String> files;
-	OAHashMap<String, Ref<Texture2D>> icons;
-
-	struct Entry {
-		String path;
-		float score = 0;
-	};
-
-	struct EntryComparator {
-		_FORCE_INLINE_ bool operator()(const Entry &A, const Entry &B) const {
-			return A.score > B.score;
-		}
-	};
-
-	void _update_search();
-	void _build_search_cache(EditorFileSystemDirectory *p_efsd);
-	float _score_path(const String &p_search, const String &p_path);
-
-	void _confirmed();
-	virtual void cancel_pressed() override;
-	void _cleanup();
-
-	void _sbox_input(const Ref<InputEvent> &p_ie);
-	void _text_changed(const String &p_newtext);
-
-	void _theme_changed();
-
-protected:
-	void _notification(int p_what);
-	static void _bind_methods();
+class QuickOpenDialog : public AcceptDialog {
+	GDCLASS(QuickOpenDialog, AcceptDialog);
 
 public:
-	String get_base_type() const;
+	void popup_dialog(const Vector<StringName> &p_base_types, const Callable &p_item_selected_callback);
+	QuickOpenDialog();
 
-	String get_selected() const;
-	Vector<String> get_selected_files() const;
+protected:
+	virtual void cancel_pressed() override;
+	virtual void ok_pressed() override;
 
-	void popup_dialog(const String &p_base, bool p_enable_multi = false, bool p_dontclear = false);
-	EditorQuickOpen();
+private:
+	LineEdit *search_box = nullptr;
+	QuickOpenResultContainer *container = nullptr;
+
+	Callable item_selected_callback;
+
+	void _search_box_text_changed(const String &p_query);
 };
 
-#endif // EDITOR_QUICK_OPEN_H
+#endif // QUICK_OPEN_DIALOG_H

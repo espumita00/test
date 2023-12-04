@@ -346,6 +346,23 @@ void EditorResourcePreview::_update_thumbnail_sizes() {
 	}
 }
 
+EditorResourcePreview::PreviewItem EditorResourcePreview::get_resource_preview_if_available(const String &p_path) {
+	PreviewItem item;
+	{
+		MutexLock lock(preview_mutex);
+		if (!cache.has(p_path)) {
+			return item;
+		}
+
+		EditorResourcePreview::Item &cached_item = cache[p_path];
+		cached_item.order = order++;
+		item.preview = cached_item.preview;
+		item.small_preview = cached_item.small_preview;
+	}
+	preview_sem.post();
+	return item;
+}
+
 void EditorResourcePreview::queue_edited_resource_preview(const Ref<Resource> &p_res, Object *p_receiver, const StringName &p_receiver_func, const Variant &p_userdata) {
 	ERR_FAIL_NULL(p_receiver);
 	ERR_FAIL_COND(!p_res.is_valid());

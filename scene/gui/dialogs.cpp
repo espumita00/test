@@ -113,10 +113,12 @@ void AcceptDialog::_text_submitted(const String &p_text) {
 }
 
 void AcceptDialog::_ok_pressed() {
+	ok_pressed();
+
 	if (hide_on_ok) {
 		set_visible(false);
 	}
-	ok_pressed();
+
 	emit_signal(SNAME("confirmed"));
 	set_input_as_handled();
 }
@@ -224,7 +226,7 @@ void AcceptDialog::_update_child_rects() {
 
 	for (int i = 0; i < get_child_count(); i++) {
 		Control *c = Object::cast_to<Control>(get_child(i));
-		if (!c) {
+		if (!c || !c->is_visible()) {
 			continue;
 		}
 		if (c == buttons_hbox || c == bg_panel || c->is_set_as_top_level()) {
@@ -240,9 +242,10 @@ Size2 AcceptDialog::_get_contents_minimum_size() const {
 	// First, we then iterate over the label and any other custom controls
 	// to try and find the size that encompasses all content.
 	Size2 content_minsize;
+
 	for (int i = 0; i < get_child_count(); i++) {
 		Control *c = Object::cast_to<Control>(get_child(i));
-		if (!c) {
+		if (!c || !c->is_visible()) {
 			continue;
 		}
 

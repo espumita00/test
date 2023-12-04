@@ -92,7 +92,7 @@
 #include "editor/editor_plugin.h"
 #include "editor/editor_properties.h"
 #include "editor/editor_property_name_processor.h"
-#include "editor/editor_quick_open.h"
+#include "editor/editor_resource_picker.h"
 #include "editor/editor_resource_preview.h"
 #include "editor/editor_run.h"
 #include "editor/editor_run_native.h"
@@ -153,6 +153,7 @@
 #include "editor/plugins/visual_shader_editor_plugin.h"
 #include "editor/progress_dialog.h"
 #include "editor/project_settings_editor.h"
+#include "editor/quick_open_dialog.h"
 #include "editor/register_exporters.h"
 #include "editor/scene_tree_dock.h"
 #include "editor/surface_upgrade_tool.h"
@@ -2549,19 +2550,13 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 
 		} break;
 		case FILE_QUICK_OPEN: {
-			quick_open->popup_dialog("Resource", true);
-			quick_open->set_title(TTR("Quick Open..."));
-
+			quick_open_dialog->popup_dialog({ "Resource" }, callable_mp(this, &EditorNode::_quick_opened));
 		} break;
 		case FILE_QUICK_OPEN_SCENE: {
-			quick_open->popup_dialog("PackedScene", true);
-			quick_open->set_title(TTR("Quick Open Scene..."));
-
+			quick_open_dialog->popup_dialog({ "PackedScene" }, callable_mp(this, &EditorNode::_quick_opened));
 		} break;
 		case FILE_QUICK_OPEN_SCRIPT: {
-			quick_open->popup_dialog("Script", true);
-			quick_open->set_title(TTR("Quick Open Script..."));
-
+			quick_open_dialog->popup_dialog({ "Script" }, callable_mp(this, &EditorNode::_quick_opened));
 		} break;
 		case FILE_OPEN_PREV: {
 			if (previous_scenes.is_empty()) {
@@ -4061,7 +4056,6 @@ void EditorNode::update_diff_data_for_node(
 		update_diff_data_for_node(p_edited_scene, p_root, child, p_modification_table, p_addition_list);
 	}
 }
-//
 
 void EditorNode::open_request(const String &p_path) {
 	if (!opening_prev) {
@@ -4187,17 +4181,14 @@ void EditorNode::_update_recent_scenes() {
 	recent_scenes->reset_size();
 }
 
-void EditorNode::_quick_opened() {
-	Vector<String> files = quick_open->get_selected_files();
+void EditorNode::_quick_opened(const String &p_file_path) {
+	List<String> scene_extensions;
+	ResourceLoader::get_recognized_extensions_for_type("PackedScene", &scene_extensions);
 
-	bool open_scene_dialog = quick_open->get_base_type() == "PackedScene";
-	for (int i = 0; i < files.size(); i++) {
-		String res_path = files[i];
-		if (open_scene_dialog || ClassDB::is_parent_class(ResourceLoader::get_resource_type(res_path), "PackedScene")) {
-			open_request(res_path);
-		} else {
-			load_resource(res_path);
-		}
+	if (scene_extensions.find(p_file_path.get_extension().to_lower())) {
+		open_request(p_file_path);
+	} else {
+		load_resource(p_file_path);
 	}
 }
 
@@ -8036,9 +8027,8 @@ EditorNode::EditorNode() {
 	open_imported->connect("custom_action", callable_mp(this, &EditorNode::_inherit_imported));
 	gui_base->add_child(open_imported);
 
-	quick_open = memnew(EditorQuickOpen);
-	gui_base->add_child(quick_open);
-	quick_open->connect("quick_open", callable_mp(this, &EditorNode::_quick_opened));
+	quick_open_dialog = memnew(QuickOpenDialog);
+	gui_base->add_child(quick_open_dialog);
 
 	_update_recent_scenes();
 

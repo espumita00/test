@@ -39,9 +39,9 @@
 #include "core/os/keyboard.h"
 #include "editor/debugger/editor_debugger_node.h"
 #include "editor/editor_feature_profile.h"
+#include "editor/editor_file_system.h"
 #include "editor/editor_node.h"
 #include "editor/editor_paths.h"
-#include "editor/editor_quick_open.h"
 #include "editor/editor_scale.h"
 #include "editor/editor_settings.h"
 #include "editor/editor_string_names.h"
@@ -53,6 +53,7 @@
 #include "editor/plugins/canvas_item_editor_plugin.h"
 #include "editor/plugins/node_3d_editor_plugin.h"
 #include "editor/plugins/script_editor_plugin.h"
+#include "editor/quick_open_dialog.h"
 #include "editor/reparent_dialog.h"
 #include "editor/shader_create_dialog.h"
 #include "scene/animation/animation_tree.h"
@@ -72,8 +73,11 @@ void SceneTreeDock::_nodes_drag_begin() {
 	pending_click_select = nullptr;
 }
 
-void SceneTreeDock::_quick_open() {
-	instantiate_scenes(quick_open->get_selected_files(), scene_tree->get_selected());
+void SceneTreeDock::_quick_open(const String &p_file_path) {
+	Vector<String> scenes;
+	scenes.push_back(p_file_path);
+
+	instantiate_scenes(scenes, scene_tree->get_selected());
 }
 
 void SceneTreeDock::input(const Ref<InputEvent> &p_event) {
@@ -449,8 +453,7 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 				break;
 			}
 
-			quick_open->popup_dialog("PackedScene", true);
-			quick_open->set_title(TTR("Instantiate Child Scene"));
+			EditorNode::get_singleton()->get_quick_open_dialog()->popup_dialog({ "PackedScene" }, callable_mp(this, &SceneTreeDock::_quick_open));
 			if (!p_confirm_override) {
 				emit_signal(SNAME("add_node_used"));
 			}
@@ -4111,10 +4114,6 @@ SceneTreeDock::SceneTreeDock(Node *p_scene_root, EditorSelection *p_editor_selec
 
 	accept = memnew(AcceptDialog);
 	add_child(accept);
-
-	quick_open = memnew(EditorQuickOpen);
-	add_child(quick_open);
-	quick_open->connect("quick_open", callable_mp(this, &SceneTreeDock::_quick_open));
 
 	set_process_shortcut_input(true);
 
