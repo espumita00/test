@@ -2352,6 +2352,38 @@ Error Main::setup2() {
 			}
 		}
 	}
+
+	bool has_command_line_window_override = init_use_custom_pos || init_use_custom_screen || init_windowed;
+	if (editor && !has_command_line_window_override) {
+		bool restore_editor_window = GLOBAL_DEF("editor/run/remember_window_size_and_position", true);
+		if (restore_editor_window) {
+			Ref<ConfigFile> config;
+			config.instantiate();
+			// Load and amend existing config if it exists.
+			Error err = config->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg"));
+			if (err == OK) {
+				init_screen = config->get_value("EditorWindow", "screen", init_screen);
+				String mode = config->get_value("EditorWindow", "mode", "maximized");
+				window_size = config->get_value("EditorWindow", "size", window_size);
+				if (mode == "windowed") {
+					window_mode = DisplayServer::WINDOW_MODE_WINDOWED;
+					init_windowed = true;
+				} else if (mode == "fullscreen") {
+					window_mode = DisplayServer::WINDOW_MODE_FULLSCREEN;
+					init_fullscreen = true;
+				} else {
+					window_mode = DisplayServer::WINDOW_MODE_MAXIMIZED;
+					init_maximized = true;
+				}
+
+				if (init_windowed) {
+					init_use_custom_pos = true;
+					init_custom_pos = config->get_value("EditorWindow", "position", Vector2i(0, 0));
+				}
+			}
+		}
+	}
+
 #endif
 
 	/* Initialize Input */
@@ -2395,6 +2427,30 @@ Error Main::setup2() {
 			return err;
 		}
 	}
+
+#ifdef TOOLS_ENABLED
+	// If the editor is running in windowed mode, ensure the window rect fits
+	// the screen in case screen count or position has changed
+	if (editor && init_windowed) {
+		// We still need to check we are actually in windowed mode, because
+		// certain platform might only support one fullscreen window.
+		if (DisplayServer::get_singleton()->window_get_mode() == DisplayServer::WINDOW_MODE_WINDOWED) {
+			Vector2i current_size = DisplayServer::get_singleton()->window_get_size();
+			Vector2i current_pos = DisplayServer::get_singleton()->window_get_position();
+			int screen = DisplayServer::get_singleton()->window_get_current_screen();
+			Rect2i screen_rect = DisplayServer::get_singleton()->screen_get_usable_rect(screen);
+
+			Vector2i adjusted_end = screen_rect.get_end().min(current_pos + current_size);
+			Vector2i adjusted_pos = screen_rect.get_position().max(adjusted_end - current_size);
+			Vector2i adjusted_size = DisplayServer::get_singleton()->window_get_min_size().max(adjusted_end - adjusted_pos);
+
+			if (current_pos != adjusted_end || current_size != adjusted_size) {
+				DisplayServer::get_singleton()->window_set_position(adjusted_pos);
+				DisplayServer::get_singleton()->window_set_size(adjusted_size);
+			}
+		}
+	}
+#endif
 
 	if (display_server->has_feature(DisplayServer::FEATURE_ORIENTATION)) {
 		display_server->screen_set_orientation(window_orientation);
