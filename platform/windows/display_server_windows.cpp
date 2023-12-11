@@ -1531,23 +1531,6 @@ void DisplayServerWindows::window_set_size(const Size2i p_size, WindowID p_windo
 	int w = p_size.width;
 	int h = p_size.height;
 
-	wd.width = w;
-	wd.height = h;
-
-#if defined(VULKAN_ENABLED)
-	if (context_vulkan) {
-		context_vulkan->window_resize(p_window, w, h);
-	}
-#endif
-#if defined(GLES3_ENABLED)
-	if (gl_manager_native) {
-		gl_manager_native->window_resize(p_window, w, h);
-	}
-	if (gl_manager_angle) {
-		gl_manager_angle->window_resize(p_window, w, h);
-	}
-#endif
-
 	RECT rect;
 	GetWindowRect(wd.hWnd, &rect);
 
