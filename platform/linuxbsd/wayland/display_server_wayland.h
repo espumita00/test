@@ -100,6 +100,8 @@ class DisplayServerWayland : public DisplayServer {
 
 		String title;
 		ObjectID instance_id;
+
+		TypedArray<Rect2i> passthrough_rectangles;
 	};
 
 	struct CustomCursor {
@@ -151,6 +153,8 @@ class DisplayServerWayland : public DisplayServer {
 	void _resize_window(const Size2i &p_size);
 
 	virtual void _show_window();
+
+	void _update_window_mouse_passthrough(WindowID p_window_id);
 
 public:
 	virtual bool has_feature(Feature p_feature) const override;
@@ -213,6 +217,7 @@ public:
 
 	virtual void window_set_title(const String &p_title, WindowID p_window_id = MAIN_WINDOW_ID) override;
 	virtual void window_set_mouse_passthrough(const Vector<Vector2> &p_region, WindowID p_window_id = MAIN_WINDOW_ID) override;
+	virtual void window_set_mouse_passthrough_rects(const TypedArray<Rect2i> &p_rects, WindowID p_window = MAIN_WINDOW_ID) override;
 
 	virtual void window_set_rect_changed_callback(const Callable &p_callable, WindowID p_window_id = MAIN_WINDOW_ID) override;
 	virtual void window_set_window_event_callback(const Callable &p_callable, WindowID p_window_id = MAIN_WINDOW_ID) override;

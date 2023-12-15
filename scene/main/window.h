@@ -118,6 +118,7 @@ private:
 	mutable Size2i max_size;
 	mutable Size2i old_size = size;
 	mutable Vector<Vector2> mpath;
+	mutable TypedArray<Rect2i> mrects;
 	mutable Mode mode = MODE_WINDOWED;
 	mutable bool flags[FLAG_MAX] = {};
 	bool visible = true;
@@ -358,6 +359,9 @@ public:
 
 	void set_mouse_passthrough_polygon(const Vector<Vector2> &p_region);
 	Vector<Vector2> get_mouse_passthrough_polygon() const;
+
+	void set_mouse_passthrough_rects(const TypedArray<Rect2i> &p_rects);
+	TypedArray<Rect2i> get_mouse_passthrough_rects() const;
 
 	void set_wrap_controls(bool p_enable);
 	bool is_wrapping_controls() const;

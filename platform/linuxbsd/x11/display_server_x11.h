@@ -184,6 +184,7 @@ class DisplayServerX11 : public DisplayServer {
 		Callable drop_files_callback;
 
 		Vector<Vector2> mpath;
+		TypedArray<Rect2i> mrects;
 
 		WindowID transient_parent = INVALID_WINDOW_ID;
 		HashSet<WindowID> transient_children;
@@ -302,6 +303,7 @@ class DisplayServerX11 : public DisplayServer {
 
 	Atom _process_selection_request_target(Atom p_target, Window p_requestor, Atom p_property, Atom p_selection) const;
 	void _handle_selection_request_event(XSelectionRequestEvent *p_event) const;
+	void _update_window_input_region(WindowID p_window);
 	void _update_window_mouse_passthrough(WindowID p_window);
 
 	String _clipboard_get_impl(Atom p_source, Window x11_window, Atom target) const;
@@ -455,6 +457,7 @@ public:
 
 	virtual void window_set_title(const String &p_title, WindowID p_window = MAIN_WINDOW_ID) override;
 	virtual void window_set_mouse_passthrough(const Vector<Vector2> &p_region, WindowID p_window = MAIN_WINDOW_ID) override;
+	virtual void window_set_mouse_passthrough_rects(const TypedArray<Rect2i> &p_rects, WindowID p_window = MAIN_WINDOW_ID) override;
 
 	virtual void window_set_rect_changed_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
 	virtual void window_set_window_event_callback(const Callable &p_callable, WindowID p_window = MAIN_WINDOW_ID) override;
