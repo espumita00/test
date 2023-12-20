@@ -6258,8 +6258,9 @@ RID RenderingDeviceVulkan::render_pipeline_create(RID p_shader, FramebufferForma
 	multisample_state_create_info.flags = 0;
 
 	multisample_state_create_info.rasterizationSamples = _ensure_supported_sample_count(p_multisample_state.sample_count);
-	multisample_state_create_info.sampleShadingEnable = p_multisample_state.enable_sample_shading;
-	multisample_state_create_info.minSampleShading = p_multisample_state.min_sample_shading;
+	const float per_sample_shading_ratio = CLAMP(double(GLOBAL_GET("rendering/anti_aliasing/quality/msaa_per_sample_shading_ratio")), 0.0, 1.0);
+	multisample_state_create_info.sampleShadingEnable = !Math::is_zero_approx(per_sample_shading_ratio);
+	multisample_state_create_info.minSampleShading = per_sample_shading_ratio;
 	Vector<VkSampleMask> sample_mask;
 	if (p_multisample_state.sample_mask.size()) {
 		// Use sample mask.
