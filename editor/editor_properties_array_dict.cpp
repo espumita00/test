@@ -386,7 +386,7 @@ void EditorPropertyArray::update_property() {
 				editor->setup("Object");
 				prop = editor;
 			} else {
-				prop = EditorInspector::instantiate_property_editor(nullptr, value_type, "", subtype_hint, subtype_hint_string, PROPERTY_USAGE_NONE);
+				prop = EditorInspector::instantiate_property_editor(this, value_type, "", subtype_hint, subtype_hint_string, PROPERTY_USAGE_NONE);
 			}
 
 			prop->set_object_and_property(object.ptr(), prop_name);
