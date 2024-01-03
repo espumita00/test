@@ -1098,6 +1098,28 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 				}
 			}
 		} break;
+		case TOOL_SCENE_APPLY_TO_BASE: {
+			if (!profile_allow_editing) {
+				break;
+			}
+
+			List<Node *> selection = editor_selection->get_selected_node_list();
+			List<Node *>::Element *e = selection.front();
+			if (!e) {
+				break;
+			}
+
+			Node *local_instance = e->get();
+			if (!local_instance) {
+				break;
+			}
+
+			const String &scene_path = local_instance->get_scene_file_path();
+			if (scene_path.is_empty()) {
+				break;
+			}
+			_new_scene_from(scene_path, true);
+		} break;
 		case TOOL_SCENE_MAKE_LOCAL: {
 			if (!profile_allow_editing) {
 				break;
@@ -2791,7 +2813,7 @@ void SceneTreeDock::set_selected(Node *p_node, bool p_emit_selected) {
 	scene_tree->set_selected(p_node, p_emit_selected);
 }
 
-void SceneTreeDock::_new_scene_from(String p_file) {
+void SceneTreeDock::_new_scene_from(String p_file, bool p_apply_changes) {
 	List<Node *> selection = editor_selection->get_selected_node_list();
 
 	if (selection.size() != 1) {
@@ -2800,7 +2822,7 @@ void SceneTreeDock::_new_scene_from(String p_file) {
 		return;
 	}
 
-	if (EditorNode::get_singleton()->is_scene_open(p_file)) {
+	if (!p_apply_changes && EditorNode::get_singleton()->is_scene_open(p_file)) {
 		accept->set_text(TTR("Can't overwrite scene that is still open!"));
 		accept->popup_centered();
 		return;
@@ -2845,6 +2867,10 @@ void SceneTreeDock::_new_scene_from(String p_file) {
 		accept->set_text(TTR("Error duplicating scene to save it."));
 		accept->popup_centered();
 		return;
+	}
+
+	if (p_apply_changes && EditorNode::get_singleton()->is_scene_open(p_file)) {
+		EditorNode::get_singleton()->reload_scene(p_file);
 	}
 }
 
@@ -3275,6 +3301,7 @@ void SceneTreeDock::_tree_rmb(const Vector2 &p_menu_pos) {
 				if (profile_allow_editing) {
 					menu->add_check_item(TTR("Editable Children"), TOOL_SCENE_EDITABLE_CHILDREN);
 					menu->add_check_item(TTR("Load as Placeholder"), TOOL_SCENE_USE_PLACEHOLDER);
+					menu->add_icon_item(get_editor_theme_icon(SNAME("ExternalLink")), TTR("Apply Changes to Base Scene"), TOOL_SCENE_APPLY_TO_BASE);
 					menu->add_item(TTR("Make Local"), TOOL_SCENE_MAKE_LOCAL);
 				}
 				menu->add_icon_item(get_editor_theme_icon(SNAME("Load")), TTR("Open in Editor"), TOOL_SCENE_OPEN);

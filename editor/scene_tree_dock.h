@@ -84,6 +84,7 @@ class SceneTreeDock : public VBoxContainer {
 		TOOL_AUTO_EXPAND,
 		TOOL_SCENE_EDITABLE_CHILDREN,
 		TOOL_SCENE_USE_PLACEHOLDER,
+		TOOL_SCENE_APPLY_TO_BASE,
 		TOOL_SCENE_MAKE_LOCAL,
 		TOOL_SCENE_OPEN,
 		TOOL_SCENE_CLEAR_INHERITANCE,
@@ -233,7 +234,7 @@ class SceneTreeDock : public VBoxContainer {
 	virtual void input(const Ref<InputEvent> &p_event) override;
 	virtual void shortcut_input(const Ref<InputEvent> &p_event) override;
 
-	void _new_scene_from(String p_file);
+	void _new_scene_from(String p_file, bool p_apply_changes = false);
 	void _set_node_owner_recursive(Node *p_node, Node *p_owner);
 
 	bool _validate_no_foreign();
