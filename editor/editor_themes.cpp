@@ -2266,7 +2266,7 @@ Ref<Theme> create_editor_theme(const Ref<Theme> p_theme) {
 	const Color brace_mismatch_color = dark_theme ? error_color : Color(1, 0.08, 0, 1);
 	const Color current_line_color = alpha1;
 	const Color line_length_guideline_color = dark_theme ? base_color : background_color;
-	const Color word_highlighted_color = alpha1;
+	const Color word_highlighted_color = Color(mono_value, mono_value, mono_value, 0.12);
 	const Color number_color = dark_theme ? Color(0.63, 1, 0.88) : Color(0, 0.55, 0.28, 1);
 	const Color function_color = dark_theme ? Color(0.34, 0.7, 1.0) : Color(0, 0.225, 0.9, 1);
 	const Color member_variable_color = dark_theme ? Color(0.34, 0.7, 1.0).lerp(mono_color, 0.6) : Color(0, 0.4, 0.68, 1);
