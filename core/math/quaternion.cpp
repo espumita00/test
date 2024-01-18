@@ -292,17 +292,17 @@ real_t Quaternion::get_angle() const {
 	return 2 * Math::acos(w);
 }
 
-Quaternion Quaternion::get_twist(const Vector3 &v) const
-{
+Quaternion Quaternion::get_twist(const Vector3 &p_axis) const {
 #ifdef MATH_CHECKS
-	ERR_FAIL_COND_V_MSG(!is_normalized(), Quaternion(), "The start quaternion must be normalized.");
+	ERR_FAIL_COND_V_MSG(!is_normalized(), Quaternion(), "The quaternion must be normalized.");
+	ERR_FAIL_COND_V_MSG(!p_axis.is_normalized(), Quaternion(), "The axis vector must be normalized.");
 #endif
-	Vector3 p =  Vector3(x,y,z).dot(v) * v;
-	return Quaternion(p.x, p.y, p.z,w).normalized();
+	Vector3 const p = Vector3(x, y, z).dot(p_axis) * p_axis;
+	return Quaternion(p.x, p.y, p.z, w).normalized();
 }
-Quaternion Quaternion::get_swing(const Vector3 &v) const
-{
-	return -(inverse() * get_twist(v));
+
+Quaternion Quaternion::get_swing(const Vector3 &p_axis) const {
+	return -(inverse() * get_twist(p_axis));
 }
 
 Quaternion::Quaternion(const Vector3 &p_axis, real_t p_angle) {
