@@ -59,6 +59,29 @@ layout(location = 10) in uvec4 bone_attrib;
 layout(location = 11) in vec4 weight_attrib;
 #endif
 
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+
+layout(constant_id = 0) const bool sc_use_light_projector = false;
+layout(constant_id = 1) const bool sc_use_light_soft_shadows = false;
+layout(constant_id = 8) const bool sc_projector_use_mipmaps = true;
+
+layout(constant_id = 9) const bool sc_disable_omni_lights = false;
+layout(constant_id = 10) const bool sc_disable_spot_lights = false;
+layout(constant_id = 11) const bool sc_disable_reflection_probes = false;
+layout(constant_id = 12) const bool sc_disable_directional_lights = false;
+
+// This is just here for reflection_process we are going to import from scene_forward_lights_inc
+layout(constant_id = 15) const float sc_luminance_multiplier = 2.0;
+
+// Default to SPECULAR_SCHLICK_GGX.
+#if !defined(SPECULAR_DISABLED) && !defined(SPECULAR_SCHLICK_GGX) && !defined(SPECULAR_TOON)
+#define SPECULAR_SCHLICK_GGX
+#endif
+
+#include "../scene_forward_lights_inc.glsl"
+
+#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+
 vec3 oct_to_vec3(vec2 e) {
 	vec3 v = vec3(e.xy, 1.0 - abs(e.x) - abs(e.y));
 	float t = max(-v.z, 0.0);
@@ -100,7 +123,10 @@ layout(location = 4) mediump out vec2 uv2_interp;
 layout(location = 5) mediump out vec3 tangent_interp;
 layout(location = 6) mediump out vec3 binormal_interp;
 #endif
-
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+layout(location = 7) highp out vec4 diffuse_light_interp;
+layout(location = 8) highp out vec4 specular_light_interp;
+#endif
 #ifdef MATERIAL_UNIFORMS_USED
 layout(set = MATERIAL_UNIFORM_SET, binding = 0, std140) uniform MaterialUniforms{
 
@@ -176,6 +202,10 @@ void main() {
 
 	mat4 model_matrix = instances.data[draw_call.instance_index].transform;
 	mat4 inv_view_matrix = scene_data.inv_view_matrix;
+#ifdef USE_VERTEX_LIGHTING
+	float alpha = 1.0;
+#endif // USE_VERTEX_LIGHTING
+
 #ifdef USE_DOUBLE_PRECISION
 	vec3 model_precision = vec3(model_matrix[0][3], model_matrix[1][3], model_matrix[2][3]);
 	model_matrix[0][3] = 0.0;
@@ -439,6 +469,177 @@ void main() {
 	binormal_interp = binormal;
 #endif
 
+// VERTEX LIGHTING
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+#ifdef USE_MULTIVIEW
+	vec3 view = -normalize(vertex_interp - eye_offset);
+#else
+	vec3 view = -normalize(vertex_interp);
+#endif
+#ifndef MODE_RENDER_DEPTH
+
+	vec3 vertex_ddx = vec3(0); // Fake variable
+	vec3 vertex_ddy = vec3(0); // Fake variable
+#endif //!MODE_RENDER_DEPTH
+
+	diffuse_light_interp = vec4(0.0);
+	specular_light_interp = vec4(0.0);
+
+#if !defined(MODE_RENDER_DEPTH)
+	//this saves some VGPRs
+	uint orms = packUnorm4x8(vec4(0.0, roughness, 0.0, 0.0));
+#endif
+
+	if (!sc_disable_directional_lights) { //directional light
+		for (uint i = 0; i < 8; i++) {
+			if (i >= scene_data.directional_light_count) {
+				break;
+			}
+
+			if (!bool(directional_lights.data[i].mask & instances.data[draw_call.instance_index].layer_mask)) {
+				continue; //not masked
+			}
+
+			if (directional_lights.data[i].bake_mode == LIGHT_BAKE_STATIC && bool(instances.data[draw_call.instance_index].flags & INSTANCE_FLAGS_USE_LIGHTMAP)) {
+				continue; // Statically baked light and object uses lightmap, skip
+			}
+			// We're not doing light transmittence
+
+			float shadow = 1.0;
+
+#ifdef DEBUG_DRAW_PSSM_SPLITS
+			vec3 tint = vec3(1.0);
+			if (-vertex.z < directional_lights.data[i].shadow_split_offsets.x) {
+				tint = vec3(1.0, 0.0, 0.0);
+			} else if (-vertex.z < directional_lights.data[i].shadow_split_offsets.y) {
+				tint = vec3(0.0, 1.0, 0.0);
+			} else if (-vertex.z < directional_lights.data[i].shadow_split_offsets.z) {
+				tint = vec3(0.0, 0.0, 1.0);
+			} else {
+				tint = vec3(1.0, 1.0, 0.0);
+			}
+			tint = mix(tint, vec3(1.0), shadow);
+			shadow = 1.0;
+#endif
+
+			light_compute(normal, directional_lights.data[i].direction, normalize(view), 0.0,
+#ifndef DEBUG_DRAW_PSSM_SPLITS
+					directional_lights.data[i].color * directional_lights.data[i].energy,
+#else
+					directional_lights.data[i].color * directional_lights.data[i].energy * tint,
+#endif
+					true, 1.0, vec3(0.0, 0.0, 1.0), orms, 1.0, vec3(1.0), alpha,
+#ifdef LIGHT_BACKLIGHT_USED
+					0.0,
+#endif
+/* not supported here
+#ifdef LIGHT_TRANSMITTANCE_USED
+					transmittance_color,
+					transmittance_depth,
+					transmittance_boost,
+					transmittance_z,
+#endif
+*/
+#ifdef LIGHT_RIM_USED
+					0.0, 0.0,
+#endif
+#ifdef LIGHT_CLEARCOAT_USED
+					0.0, 0.0, normalize(normal_interp),
+#endif
+#ifdef LIGHT_ANISOTROPY_USED
+					binormal, tangent, anisotropy,
+#endif
+#ifdef USE_SOFT_SHADOW
+					directional_lights.data[i].size,
+#endif
+					diffuse_light_interp.rgb,
+					specular_light_interp.rgb);
+		}
+	} //directional light
+
+	if (!sc_disable_omni_lights) { //omni lights
+		uint light_indices = instances.data[draw_call.instance_index].omni_lights.x;
+		for (uint i = 0; i < 8; i++) {
+			uint light_index = light_indices & 0xFF;
+			if (i == 3) {
+				light_indices = instances.data[draw_call.instance_index].omni_lights.y;
+			} else {
+				light_indices = light_indices >> 8;
+			}
+
+			if (light_index == 0xFF) {
+				break;
+			}
+
+			light_process_omni(light_index, vertex, view, normal, vertex_ddx, vertex_ddy, vec3(0.0, 0.0, 1.0), orms, 1.0, vec3(1.0), alpha,
+#ifdef LIGHT_BACKLIGHT_USED
+					0.0,
+#endif
+/*
+#ifdef LIGHT_TRANSMITTANCE_USED
+					transmittance_color,
+					transmittance_depth,
+					transmittance_boost,
+#endif
+*/
+#ifdef LIGHT_RIM_USED
+					0.0,
+					0.0,
+#endif
+#ifdef LIGHT_CLEARCOAT_USED
+					0.0, 0.0, normalize(normal_interp),
+#endif
+#ifdef LIGHT_ANISOTROPY_USED
+					tangent,
+					binormal, anisotropy,
+#endif
+					diffuse_light_interp.rgb, specular_light_interp.rgb);
+		}
+	} //omni lights
+
+	if (!sc_disable_spot_lights) { //spot lights
+
+		uint light_indices = instances.data[draw_call.instance_index].spot_lights.x;
+		for (uint i = 0; i < 8; i++) {
+			uint light_index = light_indices & 0xFF;
+			if (i == 3) {
+				light_indices = instances.data[draw_call.instance_index].spot_lights.y;
+			} else {
+				light_indices = light_indices >> 8;
+			}
+
+			if (light_index == 0xFF) {
+				break;
+			}
+
+			light_process_spot(light_index, vertex, view, normal, vertex_ddx, vertex_ddy, vec3(0.0, 0.0, 1.0), orms, 1.0, vec3(1.0), alpha,
+#ifdef LIGHT_BACKLIGHT_USED
+					0.0,
+#endif
+/*
+#ifdef LIGHT_TRANSMITTANCE_USED
+					transmittance_color,
+					transmittance_depth,
+					transmittance_boost,
+#endif
+*/
+#ifdef LIGHT_RIM_USED
+					0.0,
+					0.0,
+#endif
+#ifdef LIGHT_CLEARCOAT_USED
+					0.0, 0.0, normalize(normal_interp),
+#endif
+#ifdef LIGHT_ANISOTROPY_USED
+					tangent,
+					binormal, anisotropy,
+#endif
+					diffuse_light_interp.rgb, specular_light_interp.rgb);
+		}
+	} //spot lights
+
+#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+
 #ifdef MODE_RENDER_DEPTH
 
 #ifdef MODE_DUAL_PARABOLOID
@@ -552,6 +753,11 @@ layout(location = 5) mediump in vec3 tangent_interp;
 layout(location = 6) mediump in vec3 binormal_interp;
 #endif
 
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING)
+layout(location = 7) highp in vec4 diffuse_light_interp;
+layout(location = 8) highp in vec4 specular_light_interp;
+#endif
+
 #ifdef MODE_DUAL_PARABOLOID
 
 layout(location = 9) highp in float dp_clip;
@@ -630,7 +836,7 @@ layout(location = 0) out mediump vec4 frag_color;
 
 #include "../scene_forward_aa_inc.glsl"
 
-#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED)
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) // && !defined(USE_VERTEX_LIGHTING)
 
 // Default to SPECULAR_SCHLICK_GGX.
 #if !defined(SPECULAR_DISABLED) && !defined(SPECULAR_SCHLICK_GGX) && !defined(SPECULAR_TOON)
@@ -639,7 +845,7 @@ layout(location = 0) out mediump vec4 frag_color;
 
 #include "../scene_forward_lights_inc.glsl"
 
-#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED)
+#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && !defined(USE_VERTEX_LIGHTING)
 
 #ifndef MODE_RENDER_DEPTH
 
@@ -1024,7 +1230,10 @@ void main() {
 	vec3 specular_light = vec3(0.0, 0.0, 0.0);
 	vec3 diffuse_light = vec3(0.0, 0.0, 0.0);
 	vec3 ambient_light = vec3(0.0, 0.0, 0.0);
-
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && defined(USE_VERTEX_LIGHTING) // Pass Vertex Lighting colors
+	specular_light = specular_light_interp.rgb;
+	diffuse_light = diffuse_light_interp.rgb;
+#endif
 #ifndef MODE_UNSHADED
 	// Used in regular draw pass and when drawing SDFs for SDFGI and materials for VoxelGI.
 	emission *= scene_data.emissive_exposure_normalization;
@@ -1279,7 +1488,7 @@ void main() {
 #endif
 
 // LIGHTING
-#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED)
+#if !defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && !defined(USE_VERTEX_LIGHTING)
 
 	if (!sc_disable_directional_lights) { //directional light
 #ifndef SHADOWS_DISABLED
@@ -1721,6 +1930,8 @@ void main() {
 		}
 	} //spot lights
 
+#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED) && !defined(USE_VERTEX_LIGHTING)
+
 #ifdef USE_SHADOW_TO_OPACITY
 	alpha = min(alpha, clamp(length(ambient_light), 0.0, 1.0));
 
@@ -1741,8 +1952,6 @@ void main() {
 #endif // !ALPHA_SCISSOR_USED
 
 #endif // USE_SHADOW_TO_OPACITY
-
-#endif //!defined(MODE_RENDER_DEPTH) && !defined(MODE_UNSHADED)
 
 #ifdef MODE_RENDER_DEPTH
 
