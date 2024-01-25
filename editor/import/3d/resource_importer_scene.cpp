@@ -2214,8 +2214,7 @@ void ResourceImporterScene::_add_shapes(Node *p_node, const Vector<Ref<Shape3D>>
 void ResourceImporterScene::_copy_meta(Node *p_src_node, Node *p_dst_node) {
 	List<StringName> meta_list;
 	p_src_node->get_meta_list(&meta_list);
-	for (List<StringName>::Element *E = meta_list.front(); E; E = E->next()) {
-		StringName meta_key = E->get();
+	for (const StringName &meta_key : meta_list) {
 		Variant meta_value = p_src_node->get_meta(meta_key);
 		p_dst_node->set_meta(meta_key, meta_value);
 	}
