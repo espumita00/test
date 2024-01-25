@@ -2172,7 +2172,7 @@ Node *ResourceImporterScene::_generate_meshes(Node *p_node, const Dictionary &p_
 			List<StringName> meta_list;
 			p_node->get_meta_list(&meta_list);
 			for (List<StringName>::Element *E = meta_list.front(); E; E = E->next()) {
-				StringName meta_key = element->get();
+				StringName meta_key = E->get();
 				Variant meta_value = p_node->get_meta(meta_key);
 				mesh_node->set_meta(meta_key, meta_value);
 			}
