@@ -2168,6 +2168,16 @@ Node *ResourceImporterScene::_generate_meshes(Node *p_node, const Dictionary &p_
 			} break;
 		}
 
+		{
+			List<StringName> meta_list;
+			p_node->get_meta_list(&meta_list);
+			for (List<StringName>::Element *element = meta_list.front(); element; element = element->next()) {
+				StringName meta_key = element->get();
+				Variant meta_value = p_node->get_meta(meta_key);
+				mesh_node->set_meta(meta_key, meta_value);
+			}
+		}
+
 		mesh_node->set_layer_mask(src_mesh_node->get_layer_mask());
 		mesh_node->set_cast_shadows_setting(src_mesh_node->get_cast_shadows_setting());
 		mesh_node->set_visibility_range_begin(src_mesh_node->get_visibility_range_begin());
