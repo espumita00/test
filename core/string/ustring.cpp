@@ -41,6 +41,11 @@
 #include "core/variant/variant.h"
 #include "core/version_generated.gen.h"
 
+#include "modules/modules_enabled.gen.h" // For regex.
+#ifdef MODULE_REGEX_ENABLED
+#include "modules/regex/regex.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <cstdint>
@@ -3829,6 +3834,27 @@ String String::strip_escapes() const {
 	return new_string;
 }
 
+String String::strip_bbcode() const {
+	String result;
+	int from = 0;
+	while (true) {
+		int lb_pos = find_char('[', from);
+		if (lb_pos < 0) {
+			break;
+		}
+		int rb_pos = find_char(']', lb_pos + 1);
+		if (rb_pos < 0) {
+			break;
+		}
+		result += substr(from, lb_pos - from);
+		from = rb_pos + 1;
+	}
+	result += substr(from);
+
+	// Remove remaining special characters to avoid security issues with concatenation.
+	return result.replace("[", "").replace("]", "");
+}
+
 String String::lstrip(const String &p_chars) const {
 	int len = length();
 	int beg;
@@ -4157,6 +4183,13 @@ String String::json_escape() const {
 	escaped = escaped.replace("\t", "\\t");
 	escaped = escaped.replace("\v", "\\v");
 	escaped = escaped.replace("\"", "\\\"");
+
+	return escaped;
+}
+
+String String::bbcode_escape() const {
+	String escaped = *this;
+	escaped = escaped.replace("[", "[lb]");
 
 	return escaped;
 }
