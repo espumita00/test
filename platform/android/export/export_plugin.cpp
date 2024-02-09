@@ -2461,19 +2461,6 @@ bool EditorExportPlatformAndroid::has_valid_export_configuration(const Ref<Edito
 #ifdef MODULE_MONO_ENABLED
 	// Android export is still a work in progress, keep a message as a warning.
 	err += TTR("Exporting to Android when using C#/.NET is experimental.") + "\n";
-
-	bool unsupported_arch = false;
-	Vector<ABI> enabled_abis = get_enabled_abis(p_preset);
-	for (ABI abi : enabled_abis) {
-		if (abi.arch != "arm64" && abi.arch != "x86_64") {
-			err += vformat(TTR("Android architecture %s not supported in C# projects."), abi.arch) + "\n";
-			unsupported_arch = true;
-		}
-	}
-	if (unsupported_arch) {
-		r_error = err;
-		return false;
-	}
 #endif
 
 	// Look for export templates (first official, and if defined custom templates).
@@ -3283,12 +3270,16 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 			cmdline.push_back("clean");
 		}
 
+		String edition = "Standard";
+#ifdef MODULE_MONO_ENABLED
+		edition = "Mono";
+#endif
 		String build_type = p_debug ? "Debug" : "Release";
 		if (export_format == EXPORT_FORMAT_AAB) {
 			String bundle_build_command = vformat("bundle%s", build_type);
 			cmdline.push_back(bundle_build_command);
 		} else if (export_format == EXPORT_FORMAT_APK) {
-			String apk_build_command = vformat("assemble%s", build_type);
+			String apk_build_command = vformat("assemble%s%s", edition, build_type);
 			cmdline.push_back(apk_build_command);
 		}
 
@@ -3370,6 +3361,8 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 
 		copy_args.push_back("-p"); // argument to specify the start directory.
 		copy_args.push_back(build_path); // start directory.
+
+		copy_args.push_back("-Pexport_edition=" + edition.to_lower());
 
 		copy_args.push_back("-Pexport_build_type=" + build_type.to_lower());
 
