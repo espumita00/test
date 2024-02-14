@@ -798,6 +798,7 @@ void EditorPropertyDictionary::_change_type_menu(int p_index) {
 			object->set_new_item_value(value);
 		}
 		update_property();
+		changing_type_index = -3;
 		return;
 	}
 
@@ -1163,6 +1164,9 @@ void EditorPropertyDictionary::update_property() {
 			prop->set_selectable(false);
 			prop->connect("property_changed", callable_mp(this, &EditorPropertyDictionary::_property_changed));
 			prop->connect("object_id_selected", callable_mp(this, &EditorPropertyDictionary::_object_id_selected));
+			if (change_index == changing_type_index) {
+				callable_mp(prop, &EditorProperty::grab_focus).bind(0).call_deferred();
+			}
 
 			HBoxContainer *hbox = memnew(HBoxContainer);
 			if (add_vbox) {
