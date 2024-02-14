@@ -1165,7 +1165,7 @@ void EditorPropertyDictionary::update_property() {
 			prop->connect("property_changed", callable_mp(this, &EditorPropertyDictionary::_property_changed));
 			prop->connect("object_id_selected", callable_mp(this, &EditorPropertyDictionary::_object_id_selected));
 			if (change_index == changing_type_index) {
-				callable_mp(prop, &EditorProperty::grab_focus).bind(0).call_deferred();
+				callable_mp(prop, &EditorProperty::grab_focus).call_deferred(0);
 			}
 
 			HBoxContainer *hbox = memnew(HBoxContainer);
