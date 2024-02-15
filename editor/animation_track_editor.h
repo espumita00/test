@@ -455,6 +455,7 @@ class AnimationTrackEditor : public VBoxContainer {
 		Animation::TrackType type;
 		NodePath path;
 		int track_idx = 0;
+		float time = FLT_MAX; // Defaults to current timeline position.
 		Variant value;
 		String query;
 		bool advance = false;
