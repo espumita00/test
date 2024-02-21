@@ -50,7 +50,7 @@
 	return layers[layer]->function(__VA_ARGS__);
 
 void TileMap::_emit_changed() {
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 void TileMap::_notification(int p_what) {
@@ -220,7 +220,7 @@ void TileMap::add_layer(int p_to_pos) {
 	for (uint32_t i = 0; i < layers.size(); i++) {
 		layers[i]->set_layer_index_in_tile_map_node(i);
 	}
-	new_layer->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &TileMap::_emit_changed));
+	new_layer->connect(CoreStringName(changed), callable_mp(this, &TileMap::_emit_changed));
 
 	notify_property_list_changed();
 
@@ -542,7 +542,7 @@ bool TileMap::_set(const StringName &p_name, const Variant &p_value) {
 				new_layer->force_parent_owned();
 				new_layer->set_name("Layer0");
 				new_layer->set_layer_index_in_tile_map_node(0);
-				new_layer->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &TileMap::_emit_changed));
+				new_layer->connect(CoreStringName(changed), callable_mp(this, &TileMap::_emit_changed));
 				layers.push_back(new_layer);
 			}
 			layers[0]->set_tile_data(format, p_value);
@@ -568,7 +568,7 @@ bool TileMap::_set(const StringName &p_name, const Variant &p_value) {
 				new_layer->force_parent_owned();
 				new_layer->set_name(vformat("Layer%d", index));
 				new_layer->set_layer_index_in_tile_map_node(index);
-				new_layer->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &TileMap::_emit_changed));
+				new_layer->connect(CoreStringName(changed), callable_mp(this, &TileMap::_emit_changed));
 				layers.push_back(new_layer);
 			}
 
@@ -993,7 +993,7 @@ void TileMap::_bind_methods() {
 
 	ADD_PROPERTY_DEFAULT("format", TileMapDataFormat::FORMAT_1);
 
-	ADD_SIGNAL(MethodInfo(CoreStringNames::get_singleton()->changed));
+	ADD_SIGNAL(MethodInfo(CoreStringName(changed)));
 
 	BIND_ENUM_CONSTANT(VISIBILITY_MODE_DEFAULT);
 	BIND_ENUM_CONSTANT(VISIBILITY_MODE_FORCE_HIDE);
@@ -1005,7 +1005,7 @@ TileMap::TileMap() {
 	add_child(new_layer, false, INTERNAL_MODE_FRONT);
 	new_layer->set_name("Layer0");
 	new_layer->set_layer_index_in_tile_map_node(0);
-	new_layer->connect(CoreStringNames::get_singleton()->changed, callable_mp(this, &TileMap::_emit_changed));
+	new_layer->connect(CoreStringName(changed), callable_mp(this, &TileMap::_emit_changed));
 	layers.push_back(new_layer);
 
 	default_layer = memnew(TileMapLayer);

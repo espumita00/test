@@ -41,7 +41,7 @@
 #include <stdio.h>
 
 void Resource::emit_changed() {
-	emit_signal(CoreStringNames::get_singleton()->changed);
+	emit_signal(CoreStringName(changed));
 }
 
 void Resource::_resource_path_changed() {
@@ -152,14 +152,14 @@ bool Resource::editor_can_reload_from_file() {
 }
 
 void Resource::connect_changed(const Callable &p_callable, uint32_t p_flags) {
-	if (!is_connected(CoreStringNames::get_singleton()->changed, p_callable) || p_flags & CONNECT_REFERENCE_COUNTED) {
-		connect(CoreStringNames::get_singleton()->changed, p_callable, p_flags);
+	if (!is_connected(CoreStringName(changed), p_callable) || p_flags & CONNECT_REFERENCE_COUNTED) {
+		connect(CoreStringName(changed), p_callable, p_flags);
 	}
 }
 
 void Resource::disconnect_changed(const Callable &p_callable) {
-	if (is_connected(CoreStringNames::get_singleton()->changed, p_callable)) {
-		disconnect(CoreStringNames::get_singleton()->changed, p_callable);
+	if (is_connected(CoreStringName(changed), p_callable)) {
+		disconnect(CoreStringName(changed), p_callable);
 	}
 }
 
