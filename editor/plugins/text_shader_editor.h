@@ -198,6 +198,7 @@ public:
 	bool is_unsaved() const;
 	void tag_saved_version();
 
+	ShaderTextEditor *get_shader_text_editor() const { return shader_editor; };
 	virtual Size2 get_minimum_size() const override { return Size2(0, 200); }
 
 	TextShaderEditor();

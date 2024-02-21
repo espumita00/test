@@ -744,6 +744,7 @@ void TextShaderEditor::_editor_settings_changed() {
 		return;
 	}
 	shader_editor->update_editor_settings();
+	// shader_editor->show_toggle_scripts_button(); // TODO: Disabled for now, because it doesn't work properly.
 
 	shader_editor->get_text_editor()->add_theme_constant_override("line_spacing", EDITOR_GET("text_editor/appearance/whitespace/line_spacing"));
 	shader_editor->get_text_editor()->set_draw_breakpoints_gutter(false);
