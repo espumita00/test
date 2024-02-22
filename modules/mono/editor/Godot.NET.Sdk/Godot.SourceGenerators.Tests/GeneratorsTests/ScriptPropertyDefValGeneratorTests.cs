@@ -5,12 +5,22 @@ namespace Godot.SourceGenerators.Tests;
 public class ScriptPropertyDefValGeneratorTests
 {
     [Fact]
+    public async void DisableGenerator()
+    {
+        await CSharpSourceGeneratorVerifier<ScriptPropertyDefValGenerator>.MakeVerifier(new VerifierConfiguration()
+        {
+            Sources = new string[] { "ExportedFields.cs", "ExportedProperties.cs" },
+            DisabledGenerators = new string[] { "ScriptPropertyDefVal" },
+        }).RunAsync();
+    }
+
+    [Fact]
     public async void ExportedFields()
     {
-        await CSharpSourceGeneratorVerifier<ScriptPropertyDefValGenerator>.Verify(
-            new string[] { "ExportedFields.cs", "MoreExportedFields.cs" },
-            new string[] { "ExportedFields_ScriptPropertyDefVal.generated.cs" }
-        );
+        await CSharpSourceGeneratorVerifier<ScriptPropertyDefValGenerator>.MakeVerifier()
+            .WithSources("ExportedFields.cs", "MoreExportedFields.cs")
+            .WithGeneratedSources("ExportedFields_ScriptPropertyDefVal.generated.cs")
+            .RunAsync();
     }
 
     [Fact]
