@@ -659,6 +659,10 @@ void ProjectDialog::set_mode(Mode p_mode) {
 	mode = p_mode;
 }
 
+ProjectDialog::Mode ProjectDialog::get_mode(){
+	return mode;
+}
+
 void ProjectDialog::set_project_path(const String &p_path) {
 	project_path->set_text(p_path);
 }
@@ -736,7 +740,7 @@ void ProjectDialog::show_dialog() {
 
 		if (mode == MODE_IMPORT) {
 			set_title(TTR("Import Existing Project"));
-			set_ok_button_text(TTR("Import & Edit"));
+			set_ok_button_text(TTR("Import"));
 			name_container->hide();
 			install_path_container->hide();
 			renderer_container->hide();
