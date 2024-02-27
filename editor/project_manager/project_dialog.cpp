@@ -659,7 +659,7 @@ void ProjectDialog::set_mode(Mode p_mode) {
 	mode = p_mode;
 }
 
-ProjectDialog::Mode ProjectDialog::get_mode(){
+ProjectDialog::Mode ProjectDialog::get_mode() {
 	return mode;
 }
 

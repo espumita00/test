@@ -708,7 +708,7 @@ void ProjectManager::_on_project_created(const String &dir) {
 	project_list->select_project(i);
 	project_list->ensure_project_visible(i);
 
-	if(!(project_dialog->get_mode() == ProjectDialog::MODE_IMPORT)){
+	if (!(project_dialog->get_mode() == ProjectDialog::MODE_IMPORT)) {
 		_open_selected_projects_ask();
 	}
 
