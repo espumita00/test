@@ -1660,6 +1660,13 @@
 				[b]Note:[/b] This method is implemented on Linux (X11), macOS and Windows.
 			</description>
 		</method>
+		<method name="window_set_mouse_passthrough_rects">
+			<return type="void" />
+			<param index="0" name="rectangles" type="Rect2i[]" />
+			<param index="1" name="window_id" type="int" default="0" />
+			<description>
+			</description>
+		</method>
 		<method name="window_set_popup_safe_rect">
 			<return type="void" />
 			<param index="0" name="window" type="int" />
