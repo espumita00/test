@@ -708,7 +708,10 @@ void ProjectManager::_on_project_created(const String &dir) {
 	int i = project_list->refresh_project(dir);
 	project_list->select_project(i);
 	project_list->ensure_project_visible(i);
-	_open_selected_projects_ask();
+
+	if (!(project_dialog->get_mode() == ProjectDialog::MODE_IMPORT)) {
+		_open_selected_projects_ask();
+	}
 
 	project_list->update_dock_menu();
 }

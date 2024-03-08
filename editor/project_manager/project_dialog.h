@@ -125,6 +125,7 @@ public:
 	void set_zip_path(const String &p_path);
 	void set_zip_title(const String &p_title);
 	void set_mode(Mode p_mode);
+	Mode get_mode();
 	void set_project_path(const String &p_path);
 
 	void ask_for_path_and_show();
