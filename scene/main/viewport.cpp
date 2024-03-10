@@ -1277,6 +1277,10 @@ Camera2D *Viewport::get_camera_2d() const {
 	return camera_2d;
 }
 
+Vector2 Viewport::get_stretch_scale_factor() const {
+	return stretch_transform.get_scale();
+}
+
 Transform2D Viewport::get_final_transform() const {
 	ERR_READ_THREAD_GUARD_V(Transform2D());
 	return stretch_transform * global_canvas_transform;
@@ -4592,6 +4596,7 @@ void Viewport::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_global_canvas_transform", "xform"), &Viewport::set_global_canvas_transform);
 	ClassDB::bind_method(D_METHOD("get_global_canvas_transform"), &Viewport::get_global_canvas_transform);
+	ClassDB::bind_method(D_METHOD("get_stretch_scale_factor"), &Viewport::get_stretch_scale_factor);
 	ClassDB::bind_method(D_METHOD("get_final_transform"), &Viewport::get_final_transform);
 	ClassDB::bind_method(D_METHOD("get_screen_transform"), &Viewport::get_screen_transform);
 
