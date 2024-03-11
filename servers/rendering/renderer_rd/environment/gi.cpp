@@ -354,12 +354,20 @@ void GI::HDDAGI::create(RID p_env, const Vector3 &p_world_position, uint32_t p_r
 	switch (cascade_format) {
 		case RS::ENV_HDDAGI_CASCADE_FORMAT_16x16x16: {
 			cascade_size.y = CASCADE_SIZE;
+			y_mult = 1.0;
 		} break;
-		case RS::ENV_HDDAGI_CASCADE_FORMAT_16x8x16: {
-			cascade_size.y = CASCADE_SIZE / 2;
-		} break;
-		default: {
+		case RS::ENV_HDDAGI_CASCADE_FORMAT_16x16x16_50_PERCENT_HEIGHT: {
 			cascade_size.y = CASCADE_SIZE;
+			y_mult = 2.0;
+		} break;
+		case RS::ENV_HDDAGI_CASCADE_FORMAT_16x16x16_75_PERCENT_HEIGHT: {
+			cascade_size.y = CASCADE_SIZE;
+			y_mult = 1.5;
+		} break;
+		case RS::ENV_HDDAGI_CASCADE_FORMAT_16x8x16: 
+		default: {
+			cascade_size.y = CASCADE_SIZE / 2;
+			y_mult = 1.0;
 		} break;
 	}
 
@@ -374,9 +382,6 @@ void GI::HDDAGI::create(RID p_env, const Vector3 &p_world_position, uint32_t p_r
 	occlusion_bias = RendererSceneRenderRD::get_singleton()->environment_get_hddagi_occlusion_bias(p_env);
 	normal_bias = RendererSceneRenderRD::get_singleton()->environment_get_hddagi_normal_bias(p_env);
 	frames_to_converge = p_requested_history_size;
-	//y_scale_mode = RendererSceneRenderRD::get_singleton()->environment_get_hddagi_y_scale(p_env);
-	//static const float y_scale[3] = { 2.0, 1.5, 1.0 };
-	//y_mult = y_scale[y_scale_mode];
 	version = gi->hddagi_current_version;
 	cascades.resize(num_cascades);
 
