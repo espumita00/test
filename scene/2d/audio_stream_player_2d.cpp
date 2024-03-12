@@ -38,8 +38,8 @@
 #include "scene/main/viewport.h"
 #include "scene/resources/world_2d.h"
 #include "scene/scene_string_names.h"
+#include "servers/audio/audio_server.h"
 #include "servers/audio/audio_stream.h"
-#include "servers/audio_server.h"
 
 void AudioStreamPlayer2D::_notification(int p_what) {
 	internal->notification(p_what);

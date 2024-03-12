@@ -60,8 +60,8 @@
 #include "scene/main/window.h"
 #include "scene/property_utils.h"
 #include "scene/resources/packed_scene.h"
-#include "servers/display_server.h"
-#include "servers/rendering_server.h"
+#include "servers/display/display_server.h"
+#include "servers/rendering/rendering_server.h"
 
 #include "modules/modules_enabled.gen.h" // For regex.
 #ifdef MODULE_REGEX_ENABLED

@@ -31,7 +31,7 @@
 #include "nine_patch_rect.h"
 
 #include "scene/scene_string_names.h"
-#include "servers/rendering_server.h"
+#include "servers/rendering/rendering_server.h"
 
 void NinePatchRect::_notification(int p_what) {
 	switch (p_what) {

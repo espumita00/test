@@ -39,7 +39,7 @@
 #include "renderer_viewport.h"
 #include "rendering_server_globals.h"
 #include "servers/rendering/renderer_compositor.h"
-#include "servers/rendering_server.h"
+#include "servers/rendering/rendering_server.h"
 #include "servers/server_wrap_mt_common.h"
 
 class RenderingServerDefault : public RenderingServer {
@@ -126,8 +126,6 @@ public:
 #else
 #define SYNC_DEBUG
 #endif
-
-#include "servers/server_wrap_mt_common.h"
 
 	/* TEXTURE API */
 

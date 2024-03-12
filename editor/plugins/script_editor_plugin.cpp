@@ -66,7 +66,7 @@
 #include "scene/main/window.h"
 #include "scene/scene_string_names.h"
 #include "script_text_editor.h"
-#include "servers/display_server.h"
+#include "servers/display/display_server.h"
 #include "text_editor.h"
 
 /*** SYNTAX HIGHLIGHTER ****/
