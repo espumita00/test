@@ -376,10 +376,10 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	const float SUBPIXEL_QUALITY = 0.75;
 
 #ifdef USE_MULTIVIEW
-	float lumaUp = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(0, 1)).xyz);
-	float lumaDown = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(0, -1)).xyz);
-	float lumaLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, 0)).xyz);
-	float lumaRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, 0)).xyz);
+	float lumaUp = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(0, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaDown = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(0, -1)).xyz * exposure * params.luminance_multiplier);
+	float lumaLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, 0)).xyz * exposure * params.luminance_multiplier);
+	float lumaRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, 0)).xyz * exposure * params.luminance_multiplier);
 
 	float lumaCenter = rgb2luma(color);
 
@@ -392,10 +392,10 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 		return color;
 	}
 
-	float lumaDownLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, -1)).xyz);
-	float lumaUpRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, 1)).xyz);
-	float lumaUpLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, 1)).xyz);
-	float lumaDownRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, -1)).xyz);
+	float lumaDownLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, -1)).xyz * exposure * params.luminance_multiplier);
+	float lumaUpRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaUpLeft = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(-1, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaDownRight = rgb2luma(textureLodOffset(source_color, vec3(uv_interp, ViewIndex), 0.0, ivec2(1, -1)).xyz * exposure * params.luminance_multiplier);
 
 	float lumaDownUp = lumaDown + lumaUp;
 	float lumaLeftRight = lumaLeft + lumaRight;
@@ -440,8 +440,8 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	vec3 uv1 = vec3(currentUv - offset * QUALITY(0), ViewIndex);
 	vec3 uv2 = vec3(currentUv + offset * QUALITY(0), ViewIndex);
 
-	float lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz);
-	float lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz);
+	float lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz * exposure * params.luminance_multiplier);
+	float lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz * exposure * params.luminance_multiplier);
 	lumaEnd1 -= lumaLocalAverage;
 	lumaEnd2 -= lumaLocalAverage;
 
@@ -459,11 +459,11 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	if (!reachedBoth) {
 		for (int i = 2; i < ITERATIONS; i++) {
 			if (!reached1) {
-				lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz);
+				lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz * exposure * params.luminance_multiplier);
 				lumaEnd1 = lumaEnd1 - lumaLocalAverage;
 			}
 			if (!reached2) {
-				lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz);
+				lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz * exposure * params.luminance_multiplier);
 				lumaEnd2 = lumaEnd2 - lumaLocalAverage;
 			}
 			reached1 = abs(lumaEnd1) >= gradientScaled;
@@ -520,10 +520,10 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	return finalColor;
 
 #else
-	float lumaUp = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(0, 1)).xyz);
-	float lumaDown = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(0, -1)).xyz);
-	float lumaLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, 0)).xyz);
-	float lumaRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, 0)).xyz);
+	float lumaUp = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(0, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaDown = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(0, -1)).xyz * exposure * params.luminance_multiplier);
+	float lumaLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, 0)).xyz * exposure * params.luminance_multiplier);
+	float lumaRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, 0)).xyz * exposure * params.luminance_multiplier);
 
 	float lumaCenter = rgb2luma(color);
 
@@ -536,10 +536,10 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 		return color;
 	}
 
-	float lumaDownLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, -1)).xyz);
-	float lumaUpRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, 1)).xyz);
-	float lumaUpLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, 1)).xyz);
-	float lumaDownRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, -1)).xyz);
+	float lumaDownLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, -1)).xyz * exposure * params.luminance_multiplier);
+	float lumaUpRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaUpLeft = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(-1, 1)).xyz * exposure * params.luminance_multiplier);
+	float lumaDownRight = rgb2luma(textureLodOffset(source_color, uv_interp, 0.0, ivec2(1, -1)).xyz * exposure * params.luminance_multiplier);
 
 	float lumaDownUp = lumaDown + lumaUp;
 	float lumaLeftRight = lumaLeft + lumaRight;
@@ -584,8 +584,8 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	vec2 uv1 = currentUv - offset * QUALITY(0);
 	vec2 uv2 = currentUv + offset * QUALITY(0);
 
-	float lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz);
-	float lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz);
+	float lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz * exposure * params.luminance_multiplier);
+	float lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz * exposure * params.luminance_multiplier);
 	lumaEnd1 -= lumaLocalAverage;
 	lumaEnd2 -= lumaLocalAverage;
 
@@ -603,11 +603,11 @@ vec3 do_fxaa(vec3 color, float exposure, vec2 uv_interp) {
 	if (!reachedBoth) {
 		for (int i = 2; i < ITERATIONS; i++) {
 			if (!reached1) {
-				lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz);
+				lumaEnd1 = rgb2luma(textureLod(source_color, uv1, 0.0).xyz * exposure * params.luminance_multiplier);
 				lumaEnd1 = lumaEnd1 - lumaLocalAverage;
 			}
 			if (!reached2) {
-				lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz);
+				lumaEnd2 = rgb2luma(textureLod(source_color, uv2, 0.0).xyz * exposure * params.luminance_multiplier);
 				lumaEnd2 = lumaEnd2 - lumaLocalAverage;
 			}
 			reached1 = abs(lumaEnd1) >= gradientScaled;
