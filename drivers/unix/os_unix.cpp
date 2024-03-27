@@ -39,7 +39,7 @@
 #include "drivers/unix/file_access_unix.h"
 #include "drivers/unix/net_socket_posix.h"
 #include "drivers/unix/thread_posix.h"
-#include "servers/rendering_server.h"
+#include "servers/rendering/rendering_server.h"
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>

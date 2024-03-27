@@ -32,7 +32,7 @@
 
 #include "core/os/os.h"
 #include "scene/scene_string_names.h"
-#include "servers/audio_server.h"
+#include "servers/audio/audio_server.h"
 
 int VideoStreamPlayer::sp_get_channel_count() const {
 	if (playback.is_null()) {

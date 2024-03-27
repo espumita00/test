@@ -53,7 +53,7 @@
 #include "scene/resources/animation.h"
 #include "scene/resources/image_texture.h"
 #include "scene/scene_string_names.h"
-#include "servers/rendering_server.h"
+#include "servers/rendering/rendering_server.h"
 
 ///////////////////////////////////
 

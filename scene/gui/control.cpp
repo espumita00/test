@@ -45,8 +45,8 @@
 #include "scene/scene_string_names.h"
 #include "scene/theme/theme_db.h"
 #include "scene/theme/theme_owner.h"
-#include "servers/rendering_server.h"
-#include "servers/text_server.h"
+#include "servers/rendering/rendering_server.h"
+#include "servers/text/text_server.h"
 
 #ifdef TOOLS_ENABLED
 #include "editor/plugins/control_editor_plugin.h"
