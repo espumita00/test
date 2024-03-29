@@ -137,16 +137,7 @@ RenderingDevice::ShaderSPIRVGetCacheKeyFunction RenderingDevice::get_spirv_cache
 /***************************/
 
 void RenderingDevice::_add_dependency(RID p_id, RID p_depends_on) {
-	if (!dependency_map.has(p_depends_on)) {
-		dependency_map[p_depends_on] = HashSet<RID>();
-	}
-
 	dependency_map[p_depends_on].insert(p_id);
-
-	if (!reverse_dependency_map.has(p_id)) {
-		reverse_dependency_map[p_id] = HashSet<RID>();
-	}
-
 	reverse_dependency_map[p_id].insert(p_depends_on);
 }
 
