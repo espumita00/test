@@ -275,6 +275,7 @@ Validate extension JSON: API was removed: classes/Skeleton3D/signals/bone_pose_c
 
 They have been replaced by a safer API due to performance concerns. Compatibility method registered.
 
+
 GH-90747
 --------
 Validate extension JSON: API was removed: classes/NavigationRegion2D/methods/get_avoidance_layers
@@ -287,3 +288,11 @@ Validate extension JSON: API was removed: classes/NavigationRegion2D/methods/get
 Validate extension JSON: API was removed: classes/NavigationRegion2D/properties/constrain_avoidance
 
 Experimental NavigationRegion2D feature "constrain_avoidance" was discontinued with no replacement.
+
+
+GH-90057
+--------
+Validate extension JSON: Error: Field 'classes/EditorInterface/methods/open_scene_from_path/arguments': size changed value in new API, from 1 to 2.
+
+Added optional argument to open_scene_from_path to create a new inherited scene.
+Compatibility method registered.
