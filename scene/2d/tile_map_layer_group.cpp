@@ -57,7 +57,7 @@ void TileMapLayerGroup::_tile_set_changed() {
 		}
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 #ifdef TOOLS_ENABLED

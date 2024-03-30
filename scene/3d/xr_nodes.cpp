@@ -76,8 +76,8 @@ void XRCamera3D::_pose_changed(const Ref<XRPose> &p_pose) {
 	}
 }
 
-PackedStringArray XRCamera3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array XRCamera3D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (is_visible() && is_inside_tree()) {
 		// must be child node of XROrigin3D!
@@ -274,7 +274,7 @@ void XRNode3D::set_tracker(const StringName &p_tracker_name) {
 	// see if it's already available
 	_bind_tracker();
 
-	update_configuration_warnings();
+	update_configuration_info();
 	notify_property_list_changed();
 }
 
@@ -424,8 +424,8 @@ XRNode3D::~XRNode3D() {
 	xr_server->disconnect("tracker_removed", callable_mp(this, &XRNode3D::_removed_tracker));
 }
 
-PackedStringArray XRNode3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array XRNode3D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (is_visible() && is_inside_tree()) {
 		// must be child node of XROrigin!
@@ -606,8 +606,8 @@ Plane XRAnchor3D::get_plane() const {
 
 Vector<XROrigin3D *> XROrigin3D::origin_nodes;
 
-PackedStringArray XROrigin3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array XROrigin3D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (is_visible() && is_inside_tree()) {
 		bool has_camera = false;

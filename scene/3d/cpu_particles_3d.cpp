@@ -180,7 +180,7 @@ void CPUParticles3D::set_mesh(const Ref<Mesh> &p_mesh) {
 		RS::get_singleton()->multimesh_set_mesh(multimesh, RID());
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 Ref<Mesh> CPUParticles3D::get_mesh() const {
@@ -203,8 +203,8 @@ bool CPUParticles3D::get_fractional_delta() const {
 	return fractional_delta;
 }
 
-PackedStringArray CPUParticles3D::get_configuration_warnings() const {
-	PackedStringArray warnings = GeometryInstance3D::get_configuration_warnings();
+Array CPUParticles3D::get_configuration_info() const {
+	Array warnings = GeometryInstance3D::get_configuration_info();
 
 	bool mesh_found = false;
 	bool anim_material_found = false;
@@ -283,7 +283,7 @@ void CPUParticles3D::set_param_min(Parameter p_param, real_t p_value) {
 		set_param_max(p_param, p_value);
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 real_t CPUParticles3D::get_param_min(Parameter p_param) const {
@@ -300,7 +300,7 @@ void CPUParticles3D::set_param_max(Parameter p_param, real_t p_value) {
 		set_param_min(p_param, p_value);
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 real_t CPUParticles3D::get_param_max(Parameter p_param) const {
@@ -362,7 +362,7 @@ void CPUParticles3D::set_param_curve(Parameter p_param, const Ref<Curve> &p_curv
 		}
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 Ref<Curve> CPUParticles3D::get_param_curve(Parameter p_param) const {

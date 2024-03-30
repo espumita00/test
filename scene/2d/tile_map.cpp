@@ -225,7 +225,7 @@ void TileMap::add_layer(int p_to_pos) {
 
 	_emit_changed();
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 void TileMap::move_layer(int p_layer, int p_to_pos) {
@@ -244,7 +244,7 @@ void TileMap::move_layer(int p_layer, int p_to_pos) {
 
 	_emit_changed();
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 void TileMap::remove_layer(int p_layer) {
@@ -260,7 +260,7 @@ void TileMap::remove_layer(int p_layer) {
 
 	_emit_changed();
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 void TileMap::set_layer_name(int p_layer, String p_name) {
@@ -382,7 +382,7 @@ void TileMap::set_y_sort_enabled(bool p_enable) {
 		layer->set_y_sort_enabled(p_enable);
 	}
 	_emit_changed();
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 void TileMap::set_cell(int p_layer, const Vector2i &p_coords, int p_source_id, const Vector2i p_atlas_coords, int p_alternative_tile) {
@@ -571,7 +571,7 @@ bool TileMap::_set(const StringName &p_name, const Variant &p_value) {
 
 			notify_property_list_changed();
 			_emit_changed();
-			update_configuration_warnings();
+			update_configuration_info();
 		}
 
 		if (components[1] == "name") {
@@ -831,8 +831,8 @@ TypedArray<Vector2i> TileMap::get_surrounding_cells(const Vector2i &p_coords) {
 	return tile_set->get_surrounding_cells(p_coords);
 }
 
-PackedStringArray TileMap::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array TileMap::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	// Retrieve the set of Z index values with a Y-sorted layer.
 	RBSet<int> y_sorted_z_index;
