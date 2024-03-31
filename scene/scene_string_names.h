@@ -203,7 +203,6 @@ public:
 #ifndef DISABLE_DEPRECATED
 	StringName node_configuration_warning_changed;
 #endif
-	StringName configuration_info_changed;
 
 	StringName output;
 

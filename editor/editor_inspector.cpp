@@ -4131,7 +4131,7 @@ void EditorInspector::_notification(int p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			if (!sub_inspector) {
 				get_tree()->connect("node_removed", callable_mp(this, &EditorInspector::_node_removed));
-				get_tree()->connect("configuration_info_changed", callable_mp(this, &EditorInspector::_configuration_info_changed));
+				EditorNode::get_singleton()->connect("configuration_info_changed", callable_mp(this, &EditorInspector::_configuration_info_changed));
 			}
 		} break;
 
@@ -4142,7 +4142,7 @@ void EditorInspector::_notification(int p_what) {
 		case NOTIFICATION_EXIT_TREE: {
 			if (!sub_inspector) {
 				get_tree()->disconnect("node_removed", callable_mp(this, &EditorInspector::_node_removed));
-				get_tree()->disconnect("configuration_info_changed", callable_mp(this, &EditorInspector::_configuration_info_changed));
+				EditorNode::get_singleton()->disconnect("configuration_info_changed", callable_mp(this, &EditorInspector::_configuration_info_changed));
 			}
 			edit(nullptr);
 		} break;

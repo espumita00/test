@@ -45,6 +45,11 @@
 #include "scene/scene_string_names.h"
 #include "viewport.h"
 
+#ifdef TOOLS_ENABLED
+#include "editor/editor_node.h"
+#include "editor/editor_string_names.h"
+#endif // TOOLS_ENABLED
+
 #include <stdint.h>
 
 int Node::orphan_node_count = 0;
@@ -3323,7 +3328,9 @@ void Node::update_configuration_warnings() {
 	}
 	if (get_tree()->get_edited_scene_root() && (get_tree()->get_edited_scene_root() == this || get_tree()->get_edited_scene_root()->is_ancestor_of(this))) {
 		get_tree()->emit_signal(SceneStringNames::get_singleton()->node_configuration_warning_changed, this);
-		get_tree()->emit_signal(SceneStringNames::get_singleton()->configuration_info_changed, this);
+		if (Engine::get_singleton()->is_editor_hint()) {
+			EditorNode::get_singleton()->emit_signal(EditorStringNames::get_singleton()->configuration_info_changed, this);
+		}
 	}
 #endif
 }
@@ -3347,8 +3354,8 @@ void Node::update_configuration_info() {
 	if (!is_inside_tree()) {
 		return;
 	}
-	if (get_tree()->get_edited_scene_root() && (get_tree()->get_edited_scene_root() == this || get_tree()->get_edited_scene_root()->is_ancestor_of(this))) {
-		get_tree()->emit_signal(SceneStringNames::get_singleton()->configuration_info_changed, this);
+	if (get_tree()->is_node_being_edited(this)) {
+		EditorNode::get_singleton()->emit_signal(EditorStringNames::get_singleton()->configuration_info_changed, this);
 	}
 #endif
 }

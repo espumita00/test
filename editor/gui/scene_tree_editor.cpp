@@ -869,7 +869,7 @@ void SceneTreeEditor::_notification(int p_what) {
 			get_tree()->connect("tree_process_mode_changed", callable_mp(this, &SceneTreeEditor::_tree_process_mode_changed));
 			get_tree()->connect("node_removed", callable_mp(this, &SceneTreeEditor::_node_removed));
 			get_tree()->connect("node_renamed", callable_mp(this, &SceneTreeEditor::_node_renamed));
-			get_tree()->connect("configuration_info_changed", callable_mp(this, &SceneTreeEditor::_config_info_changed));
+			EditorNode::get_singleton()->connect("configuration_info_changed", callable_mp(this, &SceneTreeEditor::_config_info_changed));
 
 			tree->connect("item_collapsed", callable_mp(this, &SceneTreeEditor::_cell_collapsed));
 
@@ -882,7 +882,7 @@ void SceneTreeEditor::_notification(int p_what) {
 			get_tree()->disconnect("node_removed", callable_mp(this, &SceneTreeEditor::_node_removed));
 			get_tree()->disconnect("node_renamed", callable_mp(this, &SceneTreeEditor::_node_renamed));
 			tree->disconnect("item_collapsed", callable_mp(this, &SceneTreeEditor::_cell_collapsed));
-			get_tree()->disconnect("configuration_info_changed", callable_mp(this, &SceneTreeEditor::_config_info_changed));
+			EditorNode::get_singleton()->disconnect("configuration_info_changed", callable_mp(this, &SceneTreeEditor::_config_info_changed));
 		} break;
 
 		case NOTIFICATION_THEME_CHANGED: {
