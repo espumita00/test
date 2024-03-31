@@ -159,8 +159,7 @@ void RenderingDevice::_free_dependencies(RID p_id) {
 		for (const RID &F : E->value) {
 			HashMap<RID, HashSet<RID>>::Iterator G = dependency_map.find(F);
 			ERR_CONTINUE(!G);
-			ERR_CONTINUE(!G->value.has(p_id));
-			G->value.erase(p_id);
+			ERR_CONTINUE_MSG(!G->value.erase(p_id), "Attempted to erase non-existing dependency, bug?");
 		}
 
 		reverse_dependency_map.remove(E);
