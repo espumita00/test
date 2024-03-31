@@ -193,7 +193,7 @@ Array WorldEnvironment::get_configuration_info() const {
 	}
 
 	if (environment.is_valid() && get_viewport()->find_world_3d()->get_environment() != environment) {
-		warnings.push_back(("Only the first Environment has an effect in a scene (or set of instantiated scenes)."));
+		warnings.push_back(RTR("Only the first Environment has an effect in a scene (or set of instantiated scenes)."));
 	}
 
 	if (camera_attributes.is_valid() && get_viewport()->find_world_3d()->get_camera_attributes() != camera_attributes) {
@@ -201,7 +201,7 @@ Array WorldEnvironment::get_configuration_info() const {
 	}
 
 	if (compositor.is_valid() && get_viewport()->find_world_3d()->get_compositor() != compositor) {
-		warnings.push_back(("Only the first Compositor has an effect in a scene (or set of instantiated scenes)."));
+		warnings.push_back(RTR("Only the first Compositor has an effect in a scene (or set of instantiated scenes)."));
 	}
 
 	return warnings;

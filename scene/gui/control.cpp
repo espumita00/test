@@ -238,11 +238,15 @@ Array Control::get_configuration_info() const {
 	Array warnings = Node::get_configuration_info();
 
 	if (data.mouse_filter == MOUSE_FILTER_IGNORE && !data.tooltip.is_empty()) {
-		warnings.push_back(RTR("The Hint Tooltip won't be displayed as the control's Mouse Filter is set to \"Ignore\". To solve this, set the Mouse Filter to \"Stop\" or \"Pass\"."));
+		CONFIG_WARNING_P(
+				RTR("The Tooltip Text won't be displayed as the control's Mouse Filter is set to \"Ignore\". To solve this, set the Mouse Filter to \"Stop\" or \"Pass\"."),
+				"tooltip_text");
 	}
 
 	if (get_z_index() != 0) {
-		warnings.push_back(RTR("Changing the Z index of a control only affects the drawing order, not the input event handling order."));
+		CONFIG_INFO_P(
+				RTR("Changing the Z index of a control only affects the drawing order, not the input event handling order."),
+				"z_index");
 	}
 
 	return warnings;
