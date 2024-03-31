@@ -252,7 +252,9 @@ Array CollisionPolygon2D::get_configuration_info() const {
 		}
 	}
 	if (one_way_collision && Object::cast_to<Area2D>(get_parent())) {
-		CONFIG_WARNING(RTR("The One Way Collision property will be ignored when the collision object is an Area2D."));
+		CONFIG_WARNING_P(
+				RTR("One Way Collision will be ignored when the collision object is an Area2D."),
+				"one_way_collision");
 	}
 
 	return warnings;

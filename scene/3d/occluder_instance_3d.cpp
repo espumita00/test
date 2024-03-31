@@ -701,11 +701,15 @@ Array OccluderInstance3D::get_configuration_info() const {
 	}
 
 	if (bake_mask == 0) {
-		CONFIG_WARNING(RTR("The Bake Mask has no bits enabled, which means baking will not produce any occluder meshes for this OccluderInstance3D.\nTo resolve this, enable at least one bit in the Bake Mask property."));
+		CONFIG_WARNING_P(
+				RTR("The Bake Mask has no bits enabled, which means baking will not produce any occluder meshes for this OccluderInstance3D.\nTo resolve this, enable at least one bit in the Bake Mask."),
+				"bake_mask");
 	}
 
 	if (occluder.is_null()) {
-		CONFIG_WARNING(RTR("No occluder mesh is defined in the Occluder property, so no occlusion culling will be performed using this OccluderInstance3D.\nTo resolve this, set the Occluder property to one of the primitive occluder types or bake the scene meshes by selecting the OccluderInstance3D and pressing the Bake Occluders button at the top of the 3D editor viewport."));
+		CONFIG_WARNING_P(
+				RTR("No occluder mesh is defined in the Occluder property, so no occlusion culling will be performed using this OccluderInstance3D.\nTo resolve this, set the Occluder to one of the primitive occluder types or bake the scene meshes by selecting the OccluderInstance3D and pressing the Bake Occluders button at the top of the 3D editor viewport."),
+				"occluder");
 	} else {
 		Ref<ArrayOccluder3D> arr_occluder = occluder;
 		if (arr_occluder.is_valid() && arr_occluder->get_indices().size() < 3) {

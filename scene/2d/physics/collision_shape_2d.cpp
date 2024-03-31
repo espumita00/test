@@ -184,7 +184,9 @@ Array CollisionShape2D::get_configuration_info() const {
 		CONFIG_WARNING(RTR("A shape must be provided for CollisionShape2D to function. Please create a shape resource for it!"));
 	}
 	if (one_way_collision && Object::cast_to<Area2D>(col_object)) {
-		CONFIG_WARNING(RTR("The One Way Collision property will be ignored when the collision object is an Area2D."));
+		CONFIG_WARNING_P(
+				RTR("One Way Collision will be ignored when the collision object is an Area2D."),
+				"one_way_collision");
 	}
 
 	Ref<ConvexPolygonShape2D> convex = shape;

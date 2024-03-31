@@ -179,7 +179,9 @@ Array Decal::get_configuration_info() const {
 	}
 
 	if (cull_mask == 0) {
-		CONFIG_WARNING(RTR("The decal's Cull Mask has no bits enabled, which means the decal will not paint objects on any layer.\nTo resolve this, enable at least one bit in the Cull Mask property."));
+		CONFIG_WARNING_P(
+				RTR("The decal's Cull Mask has no bits enabled, which means the decal will not paint objects on any layer.\nTo resolve this, enable at least one bit in the Cull Mask."),
+				"cull_mask");
 	}
 
 	return warnings;
