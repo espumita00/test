@@ -216,7 +216,7 @@ Array Joint2D::get_configuration_info() const {
 	Array warnings = Node2D::get_configuration_info();
 
 	if (!warning.is_empty()) {
-		warnings.push_back(warning);
+		CONFIG_WARNING(warning);
 	}
 
 	return warnings;

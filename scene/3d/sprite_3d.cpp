@@ -1433,7 +1433,7 @@ StringName AnimatedSprite3D::get_animation() const {
 Array AnimatedSprite3D::get_configuration_info() const {
 	Array warnings = SpriteBase3D::get_configuration_info();
 	if (frames.is_null()) {
-		warnings.push_back(RTR("A SpriteFrames resource must be created or set in the \"Frames\" property in order for AnimatedSprite3D to display frames."));
+		CONFIG_WARNING(RTR("A SpriteFrames resource must be created or set in the \"Frames\" property in order for AnimatedSprite3D to display frames."));
 	}
 	return warnings;
 }
