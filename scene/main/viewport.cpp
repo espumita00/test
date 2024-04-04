@@ -995,7 +995,7 @@ void Viewport::_set_size(const Size2i &p_size, const Size2i &p_size_2d_override,
 #endif
 
 	_update_global_transform();
-	update_configuration_warnings();
+	update_configuration_info();
 
 	update_canvas_items();
 
@@ -3368,12 +3368,12 @@ Variant Viewport::gui_get_drag_data() const {
 	return gui.drag_data;
 }
 
-PackedStringArray Viewport::get_configuration_warnings() const {
-	ERR_MAIN_THREAD_GUARD_V(PackedStringArray());
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array Viewport::get_configuration_info() const {
+	ERR_MAIN_THREAD_GUARD_V(Array());
+	Array warnings = Node::get_configuration_info();
 
 	if (size.x <= 1 || size.y <= 1) {
-		warnings.push_back(RTR("The Viewport size must be greater than or equal to 2 pixels on both dimensions to render anything."));
+		CONFIG_WARNING(RTR("The Viewport size must be greater than or equal to 2 pixels on both dimensions to render anything."));
 	}
 	return warnings;
 }

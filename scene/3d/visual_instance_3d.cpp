@@ -203,7 +203,7 @@ float GeometryInstance3D::get_transparency() const {
 void GeometryInstance3D::set_visibility_range_begin(float p_dist) {
 	visibility_range_begin = p_dist;
 	RS::get_singleton()->instance_geometry_set_visibility_range(get_instance(), visibility_range_begin, visibility_range_end, visibility_range_begin_margin, visibility_range_end_margin, (RS::VisibilityRangeFadeMode)visibility_range_fade_mode);
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 float GeometryInstance3D::get_visibility_range_begin() const {
@@ -213,7 +213,7 @@ float GeometryInstance3D::get_visibility_range_begin() const {
 void GeometryInstance3D::set_visibility_range_end(float p_dist) {
 	visibility_range_end = p_dist;
 	RS::get_singleton()->instance_geometry_set_visibility_range(get_instance(), visibility_range_begin, visibility_range_end, visibility_range_begin_margin, visibility_range_end_margin, (RS::VisibilityRangeFadeMode)visibility_range_fade_mode);
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 float GeometryInstance3D::get_visibility_range_end() const {
@@ -223,7 +223,7 @@ float GeometryInstance3D::get_visibility_range_end() const {
 void GeometryInstance3D::set_visibility_range_begin_margin(float p_dist) {
 	visibility_range_begin_margin = p_dist;
 	RS::get_singleton()->instance_geometry_set_visibility_range(get_instance(), visibility_range_begin, visibility_range_end, visibility_range_begin_margin, visibility_range_end_margin, (RS::VisibilityRangeFadeMode)visibility_range_fade_mode);
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 float GeometryInstance3D::get_visibility_range_begin_margin() const {
@@ -233,7 +233,7 @@ float GeometryInstance3D::get_visibility_range_begin_margin() const {
 void GeometryInstance3D::set_visibility_range_end_margin(float p_dist) {
 	visibility_range_end_margin = p_dist;
 	RS::get_singleton()->instance_geometry_set_visibility_range(get_instance(), visibility_range_begin, visibility_range_end, visibility_range_begin_margin, visibility_range_end_margin, (RS::VisibilityRangeFadeMode)visibility_range_fade_mode);
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 float GeometryInstance3D::get_visibility_range_end_margin() const {
@@ -243,7 +243,7 @@ float GeometryInstance3D::get_visibility_range_end_margin() const {
 void GeometryInstance3D::set_visibility_range_fade_mode(VisibilityRangeFadeMode p_mode) {
 	visibility_range_fade_mode = p_mode;
 	RS::get_singleton()->instance_geometry_set_visibility_range(get_instance(), visibility_range_begin, visibility_range_end, visibility_range_begin_margin, visibility_range_end_margin, (RS::VisibilityRangeFadeMode)visibility_range_fade_mode);
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 GeometryInstance3D::VisibilityRangeFadeMode GeometryInstance3D::get_visibility_range_fade_mode() const {
@@ -425,19 +425,19 @@ bool GeometryInstance3D::is_ignoring_occlusion_culling() {
 	return ignore_occlusion_culling;
 }
 
-PackedStringArray GeometryInstance3D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array GeometryInstance3D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (!Math::is_zero_approx(visibility_range_end) && visibility_range_end <= visibility_range_begin) {
-		warnings.push_back(RTR("The GeometryInstance3D visibility range's End distance is set to a non-zero value, but is lower than the Begin distance.\nThis means the GeometryInstance3D will never be visible.\nTo resolve this, set the End distance to 0 or to a value greater than the Begin distance."));
+		CONFIG_WARNING(RTR("The GeometryInstance3D visibility range's End distance is set to a non-zero value, but is lower than the Begin distance.\nThis means the GeometryInstance3D will never be visible.\nTo resolve this, set the End distance to 0 or to a value greater than the Begin distance."));
 	}
 
 	if ((visibility_range_fade_mode == VISIBILITY_RANGE_FADE_SELF || visibility_range_fade_mode == VISIBILITY_RANGE_FADE_DEPENDENCIES) && !Math::is_zero_approx(visibility_range_begin) && Math::is_zero_approx(visibility_range_begin_margin)) {
-		warnings.push_back(RTR("The GeometryInstance3D is configured to fade in smoothly over distance, but the fade transition distance is set to 0.\nTo resolve this, increase Visibility Range Begin Margin above 0."));
+		CONFIG_WARNING(RTR("The GeometryInstance3D is configured to fade in smoothly over distance, but the fade transition distance is set to 0.\nTo resolve this, increase Visibility Range Begin Margin above 0."));
 	}
 
 	if ((visibility_range_fade_mode == VISIBILITY_RANGE_FADE_SELF || visibility_range_fade_mode == VISIBILITY_RANGE_FADE_DEPENDENCIES) && !Math::is_zero_approx(visibility_range_end) && Math::is_zero_approx(visibility_range_end_margin)) {
-		warnings.push_back(RTR("The GeometryInstance3D is configured to fade out smoothly over distance, but the fade transition distance is set to 0.\nTo resolve this, increase Visibility Range End Margin above 0."));
+		CONFIG_WARNING(RTR("The GeometryInstance3D is configured to fade out smoothly over distance, but the fade transition distance is set to 0.\nTo resolve this, increase Visibility Range End Margin above 0."));
 	}
 
 	return warnings;

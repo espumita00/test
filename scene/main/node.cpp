@@ -46,6 +46,11 @@
 #include "scene/scene_string_names.h"
 #include "viewport.h"
 
+#ifdef TOOLS_ENABLED
+#include "editor/editor_node.h"
+#include "editor/editor_string_names.h"
+#endif // TOOLS_ENABLED
+
 #include <stdint.h>
 
 int Node::orphan_node_count = 0;
@@ -2078,7 +2083,7 @@ void Node::set_unique_name_in_owner(bool p_enabled) {
 		_acquire_unique_name_in_owner();
 	}
 
-	update_configuration_warnings();
+	update_configuration_info();
 }
 
 bool Node::is_unique_name_in_owner() const {
@@ -3305,6 +3310,7 @@ void Node::clear_internal_tree_resource_paths() {
 	}
 }
 
+#ifndef DISABLE_DEPRECATED
 PackedStringArray Node::get_configuration_warnings() const {
 	ERR_THREAD_GUARD_V(PackedStringArray());
 	PackedStringArray ret;
@@ -3325,6 +3331,34 @@ void Node::update_configuration_warnings() {
 	}
 	if (get_tree()->get_edited_scene_root() && (get_tree()->get_edited_scene_root() == this || get_tree()->get_edited_scene_root()->is_ancestor_of(this))) {
 		get_tree()->emit_signal(SceneStringNames::get_singleton()->node_configuration_warning_changed, this);
+		if (Engine::get_singleton()->is_editor_hint()) {
+			EditorNode::get_singleton()->emit_signal(EditorStringNames::get_singleton()->configuration_info_changed, this);
+		}
+	}
+#endif
+}
+#endif // DISABLE_DEPRECATED
+
+Array Node::get_configuration_info() const {
+	ERR_THREAD_GUARD_V(Array());
+	Array ret;
+
+	Array info;
+	if (GDVIRTUAL_CALL(_get_configuration_info, info)) {
+		ret.append_array(info);
+	}
+
+	return ret;
+}
+
+void Node::update_configuration_info() {
+	ERR_THREAD_GUARD
+#ifdef TOOLS_ENABLED
+	if (!is_inside_tree()) {
+		return;
+	}
+	if (get_tree()->is_node_being_edited(this)) {
+		EditorNode::get_singleton()->emit_signal(EditorStringNames::get_singleton()->configuration_info_changed, this);
 	}
 #endif
 }
@@ -3652,7 +3686,10 @@ void Node::_bind_methods() {
 		ClassDB::bind_vararg_method(METHOD_FLAGS_DEFAULT, "rpc_id", &Node::_rpc_id_bind, mi);
 	}
 
+#ifndef DISABLE_DEPRECATED
 	ClassDB::bind_method(D_METHOD("update_configuration_warnings"), &Node::update_configuration_warnings);
+#endif
+	ClassDB::bind_method(D_METHOD("update_configuration_info"), &Node::update_configuration_info);
 
 	{
 		MethodInfo mi;
@@ -3793,7 +3830,10 @@ void Node::_bind_methods() {
 	GDVIRTUAL_BIND(_enter_tree);
 	GDVIRTUAL_BIND(_exit_tree);
 	GDVIRTUAL_BIND(_ready);
+#ifndef DISABLE_DEPRECATED
 	GDVIRTUAL_BIND(_get_configuration_warnings);
+#endif
+	GDVIRTUAL_BIND(_get_configuration_info);
 	GDVIRTUAL_BIND(_input, "event");
 	GDVIRTUAL_BIND(_shortcut_input, "event");
 	GDVIRTUAL_BIND(_unhandled_input, "event");

@@ -258,8 +258,8 @@ void SubViewportContainer::remove_child_notify(Node *p_child) {
 	}
 }
 
-PackedStringArray SubViewportContainer::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array SubViewportContainer::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	bool has_viewport = false;
 	for (int i = 0; i < get_child_count(); i++) {
@@ -269,11 +269,11 @@ PackedStringArray SubViewportContainer::get_configuration_warnings() const {
 		}
 	}
 	if (!has_viewport) {
-		warnings.push_back(RTR("This node doesn't have a SubViewport as child, so it can't display its intended content.\nConsider adding a SubViewport as a child to provide something displayable."));
+		CONFIG_WARNING(RTR("This node doesn't have a SubViewport as child, so it can't display its intended content.\nConsider adding a SubViewport as a child to provide something displayable."));
 	}
 
 	if (get_default_cursor_shape() != Control::CURSOR_ARROW) {
-		warnings.push_back(RTR("The default mouse cursor shape of SubViewportContainer has no effect.\nConsider leaving it at its initial value `CURSOR_ARROW`."));
+		CONFIG_WARNING(RTR("The default mouse cursor shape of SubViewportContainer has no effect.\nConsider leaving it at its initial value `CURSOR_ARROW`."));
 	}
 
 	return warnings;

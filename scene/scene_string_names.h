@@ -200,7 +200,9 @@ public:
 
 	StringName _default;
 
+#ifndef DISABLE_DEPRECATED
 	StringName node_configuration_warning_changed;
+#endif
 
 	StringName output;
 

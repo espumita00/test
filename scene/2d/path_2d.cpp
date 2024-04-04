@@ -287,12 +287,12 @@ void PathFollow2D::_validate_property(PropertyInfo &p_property) const {
 	}
 }
 
-PackedStringArray PathFollow2D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array PathFollow2D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (is_visible_in_tree() && is_inside_tree()) {
 		if (!Object::cast_to<Path2D>(get_parent())) {
-			warnings.push_back(RTR("PathFollow2D only works when set as a child of a Path2D node."));
+			CONFIG_WARNING(RTR("PathFollow2D only works when set as a child of a Path2D node."));
 		}
 	}
 

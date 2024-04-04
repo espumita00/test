@@ -262,15 +262,15 @@ int LightOccluder2D::get_occluder_light_mask() const {
 	return mask;
 }
 
-PackedStringArray LightOccluder2D::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array LightOccluder2D::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (!occluder_polygon.is_valid()) {
-		warnings.push_back(RTR("An occluder polygon must be set (or drawn) for this occluder to take effect."));
+		CONFIG_WARNING(RTR("An occluder polygon must be set (or drawn) for this occluder to take effect."));
 	}
 
 	if (occluder_polygon.is_valid() && occluder_polygon->get_polygon().size() == 0) {
-		warnings.push_back(RTR("The occluder polygon for this occluder is empty. Please draw a polygon."));
+		CONFIG_WARNING(RTR("The occluder polygon for this occluder is empty. Please draw a polygon."));
 	}
 
 	return warnings;

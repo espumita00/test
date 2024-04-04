@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  range.h                                                               */
+/*  editor_configuration_info.h                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,85 +28,27 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RANGE_H
-#define RANGE_H
+#ifndef EDITOR_CONFIGURATION_INFO_H
+#define EDITOR_CONFIGURATION_INFO_H
 
-#include "scene/gui/control.h"
+#include "core/object/ref_counted.h"
+#include "core/string/ustring.h"
 
-class Range : public Control {
-	GDCLASS(Range, Control);
-
-	struct Shared {
-		double val = 0.0;
-		double min = 0.0;
-		double max = 100.0;
-		double step = 1.0;
-		double page = 0.0;
-		bool exp_ratio = false;
-		bool allow_greater = false;
-		bool allow_lesser = false;
-		HashSet<Range *> owners;
-		void emit_value_changed();
-		void emit_changed(const char *p_what = "");
-		void redraw_owners();
-	};
-
-	Shared *shared = nullptr;
-
-	void _ref_shared(Shared *p_shared);
-	void _unref_shared();
-
-	void _share(Node *p_range);
-
-	void _value_changed_notify();
-	void _changed_notify(const char *p_what = "");
-	void _set_value_no_signal(double p_val);
-
-protected:
-	virtual void _value_changed(double p_value);
-	void _notify_shared_value_changed() { shared->emit_value_changed(); };
-
-	static void _bind_methods();
-
-	bool _rounded_values = false;
-
-	GDVIRTUAL1(_value_changed, double)
-
+class EditorConfigurationInfo {
 public:
-	void set_value(double p_val);
-	void set_value_no_signal(double p_val);
-	void set_min(double p_min);
-	void set_max(double p_max);
-	void set_step(double p_step);
-	void set_page(double p_page);
-	void set_as_ratio(double p_value);
+	EditorConfigurationInfo() {}
 
-	double get_value() const;
-	double get_min() const;
-	double get_max() const;
-	double get_step() const;
-	double get_page() const;
-	double get_as_ratio() const;
+	static Array get_configuration_info_dicts(Object *p_object);
+	static String get_max_severity(const Array &p_config_info_dicts);
+	static String get_severity_icon(const String &p_severity);
 
-	void set_use_rounded_values(bool p_enable);
-	bool is_using_rounded_values() const;
+	static Dictionary convert_string_to_dict(const String &p_config_info_string);
+	static Array filter_dict_list_for_property(const Array &p_config_info_dicts, const String &p_property_name);
 
-	void set_exp_ratio(bool p_enable);
-	bool is_ratio_exp() const;
+	static String format_dict_list_as_string(const Array &p_config_info_dicts, bool p_wrap_lines, bool p_prefix_property_name);
 
-	void set_allow_greater(bool p_allow);
-	bool is_greater_allowed() const;
-
-	void set_allow_lesser(bool p_allow);
-	bool is_lesser_allowed() const;
-
-	void share(Range *p_range);
-	void unshare();
-
-	Array get_configuration_info() const override;
-
-	Range();
-	~Range();
+private:
+	static Array convert_mixed_array_to_dict(const Array &p_mixed_config_infos);
 };
 
-#endif // RANGE_H
+#endif // EDITOR_CONFIGURATION_INFO_H

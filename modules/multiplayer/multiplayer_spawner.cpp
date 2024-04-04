@@ -87,11 +87,13 @@ void MultiplayerSpawner::_get_property_list(List<PropertyInfo> *p_list) const {
 }
 #endif
 
-PackedStringArray MultiplayerSpawner::get_configuration_warnings() const {
-	PackedStringArray warnings = Node::get_configuration_warnings();
+Array MultiplayerSpawner::get_configuration_info() const {
+	Array warnings = Node::get_configuration_info();
 
 	if (spawn_path.is_empty() || !has_node(spawn_path)) {
-		warnings.push_back(RTR("A valid NodePath must be set in the \"Spawn Path\" property in order for MultiplayerSpawner to be able to spawn Nodes."));
+		CONFIG_WARNING_P(
+				RTR("A valid NodePath must be set in order for MultiplayerSpawner to be able to spawn Nodes."),
+				"spawn_path");
 	}
 	return warnings;
 }
