@@ -2140,11 +2140,8 @@ void Node::set_exposed_in_owner(bool p_enabled) {
 		return;
 	}
 	data.exposed_in_owner = p_enabled;
-	if (data.exposed_in_owner && data.owner != nullptr) {
-		data.unique_name_in_owner = p_enabled;
-		if (!data.unique_name_in_owner) {
-			_acquire_unique_name_in_owner();
-		}
+	if(p_enabled) {
+		set_unique_name_in_owner(p_enabled);
 	}
 
 	update_configuration_warnings();
