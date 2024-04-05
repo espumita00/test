@@ -494,7 +494,7 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 		} break;
 		case TOOL_CUT:
 		case TOOL_COPY: {
-			if (!edited_scene || (p_tool == TOOL_CUT && !_validate_no_foreign())) {
+			if (!edited_scene || !_validate_no_foreign()) {
 				break;
 			}
 
@@ -707,6 +707,10 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 			}
 
 			if (!edited_scene) {
+				break;
+			}
+
+			if (!_validate_no_foreign()) {
 				break;
 			}
 
@@ -2073,7 +2077,7 @@ bool SceneTreeDock::_validate_no_foreign() {
 	List<Node *> selection = editor_selection->get_selected_node_list();
 
 	for (Node *E : selection) {
-		if (E != edited_scene && E->get_owner() != edited_scene) {
+		if (E != edited_scene && E->get_owner() != edited_scene && !E->is_child_of_exposed_node()) {
 			accept->set_text(TTR("Can't operate on nodes from a foreign scene!"));
 			accept->popup_centered();
 			return false;
@@ -2483,7 +2487,7 @@ void SceneTreeDock::_toggle_editable_children(Node *p_node) {
 		Array name_array;
 
 		for (Node *owned_node : owned) {
-			if (owned_node != p_node && owned_node != edited_scene && owned_node->get_owner() == edited_scene && owned_node->get_parent()->get_owner() != edited_scene) {
+			if (owned_node != p_node && owned_node != edited_scene && owned_node->get_owner() == edited_scene && owned_node->get_parent()->get_owner() != edited_scene && owned_node->is_exposed_in_owner()) {
 				owned_nodes_array.push_back(owned_node);
 				paths_array.push_back(p_node->get_path_to(owned_node->get_parent()));
 				name_array.push_back(owned_node->get_name());
