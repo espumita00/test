@@ -1294,7 +1294,7 @@ void SceneTreeDock::_tool_selected(int p_tool, bool p_confirm_override) {
 					}
 					undo_redo->add_do_method(node, "set_unique_name_in_owner", false);
 					undo_redo->add_undo_method(node, "set_unique_name_in_owner", true);
-					if(node->is_exposed_in_owner()) {
+					if (node->is_exposed_in_owner()) {
 						undo_redo->add_undo_method(node, "set_exposed_in_owner", true);
 					}
 				}
