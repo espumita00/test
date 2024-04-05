@@ -2104,9 +2104,9 @@ void Node::_acquire_unique_name_in_owner() {
 		WARN_PRINT(vformat("Setting node name '%s' to be unique within scene for '%s', but it's already claimed by '%s'.\n'%s' is no longer set as having a unique name.",
 				get_name(), is_inside_tree() ? get_path() : data.owner->get_path_to(this), which_path, which_path));
 		data.unique_name_in_owner = false;
-		if(data.exposed_in_owner) {
+		if (data.exposed_in_owner) {
 			WARN_PRINT(vformat("Setting node name '%s' to be exposed within scene for '%s', but it's already claimed by '%s'.\n'%s' is no longer set as being exposed.",
-				get_name(), is_inside_tree() ? get_path() : data.owner->get_path_to(this), which_path, which_path));
+					get_name(), is_inside_tree() ? get_path() : data.owner->get_path_to(this), which_path, which_path));
 			data.exposed_in_owner = false;
 		}
 		return;
@@ -2145,7 +2145,7 @@ void Node::set_exposed_in_owner(bool p_enabled) {
 		return;
 	}
 	data.exposed_in_owner = p_enabled;
-	if(p_enabled) {
+	if (p_enabled) {
 		set_unique_name_in_owner(p_enabled);
 	}
 

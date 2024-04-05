@@ -467,7 +467,7 @@ void SceneTreeEditor::_add_nodes(Node *p_node, TreeItem *p_parent) {
 		bool valid = false;
 		for (const StringName &E : valid_types) {
 			if (p_node->is_class(E) ||
-				EditorNode::get_singleton()->is_object_of_custom_type(p_node, E)) {
+					EditorNode::get_singleton()->is_object_of_custom_type(p_node, E)) {
 				valid = true;
 				break;
 			} else {
@@ -677,7 +677,7 @@ bool SceneTreeEditor::_update_filter(TreeItem *p_parent, bool p_scroll_to_select
 
 		for (const StringName &E : valid_types) {
 			if (n->is_class(E) ||
-				EditorNode::get_singleton()->is_object_of_custom_type(n, E)) {
+					EditorNode::get_singleton()->is_object_of_custom_type(n, E)) {
 				selectable = true;
 				break;
 			} else {
@@ -930,8 +930,7 @@ void SceneTreeEditor::_notification(int p_what) {
 			tree->connect("item_collapsed", callable_mp(this, &SceneTreeEditor::_cell_collapsed));
 
 			_update_tree();
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
 			get_tree()->disconnect("tree_changed", callable_mp(this, &SceneTreeEditor::_tree_changed));
@@ -940,15 +939,13 @@ void SceneTreeEditor::_notification(int p_what) {
 			get_tree()->disconnect("node_renamed", callable_mp(this, &SceneTreeEditor::_node_renamed));
 			tree->disconnect("item_collapsed", callable_mp(this, &SceneTreeEditor::_cell_collapsed));
 			get_tree()->disconnect("node_configuration_warning_changed", callable_mp(this, &SceneTreeEditor::_warning_changed));
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_THEME_CHANGED: {
 			tree->add_theme_constant_override("icon_max_width", get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor)));
 
 			_update_tree();
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_VISIBILITY_CHANGED: {
 			if (is_visible()) {
@@ -969,8 +966,7 @@ void SceneTreeEditor::_notification(int p_what) {
 					callable_mp(tree, &Tree::scroll_to_item).call_deferred(item, true);
 				}
 			}
-		}
-		break;
+		} break;
 	}
 }
 
@@ -1687,13 +1683,11 @@ void SceneTreeDialog::_notification(int p_what) {
 				// Select the search bar by default.
 				callable_mp((Control *)filter, &Control::grab_focus).call_deferred();
 			}
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_ENTER_TREE: {
 			connect("confirmed", callable_mp(this, &SceneTreeDialog::_select));
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_THEME_CHANGED: {
 			filter->set_right_icon(get_editor_theme_icon(SNAME("Search")));
@@ -1701,13 +1695,11 @@ void SceneTreeDialog::_notification(int p_what) {
 				trect->set_custom_minimum_size(Vector2(get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor)), 0));
 				trect->set_texture(trect->get_meta("icon"));
 			}
-		}
-		break;
+		} break;
 
 		case NOTIFICATION_EXIT_TREE: {
 			disconnect("confirmed", callable_mp(this, &SceneTreeDialog::_select));
-		}
-		break;
+		} break;
 	}
 }
 
