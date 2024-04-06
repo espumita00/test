@@ -315,8 +315,7 @@ Node *SceneState::instantiate(GenEditState p_edit_state) const {
 
 					if (nprops[j].name & FLAG_PATH_PROPERTY_IS_NODE) {
 						if (node->get_scene_instance_load_placeholder()) {
-							// nodes might not exist yet, so we skip deffering nodepath resolution to placeholder instantiation
-							// this does not solve arrays problems, and creates issues with external node referneces
+							// we cannot know if the referenced nodes exist yet, so instead of defering, we write the nodepaths directly
 
 							uint32_t name_idx = nprops[j].name & (FLAG_PATH_PROPERTY_IS_NODE - 1);
 							ERR_FAIL_UNSIGNED_INDEX_V(name_idx, (uint32_t)sname_count, nullptr);
@@ -369,7 +368,7 @@ Node *SceneState::instantiate(GenEditState p_edit_state) const {
 							value = setup_resources_in_array(set_array, n, resources_local_to_sub_scene, node, snames[nprops[j].name], resources_local_to_scene, i, ret_nodes, p_edit_state);
 
 							bool is_get_valid = false;
-							Variant get_value = node->get(snames[nprops[j].name], &is_get_valid); // this will always be false for InstancePlaceholders because set has not been called, resulting in un-typed arrays
+							Variant get_value = node->get(snames[nprops[j].name], &is_get_valid);
 
 							if (is_get_valid && get_value.get_type() == Variant::ARRAY) {
 								Array get_array = get_value;
