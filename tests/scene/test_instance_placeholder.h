@@ -53,6 +53,12 @@ protected:
 		ClassDB::bind_method(D_METHOD("get_reference_property"), &_TestInstancePlaceholderNode::get_reference_property);
 
 		ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "reference_property", PROPERTY_HINT_NODE_TYPE), "set_reference_property", "get_reference_property");
+
+		ClassDB::bind_method(D_METHOD("set_reference_array_property", "reference_array_property"), &_TestInstancePlaceholderNode::set_reference_array_property);
+		ClassDB::bind_method(D_METHOD("get_reference_array_property"), &_TestInstancePlaceholderNode::get_reference_array_property);
+
+		// subType/subTypeHint:nextSubtype
+		ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "reference_array_property", PROPERTY_HINT_TYPE_STRING, "24/34:Node"), "set_reference_array_property", "get_reference_array_property");
 	}
 
 public:
@@ -74,6 +80,16 @@ public:
 
 	Variant get_reference_property() const {
 		return reference_property;
+	}
+
+	Variant reference_array_property;
+
+	void set_reference_array_property(const Variant &p_array) {
+		reference_array_property = p_array;
+	}
+
+	Variant get_reference_array_property() const {
+		return reference_array_property;
 	}
 };
 
@@ -139,29 +155,51 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with no
 	}
 
 	SUBCASE("with node-array value") {
-		// InstancePlaceholder *ip = memnew(InstancePlaceholder);
-		// ip->set_name("TestScene");
-		// Node *root = memnew(Node);
-		// SceneTree::get_singleton()->get_root()->add_child(root);
+		InstancePlaceholder *ip = memnew(InstancePlaceholder);
+		ip->set_name("TestScene");
+		Node *root = memnew(Node);
+		SceneTree::get_singleton()->get_root()->add_child(root);
 
-		// root->add_child(ip);
-		// // Create a scene to instance.
-		// Node *scene = memnew(Node);
-		// scene->set_process_priority(12);
+		root->add_child(ip);
+		// Create a scene to instance.
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		Node *referenced1 = memnew(Node);
+		Node *referenced2 = memnew(Node);
+		scene->add_child(referenced1);
+		scene->add_child(referenced2);
+		referenced1->set_owner(scene);
+		referenced2->set_owner(scene);
+		Array node_array;
+		node_array.set_typed(Variant::OBJECT, "Node", Variant());
+		node_array.push_back(referenced1);
+		node_array.push_back(referenced2);
+		scene->set_reference_array_property(node_array);
+		// Pack the scene.
+		PackedScene *packed_scene = memnew(PackedScene);
+		const Error err = packed_scene->pack(scene);
+		REQUIRE(err == OK);
 
-		// // Pack the scene.
-		// PackedScene *packed_scene = memnew(PackedScene);
-		// const Error err = packed_scene->pack(scene);
-		// REQUIRE(err == OK);
+		// Instantiate the scene.
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
+		CHECK(created->get_name() == "TestScene");
+		CHECK(created->get_child_count() == 2);
+		Array created_array = created->get_reference_array_property();
+		REQUIRE(created_array.size() == node_array.size());
+		REQUIRE(created_array.size() == created->get_child_count());
 
-		// // Instantiate the scene.
-		// Node *created = ip->create_instance(true, packed_scene);
-		// REQUIRE(created != nullptr);
-		// CHECK(created->get_name() == "TestScene");
-		// CHECK(created->get_process_priority() == 12);
-
-		// root->queue_free();
-		// memdelete(scene);
+		// Iterate over all nodes, since the ordering is not guaranteed.
+		for (int i = 0; i < node_array.size(); i++) {
+			bool node_found = false;
+			for (int j = 0; j < created->get_child_count(); j++) {
+				if (created_array[i].identity_compare(created->get_child(j, true))) {
+					node_found = true;
+				}
+			}
+			CHECK(node_found);
+		}
+		root->queue_free();
+		memdelete(scene);
 	}
 }
 
@@ -227,28 +265,70 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with ov
 	}
 
 	SUBCASE("with node-array value") {
-		// InstancePlaceholder *ip = memnew(InstancePlaceholder);
-		// Node *root = memnew(Node);
-		// SceneTree::get_singleton()->get_root()->add_child(root);
+		InstancePlaceholder *ip = memnew(InstancePlaceholder);
+		ip->set_name("TestScene");
+		Node *root = memnew(Node);
+		SceneTree::get_singleton()->get_root()->add_child(root);
 
-		// root->add_child(ip);
-		// ip->set_name("TestScene");
-		// ip->set("text", "override");
-		// // Create a scene to pack.
-		// Label *scene = memnew(Label);
-		// scene->set_text("value");
+		Node *override1 = memnew(Node);
+		Node *override2 = memnew(Node);
+		Node *override3 = memnew(Node);
+		root->add_child(ip);
+		root->add_child(override1);
+		root->add_child(override2);
+		root->add_child(override3);
 
-		// // Pack the scene.
-		// PackedScene *packed_scene = memnew(PackedScene);
-		// packed_scene->pack(scene);
+		Array override_node_array;
+		override_node_array.set_typed(Variant::OBJECT, "Node", Variant());
+		override_node_array.push_back(override1);
+		override_node_array.push_back(override2);
+		override_node_array.push_back(override3);
 
-		// // Instantiate the scene.
-		// Label *created = Object::cast_to<Label>(ip->create_instance(true, packed_scene));
-		// REQUIRE(created != nullptr);
-		// CHECK(created->get_text() == "override");
+		ip->set("reference_array_property", override_node_array);
 
-		// root->queue_free();
-		// memdelete(scene);
+		// Create a scene to instance.
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		Node *referenced1 = memnew(Node);
+		Node *referenced2 = memnew(Node);
+
+		scene->add_child(referenced1);
+		scene->add_child(referenced2);
+
+		referenced1->set_owner(scene);
+		referenced2->set_owner(scene);
+		Array referenced_array;
+		referenced_array.set_typed(Variant::OBJECT, "Node", Variant());
+		referenced_array.push_back(referenced1);
+		referenced_array.push_back(referenced2);
+
+		scene->set_reference_array_property(referenced_array);
+		// Pack the scene.
+		PackedScene *packed_scene = memnew(PackedScene);
+		const Error err = packed_scene->pack(scene);
+		REQUIRE(err == OK);
+
+		// Instantiate the scene.
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
+		CHECK(created->get_name() == "TestScene");
+		CHECK(created->get_child_count() == 2);
+		Array created_array = created->get_reference_array_property();
+		REQUIRE_FALSE(created_array.size() == referenced_array.size());
+		REQUIRE(created_array.size() == override_node_array.size());
+		REQUIRE_FALSE(created_array.size() == created->get_child_count());
+
+		// Iterate over all nodes, since the ordering is not guaranteed.
+		for (int i = 0; i < override_node_array.size(); i++) {
+			bool node_found = false;
+			for (int j = 0; j < created_array.size(); j++) {
+				if (override_node_array[i].identity_compare(created_array[j])) {
+					node_found = true;
+				}
+			}
+			CHECK(node_found);
+		}
+		root->queue_free();
+		memdelete(scene);
 	}
 }
 
