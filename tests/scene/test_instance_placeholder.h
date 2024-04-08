@@ -57,7 +57,7 @@ protected:
 		ClassDB::bind_method(D_METHOD("set_reference_array_property", "reference_array_property"), &_TestInstancePlaceholderNode::set_reference_array_property);
 		ClassDB::bind_method(D_METHOD("get_reference_array_property"), &_TestInstancePlaceholderNode::get_reference_array_property);
 
-		// subType/subTypeHint:nextSubtype
+		// The hint string value "24/34:Node" is determined from existing PackedScenes with typed Array properties.
 		ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "reference_array_property", PROPERTY_HINT_TYPE_STRING, "24/34:Node"), "set_reference_array_property", "get_reference_array_property");
 	}
 

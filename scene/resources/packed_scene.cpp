@@ -315,7 +315,7 @@ Node *SceneState::instantiate(GenEditState p_edit_state) const {
 
 					if (nprops[j].name & FLAG_PATH_PROPERTY_IS_NODE) {
 						if (node->get_scene_instance_load_placeholder()) {
-							// we cannot know if the referenced nodes exist yet, so instead of defering, we write the nodepaths directly
+							// We cannot know if the referenced nodes exist yet, so instead of deferring, we write the NodePaths directly.
 
 							uint32_t name_idx = nprops[j].name & (FLAG_PATH_PROPERTY_IS_NODE - 1);
 							ERR_FAIL_UNSIGNED_INDEX_V(name_idx, (uint32_t)sname_count, nullptr);
