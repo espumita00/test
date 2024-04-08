@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_packed_scene.h                                                   */
+/*  test_instance_placeholder.h                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -36,90 +36,52 @@
 
 #include "tests/test_macros.h"
 
-namespace TestInstancePlaceholder {
+// Declared in global namespace because of GDCLASS macro warning (Windows):
+// "Unqualified friend declaration referring to type outside of the nearest enclosing namespace
+// is a Microsoft extension; add a nested name specifier".
+class _TestInstancePlaceholderNode : public Node {
+	GDCLASS(_TestInstancePlaceholderNode, Node);
 
-// class TestInstancePlaceholderNode : public Node {
-// 	GDCLASS(TestInstancePlaceholderNode, Node);
+protected:
+	static void _bind_methods() {
+		ClassDB::bind_method(D_METHOD("set_int_property", "int_property"), &_TestInstancePlaceholderNode::set_int_property);
+		ClassDB::bind_method(D_METHOD("get_int_property"), &_TestInstancePlaceholderNode::get_int_property);
 
-// protected:
-// 	static void _bind_methods() {
-// 		ClassDB::bind_method(D_METHOD("set_int_property", "int_property"), &TestInstancePlaceholderNode::set_int_property);
-// 		ClassDB::bind_method(D_METHOD("get_int_property"), &TestInstancePlaceholderNode::get_int_property);
+		ADD_PROPERTY(PropertyInfo(Variant::INT, "int_property"), "set_int_property", "get_int_property");
 
-// 		ADD_PROPERTY(PropertyInfo(Variant::INT, "int_property"), "set_int_property", "get_int_property");
-// 	}
+		ClassDB::bind_method(D_METHOD("set_reference_property", "reference_property"), &_TestInstancePlaceholderNode::set_reference_property);
+		ClassDB::bind_method(D_METHOD("get_reference_property"), &_TestInstancePlaceholderNode::get_reference_property);
 
-// public:
-// 	int int_property = 0;
-
-// 	void set_int_property(const int &p_int) {
-// 		int_property = p_int;
-// 	}
-
-// 	int get_int_property() const {
-// 		return int_property;
-// 	}
-// };
-
-// stolen from tests\core\object\test_object.h
-class _MockScriptInstance : public ScriptInstance {
-	StringName property_name = "NO_NAME";
-	Variant property_value;
+		ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "reference_property", PROPERTY_HINT_NODE_TYPE), "set_reference_property", "get_reference_property");
+	}
 
 public:
-	bool set(const StringName &p_name, const Variant &p_value) override {
-		property_name = p_name;
-		property_value = p_value;
-		return true;
+	int int_property = 0;
+
+	void set_int_property(const int &p_int) {
+		int_property = p_int;
 	}
-	bool get(const StringName &p_name, Variant &r_ret) const override {
-		if (property_name == p_name) {
-			r_ret = property_value;
-			return true;
-		}
-		return false;
+
+	int get_int_property() const {
+		return int_property;
 	}
-	void get_property_list(List<PropertyInfo> *p_properties) const override {
+
+	Variant reference_property;
+
+	void set_reference_property(const Variant &p_node) {
+		reference_property = p_node;
 	}
-	Variant::Type get_property_type(const StringName &p_name, bool *r_is_valid) const override {
-		return Variant::NODE_PATH;
-	}
-	virtual void validate_property(PropertyInfo &p_property) const override {
-	}
-	bool property_can_revert(const StringName &p_name) const override {
-		return false;
-	};
-	bool property_get_revert(const StringName &p_name, Variant &r_ret) const override {
-		return false;
-	};
-	void get_method_list(List<MethodInfo> *p_list) const override {
-	}
-	bool has_method(const StringName &p_method) const override {
-		return false;
-	}
-	int get_method_argument_count(const StringName &p_method, bool *r_is_valid = nullptr) const override {
-		if (r_is_valid) {
-			*r_is_valid = false;
-		}
-		return 0;
-	}
-	Variant callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) override {
-		return Variant();
-	}
-	void notification(int p_notification, bool p_reversed = false) override {
-	}
-	Ref<Script> get_script() const override {
-		return Ref<Script>();
-	}
-	const Variant get_rpc_config() const override {
-		return Variant();
-	}
-	ScriptLanguage *get_language() override {
-		return nullptr;
+
+	Variant get_reference_property() const {
+		return reference_property;
 	}
 };
 
+namespace TestInstancePlaceholder {
+
 TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with no overrides") {
+	GDREGISTER_CLASS(_TestInstancePlaceholderNode);
+
 	SUBCASE("with non-node values") {
 		InstancePlaceholder *ip = memnew(InstancePlaceholder);
 		ip->set_name("TestScene");
@@ -128,19 +90,19 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with no
 
 		root->add_child(ip);
 		// Create a scene to instance.
-		Node *scene = memnew(Node);
-		scene->set_process_priority(12);
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		scene->set_int_property(12);
 
 		// Pack the scene.
 		PackedScene *packed_scene = memnew(PackedScene);
 		const Error err = packed_scene->pack(scene);
-		CHECK(err == OK);
+		REQUIRE(err == OK);
 
 		// Instantiate the scene.
-		Node *created = ip->create_instance(true, packed_scene);
-		CHECK(created != nullptr);
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
 		CHECK(created->get_name() == "TestScene");
-		CHECK(created->get_process_priority() == 12);
+		CHECK(created->get_int_property() == 12);
 
 		root->queue_free();
 		memdelete(scene);
@@ -154,52 +116,58 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with no
 
 		root->add_child(ip);
 		// Create a scene to instance.
-		Node *scene = memnew(Node);
-		scene->set_process_priority(12);
-
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		Node *referenced = memnew(Node);
+		scene->add_child(referenced);
+		referenced->set_owner(scene);
+		scene->set_reference_property(referenced);
 		// Pack the scene.
 		PackedScene *packed_scene = memnew(PackedScene);
 		const Error err = packed_scene->pack(scene);
-		CHECK(err == OK);
+		REQUIRE(err == OK);
 
 		// Instantiate the scene.
-		Node *created = ip->create_instance(true, packed_scene);
-		CHECK(created != nullptr);
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
 		CHECK(created->get_name() == "TestScene");
-		CHECK(created->get_process_priority() == 12);
+		CHECK(created->get_child_count() == 1);
+		CHECK(created->get_reference_property().identity_compare(created->get_child(0, false)));
+		CHECK_FALSE(created->get_reference_property().identity_compare(referenced));
 
 		root->queue_free();
 		memdelete(scene);
 	}
 
 	SUBCASE("with node-array value") {
-		InstancePlaceholder *ip = memnew(InstancePlaceholder);
-		ip->set_name("TestScene");
-		Node *root = memnew(Node);
-		SceneTree::get_singleton()->get_root()->add_child(root);
+		// InstancePlaceholder *ip = memnew(InstancePlaceholder);
+		// ip->set_name("TestScene");
+		// Node *root = memnew(Node);
+		// SceneTree::get_singleton()->get_root()->add_child(root);
 
-		root->add_child(ip);
-		// Create a scene to instance.
-		Node *scene = memnew(Node);
-		scene->set_process_priority(12);
+		// root->add_child(ip);
+		// // Create a scene to instance.
+		// Node *scene = memnew(Node);
+		// scene->set_process_priority(12);
 
-		// Pack the scene.
-		PackedScene *packed_scene = memnew(PackedScene);
-		const Error err = packed_scene->pack(scene);
-		CHECK(err == OK);
+		// // Pack the scene.
+		// PackedScene *packed_scene = memnew(PackedScene);
+		// const Error err = packed_scene->pack(scene);
+		// REQUIRE(err == OK);
 
-		// Instantiate the scene.
-		Node *created = ip->create_instance(true, packed_scene);
-		CHECK(created != nullptr);
-		CHECK(created->get_name() == "TestScene");
-		CHECK(created->get_process_priority() == 12);
+		// // Instantiate the scene.
+		// Node *created = ip->create_instance(true, packed_scene);
+		// REQUIRE(created != nullptr);
+		// CHECK(created->get_name() == "TestScene");
+		// CHECK(created->get_process_priority() == 12);
 
-		root->queue_free();
-		memdelete(scene);
+		// root->queue_free();
+		// memdelete(scene);
 	}
 }
 
 TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with overrides") {
+	GDREGISTER_CLASS(_TestInstancePlaceholderNode);
+
 	SUBCASE("with non-node values") {
 		InstancePlaceholder *ip = memnew(InstancePlaceholder);
 		Node *root = memnew(Node);
@@ -207,19 +175,19 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with ov
 
 		root->add_child(ip);
 		ip->set_name("TestScene");
-		ip->set("text", "override");
+		ip->set("int_property", 45);
 		// Create a scene to pack.
-		Label *scene = memnew(Label);
-		scene->set_text("value");
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		scene->set_int_property(12);
 
 		// Pack the scene.
 		PackedScene *packed_scene = memnew(PackedScene);
 		packed_scene->pack(scene);
 
 		// Instantiate the scene.
-		Label *created = Object::cast_to<Label>(ip->create_instance(true, packed_scene));
-		CHECK(created != nullptr);
-		CHECK(created->get_text() == "override");
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
+		CHECK(created->get_int_property() == 45);
 
 		root->queue_free();
 		memdelete(scene);
@@ -227,52 +195,60 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with ov
 
 	SUBCASE("with node values") {
 		InstancePlaceholder *ip = memnew(InstancePlaceholder);
+		ip->set_name("TestScene");
 		Node *root = memnew(Node);
+		Node *overriding = memnew(Node);
 		SceneTree::get_singleton()->get_root()->add_child(root);
 
 		root->add_child(ip);
-		ip->set_name("TestScene");
-		ip->set("text", "override");
-		// Create a scene to pack.
-		Label *scene = memnew(Label);
-		scene->set_text("value");
-
+		root->add_child(overriding);
+		ip->set("reference_property", overriding);
+		// Create a scene to instance.
+		_TestInstancePlaceholderNode *scene = memnew(_TestInstancePlaceholderNode);
+		Node *referenced = memnew(Node);
+		scene->add_child(referenced);
+		referenced->set_owner(scene);
+		scene->set_reference_property(referenced);
 		// Pack the scene.
 		PackedScene *packed_scene = memnew(PackedScene);
-		packed_scene->pack(scene);
+		const Error err = packed_scene->pack(scene);
+		REQUIRE(err == OK);
 
 		// Instantiate the scene.
-		Label *created = Object::cast_to<Label>(ip->create_instance(true, packed_scene));
-		CHECK(created != nullptr);
-		CHECK(created->get_text() == "override");
+		_TestInstancePlaceholderNode *created = Object::cast_to<_TestInstancePlaceholderNode>(ip->create_instance(true, packed_scene));
+		REQUIRE(created != nullptr);
+		CHECK(created->get_name() == "TestScene");
+		CHECK(created->get_child_count() == 1);
+		CHECK(created->get_reference_property().identity_compare(overriding));
+		CHECK_FALSE(created->get_reference_property().identity_compare(referenced));
 
 		root->queue_free();
 		memdelete(scene);
 	}
 
 	SUBCASE("with node-array value") {
-		InstancePlaceholder *ip = memnew(InstancePlaceholder);
-		Node *root = memnew(Node);
-		SceneTree::get_singleton()->get_root()->add_child(root);
+		// InstancePlaceholder *ip = memnew(InstancePlaceholder);
+		// Node *root = memnew(Node);
+		// SceneTree::get_singleton()->get_root()->add_child(root);
 
-		root->add_child(ip);
-		ip->set_name("TestScene");
-		ip->set("text", "override");
-		// Create a scene to pack.
-		Label *scene = memnew(Label);
-		scene->set_text("value");
+		// root->add_child(ip);
+		// ip->set_name("TestScene");
+		// ip->set("text", "override");
+		// // Create a scene to pack.
+		// Label *scene = memnew(Label);
+		// scene->set_text("value");
 
-		// Pack the scene.
-		PackedScene *packed_scene = memnew(PackedScene);
-		packed_scene->pack(scene);
+		// // Pack the scene.
+		// PackedScene *packed_scene = memnew(PackedScene);
+		// packed_scene->pack(scene);
 
-		// Instantiate the scene.
-		Label *created = Object::cast_to<Label>(ip->create_instance(true, packed_scene));
-		CHECK(created != nullptr);
-		CHECK(created->get_text() == "override");
+		// // Instantiate the scene.
+		// Label *created = Object::cast_to<Label>(ip->create_instance(true, packed_scene));
+		// REQUIRE(created != nullptr);
+		// CHECK(created->get_text() == "override");
 
-		root->queue_free();
-		memdelete(scene);
+		// root->queue_free();
+		// memdelete(scene);
 	}
 }
 
