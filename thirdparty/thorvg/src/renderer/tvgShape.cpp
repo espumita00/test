@@ -26,7 +26,7 @@
 /************************************************************************/
 /* Internal Class Implementation                                        */
 /************************************************************************/
-constexpr auto PATH_KAPPA = 0.552284f;
+
 
 /************************************************************************/
 /* External Class Implementation                                        */
@@ -164,7 +164,7 @@ Result Shape::appendArc(float cx, float cy, float radius, float startAngle, floa
     }
 
     for (int i = 0; i < nCurves; ++i) {
-        auto endAngle = startAngle + ((i != nCurves - 1) ? float(M_PI_2) * sweepSign : fract);
+        auto endAngle = startAngle + ((i != nCurves - 1) ? MATH_PI2 * sweepSign : fract);
         Point end = {radius * cosf(endAngle), radius * sinf(endAngle)};
 
         //variables needed to calculate bezier control points
@@ -215,9 +215,7 @@ Result Shape::appendRect(float x, float y, float w, float h, float rx, float ry)
         pImpl->lineTo(x + w, y + h);
         pImpl->lineTo(x, y + h);
         pImpl->close();
-    //circle
-    } else if (mathEqual(rx, halfW) && mathEqual(ry, halfH)) {
-        return appendCircle(x + (w * 0.5f), y + (h * 0.5f), rx, ry);
+    //rounded rectangle or circle
     } else {
         auto hrx = rx * PATH_KAPPA;
         auto hry = ry * PATH_KAPPA;
