@@ -1,10 +1,9 @@
-"""Functions used to generate scu build source files during build time
-"""
+"""Functions used to generate scu build source files during build time"""
 
-import glob, os
+import glob
+import os
 import math
 from pathlib import Path
-from os.path import normpath, basename
 
 base_folder_path = str(Path(__file__).parent) + "/"
 base_folder_only = os.path.basename(os.path.normpath(base_folder_path))
@@ -24,7 +23,7 @@ def clear_out_stale_files(output_folder, extension, fresh_files):
 
     for file in glob.glob(output_folder + "/*." + extension):
         file = Path(file)
-        if not file in fresh_files:
+        if file not in fresh_files:
             # print("removed stale file: " + str(file))
             os.remove(file)
 
@@ -55,7 +54,7 @@ def find_files_in_folder(folder, sub_folder, include_list, extension, sought_exc
 
         li = '#include "' + folder + "/" + sub_folder_slashed + file + '"'
 
-        if not simple_name in sought_exceptions:
+        if simple_name not in sought_exceptions:
             include_list.append(li)
         else:
             found_exceptions.append(li)
@@ -77,7 +76,7 @@ def write_output_file(file_count, include_list, start_line, end_line, output_fol
 
     file_text = ""
 
-    for l in range(start_line, end_line):
+    for l in range(start_line, end_line):  # noqa: E741
         if l < len(include_list):
             line = include_list[l]
             li = line + "\n"
@@ -220,7 +219,6 @@ def process_folder(folders, sought_exceptions=[], includes_per_scu=0, extension=
     lines_per_file = max(lines_per_file, 1)
 
     start_line = 0
-    file_number = 0
 
     # These do not vary throughout the loop
     output_folder = abs_main_folder + "/scu/"

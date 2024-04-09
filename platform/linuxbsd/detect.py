@@ -491,7 +491,7 @@ def configure(env: "SConsEnvironment"):
     if platform.libc_ver()[0] != "glibc":
         # The default crash handler depends on glibc, so if the host uses
         # a different libc (BSD libc, musl), fall back to libexecinfo.
-        if not "execinfo" in env:
+        if "execinfo" not in env:
             print("Note: Using `execinfo=yes` for the crash handler as required on platforms where glibc is missing.")
             env["execinfo"] = True
 
