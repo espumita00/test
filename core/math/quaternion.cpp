@@ -293,16 +293,34 @@ real_t Quaternion::get_angle() const {
 }
 
 Quaternion Quaternion::get_twist(const Vector3 &p_axis) const {
-#ifdef MATH_CHECKS
-	ERR_FAIL_COND_V_MSG(!is_normalized(), Quaternion(), "The quaternion must be normalized.");
-	ERR_FAIL_COND_V_MSG(!p_axis.is_normalized(), Quaternion(), "The axis vector must be normalized.");
-#endif
 	Vector3 const p = Vector3(x, y, z).dot(p_axis) * p_axis;
 	return Quaternion(p.x, p.y, p.z, w).normalized();
 }
 
 Quaternion Quaternion::get_swing(const Vector3 &p_axis) const {
 	return -(inverse() * get_twist(p_axis));
+}
+
+Quaternion Quaternion::get_rotation_around(const Vector3 &p_axis) const {
+	// Check if quaternion and axis is normalized, otherwise return identity quaternion.
+	if (!p_axis.is_normalized()) {
+		ERR_FAIL_V_MSG(Quaternion(), "The axis vector is not normalized");
+	} else if (!is_normalized()) {
+		ERR_FAIL_V_MSG(Quaternion(), "The quaternion is not normalized");
+	}
+    // Ensure we're working with a non-negative quaternion.
+    Quaternion corrected_rotation = w < real_t(0.0) ? -(*this) : *this;
+    // Projection of rotation onto the axis.
+    Vector3 p = p_axis * (corrected_rotation.x * p_axis.x + corrected_rotation.y * p_axis.y + corrected_rotation.z * p_axis.z);
+    Quaternion twist(p.x, p.y, p.z, corrected_rotation.w);
+    twist.normalize();
+    
+    // Ensure that twist quaternion's direction aligns with the provided axis.
+    real_t d = Vector3(twist.x, twist.y, twist.z).dot(p_axis);
+    if (d < real_t(0.0)) {
+        twist = -twist; // Flip twist to ensure it's along the provided axis.
+    }
+	return twist;
 }
 
 Quaternion::Quaternion(const Vector3 &p_axis, real_t p_angle) {

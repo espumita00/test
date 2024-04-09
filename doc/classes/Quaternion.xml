@@ -134,6 +134,14 @@
 				[b]Note:[/b] This is probably the one you want to use if you want to get the rotation around an axis.
 			</description>
 		</method>
+		<method name="get_rotation_around" qualifiers="const">
+			<return type="Quaternion" />
+			<param index="0" name="axis" type="Vector3" />
+			<description>
+				Returns the quaternion's rotation [b]around[/b] the normalized axis vector. The quaternion and the axis vector must be normalized, otherwise it returns the identity quaternion.
+				This method is related to the swing-twist decomposition, but provide some safe-check and a proper name.
+			</description>
+		</method>
 		<method name="inverse" qualifiers="const">
 			<return type="Quaternion" />
 			<description>
