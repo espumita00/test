@@ -332,6 +332,82 @@ TEST_CASE("[SceneTree][InstancePlaceholder] Instantiate from placeholder with ov
 	}
 }
 
+TEST_CASE("[SceneTree][InstancePlaceholder] Instance a PackedScene containing an InstancePlaceholder with no overrides") {
+	GDREGISTER_CLASS(_TestInstancePlaceholderNode);
+
+	// Create the internal scene.
+	_TestInstancePlaceholderNode *internal = memnew(_TestInstancePlaceholderNode);
+	internal->set_name("InternalNode");
+	Node *referenced = memnew(Node);
+	referenced->set_name("OriginalReference");
+	internal->add_child(referenced);
+	referenced->set_owner(internal);
+	internal->set_reference_property(referenced);
+
+	// Pack the internal scene.
+	PackedScene *internal_scene = memnew(PackedScene);
+	Error err = internal_scene->pack(internal);
+	REQUIRE(err == OK);
+
+	const String internal_path = OS::get_singleton()->get_resource_dir().path_join("instance_placeholder_test_internal.tscn");
+	err = ResourceSaver::save(internal_scene, internal_path);
+	REQUIRE(err == OK);
+
+	Ref<PackedScene> internal_scene_loaded = ResourceLoader::load(internal_path, "PackedScene", ResourceFormatLoader::CacheMode::CACHE_MODE_IGNORE, &err);
+	REQUIRE(err == OK);
+
+	// Create the main scene.
+	Node *root = memnew(Node);
+	root->set_name("MainNode");
+	Node *overriding = memnew(Node);
+	overriding->set_name("OverridingReference");
+
+	_TestInstancePlaceholderNode *internal_created = Object::cast_to<_TestInstancePlaceholderNode>(internal_scene_loaded->instantiate(PackedScene::GEN_EDIT_STATE_MAIN_INHERITED));
+	internal_created->set_scene_instance_load_placeholder(true);
+	root->add_child(internal_created);
+	internal_created->set_owner(root);
+
+	root->add_child(overriding);
+	overriding->set_owner(root);
+	// Here we introduce an error, we override the property with an internal node to the instance placeholder.
+	// The InstancePlaceholder is now forced to properly resolve the Node.
+	internal_created->set("reference_property", NodePath("OriginalReference"));
+
+	// Pack the main scene.
+	PackedScene *main_scene = memnew(PackedScene);
+	err = main_scene->pack(root);
+	REQUIRE(err == OK);
+
+	const String main_path = OS::get_singleton()->get_resource_dir().path_join("instance_placeholder_test_main.tscn");
+	err = ResourceSaver::save(main_scene, main_path);
+	REQUIRE(err == OK);
+	// main_scene->set_path(main_path, true);
+
+	// // Instantiate the scene.
+	Ref<PackedScene> main_scene_loaded = ResourceLoader::load(main_path, "PackedScene", ResourceFormatLoader::CacheMode::CACHE_MODE_IGNORE, &err);
+	REQUIRE(err == OK);
+
+	Node *instanced_main_node = main_scene_loaded->instantiate();
+	REQUIRE(instanced_main_node != nullptr);
+	SceneTree::get_singleton()->get_root()->add_child(instanced_main_node);
+	CHECK(instanced_main_node->get_name() == "MainNode");
+	REQUIRE(instanced_main_node->get_child_count() == 2);
+	InstancePlaceholder *instanced_placeholder = Object::cast_to<InstancePlaceholder>(instanced_main_node->get_child(0, true));
+	REQUIRE(instanced_placeholder != nullptr);
+
+	_TestInstancePlaceholderNode *final_node = Object::cast_to<_TestInstancePlaceholderNode>(instanced_placeholder->create_instance(true));
+	REQUIRE(final_node != nullptr);
+	REQUIRE(final_node->get_child_count() == 1);
+	REQUIRE(final_node->get_reference_property().identity_compare(final_node->get_child(0, true)));
+
+	instanced_main_node->queue_free();
+	memdelete(overriding);
+	memdelete(root);
+	memdelete(internal);
+	DirAccess::remove_file_or_error(internal_path);
+	DirAccess::remove_file_or_error(main_path);
+}
+
 } //namespace TestInstancePlaceholder
 
 #endif // TEST_INSTANCE_PLACEHOLDER_H
