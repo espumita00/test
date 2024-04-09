@@ -45,8 +45,7 @@ Size2 SubViewportContainer::get_minimum_size() const {
 		}
 
 		Size2 minsize = c->get_size();
-		ms.width = MAX(ms.width, minsize.width);
-		ms.height = MAX(ms.height, minsize.height);
+		ms = ms.max(minsize);
 	}
 
 	return ms;
@@ -259,8 +258,8 @@ void SubViewportContainer::remove_child_notify(Node *p_child) {
 	}
 }
 
-Array SubViewportContainer::get_configuration_warnings() const {
-	Array warnings = Node::get_configuration_warnings();
+PackedStringArray SubViewportContainer::get_configuration_warnings() const {
+	PackedStringArray warnings = Node::get_configuration_warnings();
 
 	bool has_viewport = false;
 	for (int i = 0; i < get_child_count(); i++) {

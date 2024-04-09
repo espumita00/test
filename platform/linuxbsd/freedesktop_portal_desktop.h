@@ -34,6 +34,7 @@
 #ifdef DBUS_ENABLED
 
 #include "core/os/thread.h"
+#include "core/os/thread_safe.h"
 #include "servers/display_server.h"
 
 struct DBusMessage;
@@ -59,19 +60,24 @@ private:
 
 	struct FileDialogData {
 		Vector<String> filter_names;
-		DBusConnection *connection = nullptr;
 		DisplayServer::WindowID prev_focus = DisplayServer::INVALID_WINDOW_ID;
 		Callable callback;
+		String filter;
 		String path;
 		bool opt_in_cb = false;
 	};
 
 	Mutex file_dialog_mutex;
 	Vector<FileDialogData> file_dialogs;
-	Thread file_dialog_thread;
-	SafeFlag file_dialog_thread_abort;
+	Thread monitor_thread;
+	SafeFlag monitor_thread_abort;
+	DBusConnection *monitor_connection = nullptr;
 
-	static void _thread_file_dialog_monitor(void *p_ud);
+	String theme_path;
+	Callable system_theme_changed;
+	void _system_theme_changed_callback();
+
+	static void _thread_monitor(void *p_ud);
 
 public:
 	FreeDesktopPortalDesktop();
@@ -86,6 +92,9 @@ public:
 	// 1: Prefer dark appearance.
 	// 2: Prefer light appearance.
 	uint32_t get_appearance_color_scheme();
+	void set_system_theme_change_callback(const Callable &p_system_theme_changed) {
+		system_theme_changed = p_system_theme_changed;
+	}
 };
 
 #endif // DBUS_ENABLED

@@ -30,7 +30,8 @@
 
 #include "gltf_document_extension_physics.h"
 
-#include "scene/3d/area_3d.h"
+#include "scene/3d/physics/area_3d.h"
+#include "scene/3d/physics/static_body_3d.h"
 
 // Import process.
 Error GLTFDocumentExtensionPhysics::import_preflight(Ref<GLTFState> p_state, Vector<String> p_extensions) {
@@ -354,6 +355,7 @@ void GLTFDocumentExtensionPhysics::convert_scene_node(Ref<GLTFState> p_state, Re
 	if (cast_to<CollisionShape3D>(p_scene_node)) {
 		CollisionShape3D *godot_shape = Object::cast_to<CollisionShape3D>(p_scene_node);
 		Ref<GLTFPhysicsShape> gltf_shape = GLTFPhysicsShape::from_node(godot_shape);
+		ERR_FAIL_COND_MSG(gltf_shape.is_null(), "GLTF Physics: Could not convert CollisionShape3D to GLTFPhysicsShape. Does it have a valid Shape3D?");
 		{
 			Ref<ImporterMesh> importer_mesh = gltf_shape->get_importer_mesh();
 			if (importer_mesh.is_valid()) {

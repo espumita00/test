@@ -55,7 +55,9 @@ static inline void setup_http_request(HTTPRequest *request) {
 }
 
 void EditorAssetLibraryItem::configure(const String &p_title, int p_asset_id, const String &p_category, int p_category_id, const String &p_author, int p_author_id, const String &p_cost) {
-	title->set_text(p_title);
+	title_text = p_title;
+	title->set_text(title_text);
+	title->set_tooltip_text(title_text);
 	asset_id = p_asset_id;
 	category->set_text(p_category);
 	category_id = p_category_id;
@@ -66,16 +68,15 @@ void EditorAssetLibraryItem::configure(const String &p_title, int p_asset_id, co
 
 // TODO: Refactor this method to use the TextServer.
 void EditorAssetLibraryItem::clamp_width(int p_max_width) {
-	int text_pixel_width = title->get_button_font().ptr()->get_string_size(title->get_text()).x * EDSCALE;
-
-	String full_text = title->get_text();
-	title->set_tooltip_text(full_text);
+	int text_pixel_width = title->get_button_font()->get_string_size(title_text).x * EDSCALE;
 
 	if (text_pixel_width > p_max_width) {
 		// Truncate title text to within the current column width.
-		int max_length = p_max_width / (text_pixel_width / full_text.length());
-		String truncated_text = full_text.left(max_length - 3) + "...";
+		int max_length = p_max_width / (text_pixel_width / title_text.length());
+		String truncated_text = title_text.left(max_length - 3) + "...";
 		title->set_text(truncated_text);
+	} else {
+		title->set_text(title_text);
 	}
 }
 
@@ -93,6 +94,12 @@ void EditorAssetLibraryItem::_notification(int p_what) {
 			category->add_theme_color_override("font_color", Color(0.5, 0.5, 0.5));
 			author->add_theme_color_override("font_color", Color(0.5, 0.5, 0.5));
 			price->add_theme_color_override("font_color", Color(0.5, 0.5, 0.5));
+
+			if (author->get_default_cursor_shape() == CURSOR_ARROW) {
+				// Disable visible feedback if author link isn't clickable.
+				author->add_theme_color_override("font_pressed_color", Color(0.5, 0.5, 0.5));
+				author->add_theme_color_override("font_hover_color", Color(0.5, 0.5, 0.5));
+			}
 		} break;
 	}
 }
@@ -106,7 +113,7 @@ void EditorAssetLibraryItem::_category_clicked() {
 }
 
 void EditorAssetLibraryItem::_author_clicked() {
-	emit_signal(SNAME("author_selected"), author_id);
+	emit_signal(SNAME("author_selected"), author->get_text());
 }
 
 void EditorAssetLibraryItem::_bind_methods() {
@@ -116,7 +123,7 @@ void EditorAssetLibraryItem::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("author_selected"));
 }
 
-EditorAssetLibraryItem::EditorAssetLibraryItem() {
+EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 	Ref<StyleBoxEmpty> border;
 	border.instantiate();
 	border->set_content_margin_all(5 * EDSCALE);
@@ -129,9 +136,6 @@ EditorAssetLibraryItem::EditorAssetLibraryItem() {
 
 	icon = memnew(TextureButton);
 	icon->set_custom_minimum_size(Size2(64, 64) * EDSCALE);
-	icon->set_default_cursor_shape(CURSOR_POINTING_HAND);
-	icon->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
-
 	hb->add_child(icon);
 
 	VBoxContainer *vb = memnew(VBoxContainer);
@@ -140,24 +144,50 @@ EditorAssetLibraryItem::EditorAssetLibraryItem() {
 	vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 
 	title = memnew(LinkButton);
+	title->set_auto_translate_mode(AutoTranslateMode::AUTO_TRANSLATE_MODE_DISABLED);
 	title->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
-	title->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
 	vb->add_child(title);
 
 	category = memnew(LinkButton);
 	category->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
-	category->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_category_clicked));
 	vb->add_child(category);
 
+	HBoxContainer *author_price_hbox = memnew(HBoxContainer);
+	author_price_hbox->add_theme_constant_override("separation", 5 * EDSCALE);
+	vb->add_child(author_price_hbox);
+
 	author = memnew(LinkButton);
-	author->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
-	author->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_author_clicked));
-	vb->add_child(author);
+	author->set_tooltip_text(TTR("Author"));
+	author_price_hbox->add_child(author);
+
+	author_price_hbox->add_child(memnew(HSeparator));
+
+	if (p_clickable) {
+		author->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
+		icon->set_default_cursor_shape(CURSOR_POINTING_HAND);
+		icon->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
+		title->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
+		category->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_category_clicked));
+		author->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_author_clicked));
+	} else {
+		title->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		category->set_mouse_filter(MOUSE_FILTER_IGNORE);
+		author->set_underline_mode(LinkButton::UNDERLINE_MODE_NEVER);
+		author->set_default_cursor_shape(CURSOR_ARROW);
+	}
+
+	Ref<StyleBoxEmpty> label_margin;
+	label_margin.instantiate();
+	label_margin->set_content_margin_all(0);
 
 	price = memnew(Label);
-	vb->add_child(price);
+	price->add_theme_style_override("normal", label_margin);
+	price->set_tooltip_text(TTR("License"));
+	price->set_mouse_filter(MOUSE_FILTER_PASS);
 
-	set_custom_minimum_size(Size2(250, 100) * EDSCALE);
+	author_price_hbox->add_child(price);
+
+	set_custom_minimum_size(Size2(250, 80) * EDSCALE);
 	set_h_size_flags(Control::SIZE_EXPAND_FILL);
 }
 
@@ -262,6 +292,10 @@ void EditorAssetLibraryItemDescription::configure(const String &p_title, int p_a
 }
 
 void EditorAssetLibraryItemDescription::add_preview(int p_id, bool p_video, const String &p_url) {
+	if (preview_images.is_empty()) {
+		previews_vbox->show();
+	}
+
 	Preview new_preview;
 	new_preview.id = p_id;
 	new_preview.video_link = p_url;
@@ -290,7 +324,7 @@ EditorAssetLibraryItemDescription::EditorAssetLibraryItemDescription() {
 	item = memnew(EditorAssetLibraryItem);
 
 	desc_vbox->add_child(item);
-	desc_vbox->set_custom_minimum_size(Size2(440 * EDSCALE, 0));
+	desc_vbox->set_custom_minimum_size(Size2(440 * EDSCALE, 440 * EDSCALE));
 
 	description = memnew(RichTextLabel);
 	desc_vbox->add_child(description);
@@ -298,7 +332,9 @@ EditorAssetLibraryItemDescription::EditorAssetLibraryItemDescription() {
 	description->connect("meta_clicked", callable_mp(this, &EditorAssetLibraryItemDescription::_link_click));
 	description->add_theme_constant_override("line_separation", Math::round(5 * EDSCALE));
 
-	VBoxContainer *previews_vbox = memnew(VBoxContainer);
+	previews_vbox = memnew(VBoxContainer);
+	previews_vbox->hide(); // Will be shown if we add any previews later.
+
 	hbox->add_child(previews_vbox);
 	previews_vbox->add_theme_constant_override("separation", 15 * EDSCALE);
 	previews_vbox->set_v_size_flags(Control::SIZE_EXPAND_FILL);
@@ -645,6 +681,11 @@ void EditorAssetLibrary::_notification(int p_what) {
 		} break;
 
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
+			if (!EditorSettings::get_singleton()->check_changed_settings_in_group("asset_library") &&
+					!EditorSettings::get_singleton()->check_changed_settings_in_group("network")) {
+				break;
+			}
+
 			_update_repository_options();
 			setup_http_request(request);
 
@@ -725,19 +766,23 @@ const char *EditorAssetLibrary::sort_text[SORT_MAX] = {
 };
 
 const char *EditorAssetLibrary::support_key[SUPPORT_MAX] = {
-	"official",
+	"official", // Former name for the Featured support level (still used on the API backend).
 	"community",
 	"testing",
 };
 
 const char *EditorAssetLibrary::support_text[SUPPORT_MAX] = {
-	TTRC("Official"),
+	TTRC("Featured"),
 	TTRC("Community"),
 	TTRC("Testing"),
 };
 
-void EditorAssetLibrary::_select_author(int p_id) {
-	// Open author window.
+void EditorAssetLibrary::_select_author(const String &p_author) {
+	if (!host.contains("godotengine.org")) {
+		// Don't open the link for alternative repositories.
+		return;
+	}
+	OS::get_singleton()->shell_open("https://godotengine.org/asset-library/asset?user=" + p_author.uri_encode());
 }
 
 void EditorAssetLibrary::_select_category(int p_id) {
@@ -1342,7 +1387,7 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 				ERR_FAIL_COND(!category_map.has(r["category_id"]));
 				ERR_CONTINUE(!r.has("cost"));
 
-				EditorAssetLibraryItem *item = memnew(EditorAssetLibraryItem);
+				EditorAssetLibraryItem *item = memnew(EditorAssetLibraryItem(true));
 				asset_items->add_child(item);
 				item->configure(r["title"], r["asset_id"], category_map[r["category_id"]], r["category_id"], r["author"], r["author_id"], r["cost"]);
 				item->clamp_width(asset_items_column_width);
@@ -1382,7 +1427,6 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 
 			description = memnew(EditorAssetLibraryItemDescription);
 			add_child(description);
-			description->popup_centered();
 			description->connect("confirmed", callable_mp(this, &EditorAssetLibrary::_install_asset));
 
 			description->configure(r["title"], r["asset_id"], category_map[r["category_id"]], r["category_id"], r["author"], r["author_id"], r["cost"], r["version"], r["version_string"], r["description"], r["download_url"], r["browse_url"], r["download_hash"]);
@@ -1431,6 +1475,8 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 					}
 				}
 			}
+
+			description->popup_centered();
 		} break;
 		default:
 			break;
@@ -1481,7 +1527,15 @@ void EditorAssetLibrary::_update_asset_items_columns() {
 		asset_items->set_columns(new_columns);
 	}
 
-	asset_items_column_width = (get_size().x / new_columns) - (100 * EDSCALE);
+	asset_items_column_width = (get_size().x / new_columns) - (120 * EDSCALE);
+
+	for (int i = 0; i < asset_items->get_child_count(); i++) {
+		EditorAssetLibraryItem *item = Object::cast_to<EditorAssetLibraryItem>(asset_items->get_child(i));
+		if (!item || !item->is_visible()) {
+			continue;
+		}
+		item->clamp_width(asset_items_column_width);
+	}
 }
 
 void EditorAssetLibrary::_set_library_message(const String &p_message) {
@@ -1620,10 +1674,10 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	search_hb2->add_child(support);
 	support->set_text(TTR("Support"));
 	support->get_popup()->set_hide_on_checkable_item_selection(false);
-	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_OFFICIAL]), SUPPORT_OFFICIAL);
+	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_FEATURED]), SUPPORT_FEATURED);
 	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_COMMUNITY]), SUPPORT_COMMUNITY);
 	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_TESTING]), SUPPORT_TESTING);
-	support->get_popup()->set_item_checked(SUPPORT_OFFICIAL, true);
+	support->get_popup()->set_item_checked(SUPPORT_FEATURED, true);
 	support->get_popup()->set_item_checked(SUPPORT_COMMUNITY, true);
 	support->get_popup()->connect("id_pressed", callable_mp(this, &EditorAssetLibrary::_support_toggled));
 

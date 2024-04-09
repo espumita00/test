@@ -30,12 +30,12 @@
 
 #ifndef DISABLE_DEPRECATED
 
-PackedStringArray Node::get_configuration_warnings_bind_compat_68420() const {
-	return PackedStringArray(get_configuration_warnings());
+void Node::_replace_by_bind_compat_89992(Node *p_node, bool p_keep_data) {
+	replace_by(p_node, p_keep_data, true);
 }
 
 void Node::_bind_compatibility_methods() {
-	ClassDB::bind_compatibility_method(D_METHOD("get_configuration_warnings"), &Node::get_configuration_warnings_bind_compat_68420);
+	ClassDB::bind_compatibility_method(D_METHOD("replace_by", "node", "keep_groups"), &Node::_replace_by_bind_compat_89992, DEFVAL(false));
 }
 
-#endif // DISABLE_DEPRECATED
+#endif

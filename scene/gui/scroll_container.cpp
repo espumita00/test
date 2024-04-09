@@ -56,8 +56,7 @@ Size2 ScrollContainer::get_minimum_size() const {
 
 		Size2 child_min_size = c->get_combined_minimum_size();
 
-		largest_child_min_size.x = MAX(largest_child_min_size.x, child_min_size.x);
-		largest_child_min_size.y = MAX(largest_child_min_size.y, child_min_size.y);
+		largest_child_min_size = largest_child_min_size.max(child_min_size);
 	}
 
 	if (horizontal_scroll_mode == SCROLL_MODE_DISABLED) {
@@ -537,8 +536,8 @@ void ScrollContainer::set_follow_focus(bool p_follow) {
 	follow_focus = p_follow;
 }
 
-Array ScrollContainer::get_configuration_warnings() const {
-	Array warnings = Container::get_configuration_warnings();
+PackedStringArray ScrollContainer::get_configuration_warnings() const {
+	PackedStringArray warnings = Container::get_configuration_warnings();
 
 	int found = 0;
 
