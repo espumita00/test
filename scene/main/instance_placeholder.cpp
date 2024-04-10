@@ -118,7 +118,7 @@ Node *InstancePlaceholder::create_instance(bool p_replace, const Ref<PackedScene
 void InstancePlaceholder::set_value_on_instance(InstancePlaceholder *p_placeholder, Node *p_instance, const InstancePlaceholder::PropSet &p_set) {
 	bool is_valid;
 
-	// If we don't have any info, we can't do anything
+	// If we don't have any info, we can't do anything,
 	// so try setting the value directly.
 	Variant current = p_instance->get(p_set.name, &is_valid);
 	if (!is_valid) {
@@ -129,16 +129,38 @@ void InstancePlaceholder::set_value_on_instance(InstancePlaceholder *p_placehold
 	Variant::Type current_type = current.get_type();
 	Variant::Type placeholder_type = p_set.value.get_type();
 
-	// Check if the variant types match.
-	if (Variant::evaluate(Variant::OP_EQUAL, current_type, placeholder_type)) {
-		p_instance->set(p_set.name, p_set.value, &is_valid);
-		if (is_valid) {
+	// Arrays are a special case, because their containing type might be different.
+	if (current_type != Variant::Type::ARRAY) {
+		// Check if the variant types match.
+		if (Variant::evaluate(Variant::OP_EQUAL, current_type, placeholder_type)) {
+			p_instance->set(p_set.name, p_set.value, &is_valid);
+			if (is_valid) {
+				return;
+			}
+			// Types match but setting failed? This is strange, so let's print a warning!
+			WARN_PRINT(vformat("Property '%s' with type '%s' could not be set when creating instance of '%s'.", p_set.name, Variant::get_type_name(current_type), p_placeholder->get_name()));
 			return;
 		}
-		// Types match but setting failed? it's probably an array and we have a TypedArray issue.
+	} else {
+		// We are dealing with an Array.
+		// Let's check if the subtype of the array matches first.
+		// This is needed because the set method of ScriptInstance checks for type,
+		// but the ClassDB set method doesn't! So we cannot reliably know what actually happens.
+		Array current_array = current;
+		Array placeholder_array = p_set.value;
+		if (current_array.is_same_typed(placeholder_array)) {
+			p_instance->set(p_set.name, p_set.value, &is_valid);
+			if (is_valid) {
+				return;
+			}
+			// Internal array types match but setting failed? This is strange, so let's print a warning!
+			WARN_PRINT(vformat("Array Property '%s' with type '%s' could not be set when creating instance of '%s'.", p_set.name, Variant::get_type_name(Variant::Type(current_array.get_typed_builtin())), p_placeholder->get_name()));
+		}
+		// Arrays are not the same internal type. This should be happening because we have a NodePath Array,
+		// but the instance wants a Node Array.
 	}
 
-	switch (current.get_type()) {
+	switch (current_type) {
 		case Variant::Type::NIL:
 			if (placeholder_type != Variant::Type::NODE_PATH) {
 				break;
@@ -183,7 +205,7 @@ void InstancePlaceholder::set_value_on_instance(InstancePlaceholder *p_placehold
 
 			p_instance->set(p_set.name, converted_array, &is_valid);
 			if (!is_valid) {
-				WARN_PRINT(vformat("Property '%s' with type %s could not be set when creating instance of '%s'.", p_set.name, Variant::get_type_name(current_type), p_placeholder->get_name()));
+				WARN_PRINT(vformat("Property '%s' with type '%s' could not be set when creating instance of '%s'.", p_set.name, Variant::get_type_name(current_type), p_placeholder->get_name()));
 			}
 			break;
 		}
