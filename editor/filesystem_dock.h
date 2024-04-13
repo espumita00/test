@@ -129,6 +129,7 @@ private:
 		FILE_OPEN_EXTERNAL,
 		FILE_OPEN_IN_TERMINAL,
 		FILE_COPY_PATH,
+		FILE_COPY_ABSOLUTE_PATH,
 		FILE_COPY_UID,
 		FOLDER_EXPAND_ALL,
 		FOLDER_COLLAPSE_ALL,
@@ -361,6 +362,7 @@ private:
 	bool _is_file_type_disabled_by_feature_profile(const StringName &p_class);
 
 	void _feature_profile_changed();
+	void _project_settings_changed();
 	static Vector<String> _remove_self_included_paths(Vector<String> selected_strings);
 
 	void _change_bottom_dock_placement();
