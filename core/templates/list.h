@@ -520,7 +520,7 @@ public:
 	}
 
 	T &operator[](int p_index) {
-		CRASH_BAD_INDEX(p_index, size());
+		CRASH_BAD_UNSIGNED_INDEX((uint32_t)p_index, (uint32_t)size());
 
 		Element *I = front();
 		int c = 0;
@@ -533,7 +533,7 @@ public:
 	}
 
 	const T &operator[](int p_index) const {
-		CRASH_BAD_INDEX(p_index, size());
+		CRASH_BAD_UNSIGNED_INDEX((uint32_t)p_index, (uint32_t)size());
 
 		const Element *I = front();
 		int c = 0;
