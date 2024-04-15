@@ -156,7 +156,7 @@ Error ResourceImporterImageFont::import(const String &p_source_file, const Strin
 								c++; // Skip "+".
 								continue;
 							}
-						} else if (range[c] == '0' && (c + 1 < range.length()) && range[c + 1] == 'x') {
+						} else if (range[c] == '0' && (c <= range.length() - 2) && range[c + 1] == 'x') {
 							// Read hexadecimal value, start.
 							token = String();
 							if (step == STEP_START_BEGIN) {
@@ -250,15 +250,20 @@ Error ResourceImporterImageFont::import(const String &p_source_file, const Strin
 					} break;
 				}
 			}
-			if (end == -1) {
-				if (step == STEP_END_READ_HEX) {
-					end = token.hex_to_int();
-				}
-				if (step == STEP_END_READ_DEC) {
-					end = token.to_int();
-				}
+			if (step == STEP_START_READ_HEX) {
+				start = token.hex_to_int();
+			} else if (step == STEP_START_READ_DEC) {
+				start = token.to_int();
+			} else if (step == STEP_END_READ_HEX) {
+				end = token.hex_to_int();
+			} else if (step == STEP_END_READ_DEC) {
+				end = token.to_int();
 			}
-			if (start == -1) {
+			if (end == -1) {
+				end = start;
+			}
+
+			if (start == -1 || start == end) {
 				WARN_PRINT(vformat("Invalid range: \"%s\"", range));
 				continue;
 			}
