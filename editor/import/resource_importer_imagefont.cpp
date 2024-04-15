@@ -263,7 +263,7 @@ Error ResourceImporterImageFont::import(const String &p_source_file, const Strin
 				end = start;
 			}
 
-			if (start == -1 || start == end) {
+			if (start == -1) {
 				WARN_PRINT(vformat("Invalid range: \"%s\"", range));
 				continue;
 			}
