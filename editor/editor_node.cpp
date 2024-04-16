@@ -771,6 +771,12 @@ void EditorNode::_notification(int p_what) {
 				EditorFileDialog::set_default_display_mode((EditorFileDialog::DisplayMode)EDITOR_GET("filesystem/file_dialog/display_mode").operator int());
 			}
 
+			if (EDITOR_GET("interface/editor/import_resources_when_unfocused")) {
+				scan_changes_timer->start();
+			} else {
+				scan_changes_timer->stop();
+			}
+
 			follow_system_theme = EDITOR_GET("interface/theme/follow_system_theme");
 			use_system_accent_color = EDITOR_GET("interface/theme/use_system_accent_color");
 
@@ -1444,6 +1450,9 @@ void EditorNode::_dialog_display_load_error(String p_file, Error p_error) {
 			} break;
 			case ERR_FILE_NOT_FOUND: {
 				show_accept(vformat(TTR("Missing file '%s' or one of its dependencies."), p_file.get_file()), TTR("OK"));
+			} break;
+			case ERR_FILE_UNRECOGNIZED: {
+				show_accept(vformat(TTR("File '%s' is saved in a format that is newer than the formats supported by this version of Godot, so it can't be opened."), p_file.get_file()), TTR("OK"));
 			} break;
 			default: {
 				show_accept(vformat(TTR("Error while loading file '%s'."), p_file.get_file()), TTR("OK"));
@@ -2136,10 +2145,6 @@ void EditorNode::_dialog_action(String p_file) {
 
 		} break;
 		case SETTINGS_LAYOUT_DELETE: {
-			if (p_file.is_empty()) {
-				return;
-			}
-
 			Ref<ConfigFile> config;
 			config.instantiate();
 			Error err = config->load(EditorSettings::get_singleton()->get_editor_layouts_config());
@@ -2896,9 +2901,6 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 				}
 			}
 		} break;
-		case TOOLS_BUILD_PROFILE_MANAGER: {
-			build_profile_manager->popup_centered_clamped(Size2(700, 800) * EDSCALE, 0.8);
-		} break;
 		case RUN_USER_DATA_FOLDER: {
 			// Ensure_user_data_dir() to prevent the edge case: "Open User Data Folder" won't work after the project was renamed in ProjectSettingsEditor unless the project is saved.
 			OS::get_singleton()->ensure_user_data_dir();
@@ -3062,8 +3064,8 @@ void EditorNode::_menu_option_confirm(int p_option, bool p_confirmed) {
 		case HELP_DOCS: {
 			OS::get_singleton()->shell_open(VERSION_DOCS_URL "/");
 		} break;
-		case HELP_QA: {
-			OS::get_singleton()->shell_open("https://godotengine.org/qa/");
+		case HELP_FORUM: {
+			OS::get_singleton()->shell_open("https://forum.godotengine.org/");
 		} break;
 		case HELP_REPORT_A_BUG: {
 			OS::get_singleton()->shell_open("https://github.com/godotengine/godot/issues");
@@ -3202,6 +3204,9 @@ void EditorNode::_tool_menu_option(int p_idx) {
 	switch (tool_menu->get_item_id(p_idx)) {
 		case TOOLS_ORPHAN_RESOURCES: {
 			orphan_resources->show();
+		} break;
+		case TOOLS_BUILD_PROFILE_MANAGER: {
+			build_profile_manager->popup_centered_clamped(Size2(700, 800) * EDSCALE, 0.8);
 		} break;
 		case TOOLS_SURFACE_UPGRADE: {
 			surface_upgrade_dialog->popup_on_demand();
@@ -3674,9 +3679,7 @@ void EditorNode::set_edited_scene(Node *p_scene) {
 		if (old_edited_scene_root->get_parent() == scene_root) {
 			scene_root->remove_child(old_edited_scene_root);
 		}
-		if (old_edited_scene_root->is_connected("replacing_by", callable_mp(this, &EditorNode::set_edited_scene))) {
-			old_edited_scene_root->disconnect(SNAME("replacing_by"), callable_mp(this, &EditorNode::set_edited_scene));
-		}
+		old_edited_scene_root->disconnect(SNAME("replacing_by"), callable_mp(this, &EditorNode::set_edited_scene));
 	}
 	get_editor_data().set_edited_scene_root(p_scene);
 
@@ -6580,6 +6583,12 @@ EditorNode::EditorNode() {
 	editor_layout_save_delay_timer->set_one_shot(true);
 	editor_layout_save_delay_timer->connect("timeout", callable_mp(this, &EditorNode::_save_editor_layout));
 
+	scan_changes_timer = memnew(Timer);
+	scan_changes_timer->set_wait_time(0.5);
+	scan_changes_timer->set_autostart(EDITOR_GET("interface/editor/import_resources_when_unfocused"));
+	scan_changes_timer->connect("timeout", callable_mp(EditorFileSystem::get_singleton(), &EditorFileSystem::scan_changes));
+	add_child(scan_changes_timer);
+
 	top_split = memnew(VSplitContainer);
 	center_split->add_child(top_split);
 	top_split->set_v_size_flags(Control::SIZE_EXPAND_FILL);
@@ -6648,6 +6657,8 @@ EditorNode::EditorNode() {
 	main_menu->set_menu_tooltip(0, TTR("Operations with scene files."));
 
 	accept = memnew(AcceptDialog);
+	accept->set_autowrap(true);
+	accept->set_min_size(Vector2i(600, 0));
 	accept->set_unparent_when_invisible(true);
 
 	save_accept = memnew(AcceptDialog);
@@ -6783,13 +6794,12 @@ EditorNode::EditorNode() {
 #endif
 
 	project_menu->add_separator();
-	project_menu->add_item(TTR("Customize Engine Build Configuration..."), TOOLS_BUILD_PROFILE_MANAGER);
-	project_menu->add_separator();
 
 	tool_menu = memnew(PopupMenu);
 	tool_menu->connect("index_pressed", callable_mp(this, &EditorNode::_tool_menu_option));
 	project_menu->add_submenu_node_item(TTR("Tools"), tool_menu);
 	tool_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/orphan_resource_explorer", TTR("Orphan Resource Explorer...")), TOOLS_ORPHAN_RESOURCES);
+	tool_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/engine_compilation_configuration_editor", TTR("Engine Compilation Configuration Editor...")), TOOLS_BUILD_PROFILE_MANAGER);
 	tool_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/upgrade_mesh_surfaces", TTR("Upgrade Mesh Surfaces...")), TOOLS_SURFACE_UPGRADE);
 
 	project_menu->add_separator();
@@ -6893,7 +6903,7 @@ EditorNode::EditorNode() {
 	help_menu->add_icon_shortcut(theme->get_icon(SNAME("HelpSearch"), EditorStringName(EditorIcons)), ED_GET_SHORTCUT("editor/editor_help"), HELP_SEARCH);
 	help_menu->add_separator();
 	help_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/online_docs", TTR("Online Documentation")), HELP_DOCS);
-	help_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/q&a", TTR("Questions & Answers")), HELP_QA);
+	help_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/forum", TTR("Forum")), HELP_FORUM);
 	help_menu->add_shortcut(ED_SHORTCUT_AND_COMMAND("editor/community", TTR("Community")), HELP_COMMUNITY);
 	help_menu->add_separator();
 	help_menu->add_icon_shortcut(theme->get_icon(SNAME("ActionCopy"), EditorStringName(EditorIcons)), ED_SHORTCUT_AND_COMMAND("editor/copy_system_info", TTR("Copy System Info")), HELP_COPY_SYSTEM_INFO);
