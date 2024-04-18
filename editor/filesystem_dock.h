@@ -362,6 +362,7 @@ private:
 	bool _is_file_type_disabled_by_feature_profile(const StringName &p_class);
 
 	void _feature_profile_changed();
+	void _project_settings_changed();
 	static Vector<String> _remove_self_included_paths(Vector<String> selected_strings);
 
 	void _change_bottom_dock_placement();
@@ -380,6 +381,11 @@ protected:
 	static void _bind_methods();
 
 public:
+	static constexpr double ITEM_COLOR_SCALE = 1.75;
+	static constexpr double ITEM_ALPHA_MIN = 0.1;
+	static constexpr double ITEM_ALPHA_MAX = 0.15;
+	static constexpr double ITEM_BG_DARK_SCALE = 0.3;
+
 	const HashMap<String, Color> &get_folder_colors() const;
 	Dictionary get_assigned_folder_colors() const;
 
