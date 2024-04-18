@@ -715,7 +715,7 @@ else:
             env.Append(CCFLAGS=["-g2"])
         if env["debug_paths_relative"]:
             # Remap absolute paths to relative paths for debug symbols.
-            project_path = Dir("#").abspath
+            project_path = Dir("#").abspath  # noqa: F821
             env.Append(CCFLAGS=[f"-ffile-prefix-map={project_path}=."])
     else:
         if methods.using_clang(env) and not methods.is_vanilla_clang(env):
