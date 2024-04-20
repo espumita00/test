@@ -703,6 +703,7 @@ void ScriptEditor::_go_to_tab(int p_idx) {
 	_update_members_overview();
 	_update_help_overview();
 	_update_selected_editor_menu();
+	_update_online_doc();
 	_update_members_overview_visibility();
 	_update_help_overview_visibility();
 }
@@ -1321,7 +1322,16 @@ void ScriptEditor::_menu_option(int p_option) {
 			help_search_dialog->popup_dialog();
 		} break;
 		case SEARCH_WEBSITE: {
-			OS::get_singleton()->shell_open(VERSION_DOCS_URL "/");
+			Control *tab = tab_container->get_current_tab_control();
+
+			EditorHelp *eh = Object::cast_to<EditorHelp>(tab);
+			if (eh) {
+				String name = eh->get_class().to_lower();
+				String doc_url = vformat(VERSION_DOCS_URL "/classes/class_%s.html", name);
+				OS::get_singleton()->shell_open(doc_url);
+			} else {
+				OS::get_singleton()->shell_open(VERSION_DOCS_URL "/");
+			}
 		} break;
 		case WINDOW_NEXT: {
 			_history_forward();
@@ -1997,6 +2007,21 @@ void ScriptEditor::_update_help_overview() {
 	for (int i = 0; i < sections.size(); i++) {
 		help_overview->add_item(sections[i].first);
 		help_overview->set_item_metadata(i, sections[i].second);
+	}
+}
+
+void ScriptEditor::_update_online_doc() {
+	Node *current = tab_container->get_tab_control(tab_container->get_current_tab());
+
+	EditorHelp *eh = Object::cast_to<EditorHelp>(current);
+	if (eh) {
+		String name = eh->get_class();
+		String tooltip = vformat(TTR("Open '%s' in Godot online documentation."), name);
+		site_search->set_text(TTR("Open in Online Docs"));
+		site_search->set_tooltip_text(tooltip);
+	} else {
+		site_search->set_text(TTR("Online Docs"));
+		site_search->set_tooltip_text(TTR("Open Godot online documentation."));
 	}
 }
 
@@ -4107,10 +4132,8 @@ ScriptEditor::ScriptEditor(WindowWrapper *p_wrapper) {
 
 	site_search = memnew(Button);
 	site_search->set_flat(true);
-	site_search->set_text(TTR("Online Docs"));
 	site_search->connect("pressed", callable_mp(this, &ScriptEditor::_menu_option).bind(SEARCH_WEBSITE));
 	menu_hb->add_child(site_search);
-	site_search->set_tooltip_text(TTR("Open Godot online documentation."));
 
 	help_search = memnew(Button);
 	help_search->set_flat(true);
