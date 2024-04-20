@@ -874,6 +874,7 @@ void ScriptEditor::_close_tab(int p_idx, bool p_save, bool p_history_back) {
 		_go_to_tab(idx);
 	} else {
 		_update_selected_editor_menu();
+		_update_online_doc();
 	}
 
 	if (script_close_queue.is_empty()) {
@@ -4254,6 +4255,8 @@ ScriptEditor::ScriptEditor(WindowWrapper *p_wrapper) {
 	Ref<EditorJSONSyntaxHighlighter> json_syntax_highlighter;
 	json_syntax_highlighter.instantiate();
 	register_syntax_highlighter(json_syntax_highlighter);
+
+	_update_online_doc();
 }
 
 ScriptEditor::~ScriptEditor() {
