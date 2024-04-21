@@ -37,6 +37,7 @@
 #include "editor/editor_node.h"
 #include "editor/gui/editor_validation_panel.h"
 #include "editor/plugins/editor_plugin.h"
+#include "editor/plugins/gdextension/gdextension_plugin_creator.h"
 #include "editor/project_settings_editor.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/grid_container.h"
@@ -67,7 +68,18 @@ void PluginConfigDialog::_on_confirmed() {
 	cf->set_value("plugin", "version", version_edit->get_text());
 	// Language-specific settings.
 	int lang_index = script_option_edit->get_selected();
-	_create_script_for_plugin(path, cf, lang_index);
+	String lang_name = script_option_edit->get_item_text(lang_index);
+	if (lang_name.begins_with("GDExtension")) {
+		cf->set_value("plugin", "script", "");
+		GDExtensionPluginCreator creator = GDExtensionPluginCreator();
+		if (lang_name == "GDExtension C++ only") {
+			creator.create_plugin_only(path, active_edit->is_pressed());
+		} else if (lang_name == "GDExtension C++ and engine module") {
+			creator.create_plugin_with_module(path, active_edit->is_pressed());
+		}
+	} else {
+		_create_script_for_plugin(path, cf, lang_index);
+	}
 	// Save and inform the editor.
 	cf->save(path.path_join("plugin.cfg"));
 	EditorNode::get_singleton()->get_project_settings()->update_plugins();
@@ -123,8 +135,45 @@ void PluginConfigDialog::_on_required_text_changed() {
 	} else {
 		validation_panel->set_message(MSG_ID_SUBFOLDER, "", EditorValidationPanel::MSG_OK);
 	}
-	// Language and script validation.
+	// Language and script validation. First check for GDExtension plugins.
 	int lang_idx = script_option_edit->get_selected();
+	String lang_name = script_option_edit->get_item_text(lang_idx);
+	if (lang_name.begins_with("GDExtension")) {
+		validation_panel->set_message(MSG_ID_SCRIPT, TTR("GDExtension plugins don't require a plugin script."), EditorValidationPanel::MSG_OK);
+		script_name_label->set_visible(false);
+		script_edit->set_visible(false);
+		active_label->set_text(TTR("Compile now? (slow)"));
+		if (lang_name == "GDExtension C++ and engine module") {
+			Ref<DirAccess> dir = DirAccess::create(DirAccess::ACCESS_RESOURCES);
+			if (dir->file_exists("SCsub")) {
+				validation_panel->set_message(MSG_ID_SCRIPT, TTR("This project already contains a C++ engine module."), EditorValidationPanel::MSG_ERROR);
+			} else {
+				validation_panel->set_message(MSG_ID_SCRIPT, TTR("Able to create engine module in this Godot project."), EditorValidationPanel::MSG_OK);
+			}
+		}
+		// Check for Git and SCons.
+		EditorValidationPanel::MessageType consequence = active_edit->is_pressed() ? EditorValidationPanel::MSG_ERROR : EditorValidationPanel::MSG_WARNING;
+		List<String> args;
+		args.push_back("--version");
+		String output;
+		OS::get_singleton()->execute("git", args, &output);
+		if (output.is_empty()) {
+			validation_panel->set_message(MSG_ID_ACTIVE, TTR("Cannot compile now, Git was not found."), consequence);
+		} else {
+			output = "";
+			OS::get_singleton()->execute("scons", args, &output);
+			if (output.is_empty()) {
+				validation_panel->set_message(MSG_ID_ACTIVE, TTR("Cannot compile now, SCons was not found."), consequence);
+			} else {
+				validation_panel->set_message(MSG_ID_ACTIVE, TTR("Both Git and SCons were found."), EditorValidationPanel::MSG_OK);
+			}
+		}
+		return;
+	}
+	// Script-based plugins (not GDExtension).
+	script_name_label->set_visible(true);
+	script_edit->set_visible(true);
+	active_label->set_text(TTR("Activate now?"));
 	ScriptLanguage *language = ScriptServer::get_language(lang_idx);
 	if (language == nullptr) {
 		return;
@@ -296,11 +345,14 @@ PluginConfigDialog::PluginConfigDialog() {
 			default_lang = i;
 		}
 	}
+	// Add GDExtension options.
+	script_option_edit->add_item("GDExtension C++ only");
+	script_option_edit->add_item("GDExtension C++ and engine module");
 	script_option_edit->select(default_lang);
 	grid->add_child(script_option_edit);
 
 	// Plugin Script Name
-	Label *script_name_label = memnew(Label);
+	script_name_label = memnew(Label);
 	script_name_label->set_text(TTR("Script Name:"));
 	script_name_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
 	grid->add_child(script_name_label);
@@ -312,7 +364,7 @@ PluginConfigDialog::PluginConfigDialog() {
 	grid->add_child(script_edit);
 
 	// Activate now checkbox
-	Label *active_label = memnew(Label);
+	active_label = memnew(Label);
 	active_label->set_text(TTR("Activate now?"));
 	active_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
 	grid->add_child(active_label);
@@ -340,6 +392,7 @@ PluginConfigDialog::PluginConfigDialog() {
 	name_edit->connect("text_changed", callable_mp(validation_panel, &EditorValidationPanel::update).unbind(1));
 	subfolder_edit->connect("text_changed", callable_mp(validation_panel, &EditorValidationPanel::update).unbind(1));
 	script_edit->connect("text_changed", callable_mp(validation_panel, &EditorValidationPanel::update).unbind(1));
+	active_edit->connect("pressed", callable_mp(validation_panel, &EditorValidationPanel::update));
 }
 
 PluginConfigDialog::~PluginConfigDialog() {

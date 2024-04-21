@@ -18,6 +18,8 @@ files_invalid_guard=""
 for file in $files; do
   # Skip *.gen.h and *-so_wrap.h, they're generated.
   if [[ "$file" == *".gen.h" || "$file" == *"-so_wrap.h" ]]; then continue; fi
+  # Skip GDExtension template files.
+  if [[ "$file" == *"gdextension/cpp_template"* ]]; then continue; fi
   # Has important define before normal header guards.
   if [[ "$file" == *"thread.h" || "$file" == *"platform_config.h" || "$file" == *"platform_gl.h" ]]; then continue; fi
   # Obj-C files don't use header guards.

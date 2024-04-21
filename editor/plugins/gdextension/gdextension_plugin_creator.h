@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  plugin_config_dialog.h                                                */
+/*  gdextension_plugin_creator.h                                          */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,65 +28,27 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef PLUGIN_CONFIG_DIALOG_H
-#define PLUGIN_CONFIG_DIALOG_H
+#ifndef GDEXTENSION_PLUGIN_CREATOR_H
+#define GDEXTENSION_PLUGIN_CREATOR_H
 
-#include "scene/gui/check_box.h"
-#include "scene/gui/dialogs.h"
-#include "scene/gui/line_edit.h"
-#include "scene/gui/option_button.h"
-#include "scene/gui/panel_container.h"
-#include "scene/gui/text_edit.h"
-#include "scene/gui/texture_rect.h"
+#include "core/string/ustring.h"
 
-class ConfigFile;
-class EditorValidationPanel;
+class GDExtensionPluginCreator {
+	// Used by _process_template.
+	bool _strip_module_defines = false;
+	String _base_name;
+	String _library_name;
 
-class PluginConfigDialog : public ConfirmationDialog {
-	GDCLASS(PluginConfigDialog, ConfirmationDialog);
-
-	enum {
-		MSG_ID_PLUGIN,
-		MSG_ID_SUBFOLDER,
-		MSG_ID_SCRIPT,
-		MSG_ID_ACTIVE,
-	};
-
-	LineEdit *name_edit = nullptr;
-	LineEdit *subfolder_edit = nullptr;
-	TextEdit *desc_edit = nullptr;
-	LineEdit *author_edit = nullptr;
-	LineEdit *version_edit = nullptr;
-	OptionButton *script_option_edit = nullptr;
-	Label *script_name_label = nullptr;
-	LineEdit *script_edit = nullptr;
-	Label *active_label = nullptr;
-	CheckBox *active_edit = nullptr;
-
-	LocalVector<Control *> plugin_edit_hidden_controls;
-
-	EditorValidationPanel *validation_panel = nullptr;
-
-	bool _edit_mode = false;
-
-	void _clear_fields();
-	void _on_confirmed();
-	void _on_canceled();
-	void _on_required_text_changed();
-	void _create_script_for_plugin(const String &p_plugin_path, Ref<ConfigFile> p_config_file, int p_script_lang_index);
-	String _get_subfolder();
-
-	static String _to_absolute_plugin_path(const String &p_plugin_name);
-
-protected:
-	virtual void _notification(int p_what);
-	static void _bind_methods();
+	void _git_clone_godot_cpp(const String &p_parent_path, bool p_compile);
+	void _make_dir_in_res(const String &p_dir_path);
+	String _process_template(const String &p_contents);
+	void _write_common_files_and_dirs(const String &p_addon_path);
+	void _write_file(const String &p_file_path, const String &p_contents);
+	void _ensure_file_contains(const String &p_file_path, const String &p_new_contents);
 
 public:
-	void config(const String &p_config_path);
-
-	PluginConfigDialog();
-	~PluginConfigDialog();
+	void create_plugin_only(const String &p_addon_path, bool p_compile);
+	void create_plugin_with_module(const String &p_addon_path, bool p_compile);
 };
 
-#endif // PLUGIN_CONFIG_DIALOG_H
+#endif // GDEXTENSION_PLUGIN_CREATOR_H
