@@ -42,6 +42,7 @@ repos:
             .*thirdparty.*|
             .*-so_wrap.*|
             core/math/bvh_.*\.inc$|
+            editor/plugins/gdextension/cpp_template/*|
             platform/android/java/lib/src/com.*|
             platform/android/java/lib/src/org/godotengine/godot/gl/GLSurfaceView.*|
             platform/android/java/lib/src/org/godotengine/godot/gl/EGLLogWrapper.*|

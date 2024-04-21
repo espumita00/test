@@ -39,6 +39,7 @@
 #include "scene/gui/text_edit.h"
 #include "scene/gui/texture_rect.h"
 
+class ConfigFile;
 class EditorValidationPanel;
 
 class PluginConfigDialog : public ConfirmationDialog {
@@ -57,7 +58,9 @@ class PluginConfigDialog : public ConfirmationDialog {
 	LineEdit *author_edit = nullptr;
 	LineEdit *version_edit = nullptr;
 	OptionButton *script_option_edit = nullptr;
+	Label *script_name_label = nullptr;
 	LineEdit *script_edit = nullptr;
+	Label *active_label = nullptr;
 	CheckBox *active_edit = nullptr;
 
 	LocalVector<Control *> plugin_edit_hidden_controls;
@@ -70,6 +73,7 @@ class PluginConfigDialog : public ConfirmationDialog {
 	void _on_confirmed();
 	void _on_canceled();
 	void _on_required_text_changed();
+	void _create_script_for_plugin(const String &p_plugin_path, Ref<ConfigFile> p_config_file, int p_script_lang_index);
 	String _get_subfolder();
 
 	static String _to_absolute_plugin_path(const String &p_plugin_name);
