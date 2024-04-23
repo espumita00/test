@@ -50,8 +50,6 @@ class BitMap : public Resource {
 
 	TypedArray<PackedVector2Array> _opaque_to_polygons_bind(const Rect2i &p_rect, float p_epsilon) const;
 
-	bool _get_bit_no_err(int p_x, int p_y) const;
-
 protected:
 	void _set_data(const Dictionary &p_d);
 	Dictionary _get_data() const;

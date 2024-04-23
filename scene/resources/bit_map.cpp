@@ -139,23 +139,15 @@ bool BitMap::get_bitv(const Point2i &p_pos) const {
 	return get_bit(p_pos.x, p_pos.y);
 }
 
-bool BitMap::_get_bit_no_err(int p_x, int p_y) const {
-	if (p_x >= width || p_y >= height) {
-		return false;
-	}
+bool BitMap::get_bit(int p_x, int p_y) const {
+	ERR_FAIL_INDEX_V(p_x, width, false);
+	ERR_FAIL_INDEX_V(p_y, height, false);
 
 	int ofs = width * p_y + p_x;
 	int bbyte = ofs / 8;
 	int bbit = ofs % 8;
 
 	return (bitmask[bbyte] & (1 << bbit)) != 0;
-}
-
-bool BitMap::get_bit(int p_x, int p_y) const {
-	ERR_FAIL_INDEX_V(p_x, width, false);
-	ERR_FAIL_INDEX_V(p_y, height, false);
-
-	return _get_bit_no_err(p_x, p_y);
 }
 
 Size2i BitMap::get_size() const {
@@ -723,8 +715,8 @@ Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b) {
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
-			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+			bool value_a = (x < width && y < height) ? get_bit(x, y) : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->get_bit(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a & value_b);
 		}
@@ -744,8 +736,8 @@ Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b) {
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
-			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+			bool value_a = (x < width && y < height) ? get_bit(x, y) : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->get_bit(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a | value_b);
 		}
@@ -765,8 +757,8 @@ Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &b) {
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
-			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+			bool value_a = (x < width && y < height) ? get_bit(x, y) : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->get_bit(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a ^ value_b);
 		}
@@ -782,7 +774,7 @@ Ref<BitMap> BitMap::bitwise_not() {
 
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			bool value = !_get_bit_no_err(x, y);
+			bool value = !get_bit(x, y);
 			new_bitmap->set_bit(x, y, value);
 		}
 	}
