@@ -719,11 +719,11 @@ Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b) {
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
-	new_bitmap->create(new_size); 
+	new_bitmap->create(new_size);
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
 			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a & value_b);
@@ -740,11 +740,11 @@ Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b) {
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
-	new_bitmap->create(new_size); 
+	new_bitmap->create(new_size);
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
 			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a | value_b);
@@ -761,11 +761,11 @@ Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &b) {
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
-	new_bitmap->create(new_size); 
+	new_bitmap->create(new_size);
 
 	for (int x = 0; x < new_size.width; x++) {
 		for (int y = 0; y < new_size.height; y++) {
-			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_a = (x < width && y < height) ? _get_bit_no_err(x, y) : false;
 			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
 
 			new_bitmap->set_bit(x, y, value_a ^ value_b);
