@@ -50,6 +50,8 @@ class BitMap : public Resource {
 
 	TypedArray<PackedVector2Array> _opaque_to_polygons_bind(const Rect2i &p_rect, float p_epsilon) const;
 
+	bool _get_bit_no_err(int p_x, int p_y) const;
+
 protected:
 	void _set_data(const Dictionary &p_d);
 	Dictionary _get_data() const;
@@ -78,6 +80,11 @@ public:
 	Ref<Image> convert_to_image() const;
 
 	Vector<Vector<Vector2>> clip_opaque_to_polygons(const Rect2i &p_rect, float p_epsilon = 2.0) const;
+
+	Ref<BitMap> bitwise_and(const Ref<BitMap> &b);
+	Ref<BitMap> bitwise_or(const Ref<BitMap> &b);
+	Ref<BitMap> bitwise_xor(const Ref<BitMap> &b);
+	Ref<BitMap> bitwise_not();
 
 	BitMap();
 };

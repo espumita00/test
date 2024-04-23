@@ -139,15 +139,23 @@ bool BitMap::get_bitv(const Point2i &p_pos) const {
 	return get_bit(p_pos.x, p_pos.y);
 }
 
-bool BitMap::get_bit(int p_x, int p_y) const {
-	ERR_FAIL_INDEX_V(p_x, width, false);
-	ERR_FAIL_INDEX_V(p_y, height, false);
+bool BitMap::_get_bit_no_err(int p_x, int p_y) const {
+	if (p_x >= width || p_y >= height) {
+		return false;
+	}
 
 	int ofs = width * p_y + p_x;
 	int bbyte = ofs / 8;
 	int bbit = ofs % 8;
 
 	return (bitmask[bbyte] & (1 << bbit)) != 0;
+}
+
+bool BitMap::get_bit(int p_x, int p_y) const {
+	ERR_FAIL_INDEX_V(p_x, width, false);
+	ERR_FAIL_INDEX_V(p_y, height, false);
+
+	return _get_bit_no_err(p_x, p_y);
 }
 
 Size2i BitMap::get_size() const {
@@ -704,6 +712,84 @@ void BitMap::blit(const Vector2i &p_pos, const Ref<BitMap> &p_bitmap) {
 	}
 }
 
+Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+
+	Size2i new_size = get_size().max(b->get_size());
+
+	Ref<BitMap> new_bitmap;
+	new_bitmap.instantiate();
+	new_bitmap->create(new_size); 
+
+	for (int x = 0; x < new_size.width; x++) {
+		for (int y = 0; y < new_size.height; y++) {
+			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+
+			new_bitmap->set_bit(x, y, value_a & value_b);
+		}
+	}
+
+	return new_bitmap;
+}
+
+Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+
+	Size2i new_size = get_size().max(b->get_size());
+
+	Ref<BitMap> new_bitmap;
+	new_bitmap.instantiate();
+	new_bitmap->create(new_size); 
+
+	for (int x = 0; x < new_size.width; x++) {
+		for (int y = 0; y < new_size.height; y++) {
+			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+
+			new_bitmap->set_bit(x, y, value_a | value_b);
+		}
+	}
+
+	return new_bitmap;
+}
+
+Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &b) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+
+	Size2i new_size = get_size().max(b->get_size());
+
+	Ref<BitMap> new_bitmap;
+	new_bitmap.instantiate();
+	new_bitmap->create(new_size); 
+
+	for (int x = 0; x < new_size.width; x++) {
+		for (int y = 0; y < new_size.height; y++) {
+			bool value_a = (x < width && y < height) 					? _get_bit_no_err(x, y)    : false;
+			bool value_b = (x < b->get_size().x && y < b->get_size().y) ? b->_get_bit_no_err(x, y) : false;
+
+			new_bitmap->set_bit(x, y, value_a ^ value_b);
+		}
+	}
+
+	return new_bitmap;
+}
+
+Ref<BitMap> BitMap::bitwise_not() {
+	Ref<BitMap> new_bitmap;
+	new_bitmap.instantiate();
+	new_bitmap->create(get_size());
+
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
+			bool value = !_get_bit_no_err(x, y);
+			new_bitmap->set_bit(x, y, value);
+		}
+	}
+
+	return new_bitmap;
+}
+
 void BitMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("create", "size"), &BitMap::create);
 	ClassDB::bind_method(D_METHOD("create_from_image_alpha", "image", "threshold"), &BitMap::create_from_image_alpha, DEFVAL(0.1));
@@ -725,6 +811,11 @@ void BitMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("grow_mask", "pixels", "rect"), &BitMap::grow_mask);
 	ClassDB::bind_method(D_METHOD("convert_to_image"), &BitMap::convert_to_image);
 	ClassDB::bind_method(D_METHOD("opaque_to_polygons", "rect", "epsilon"), &BitMap::_opaque_to_polygons_bind, DEFVAL(2.0));
+
+	ClassDB::bind_method(D_METHOD("bitwise_and", "other"), &BitMap::bitwise_and);
+	ClassDB::bind_method(D_METHOD("bitwise_or", "other"), &BitMap::bitwise_or);
+	ClassDB::bind_method(D_METHOD("bitwise_xor", "other"), &BitMap::bitwise_xor);
+	ClassDB::bind_method(D_METHOD("bitwise_not"), &BitMap::bitwise_not);
 
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_data", "_get_data");
 }

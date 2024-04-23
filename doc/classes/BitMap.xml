@@ -110,5 +110,35 @@
 				Sets the bitmap's element at the specified position, to the specified value.
 			</description>
 		</method>
+		<method name="bitwise_and">
+			<return type="BitMap" />
+			<param index="0" name="other" type="BitMap" />
+			<description>
+				Creates a new bitmap from the boolean AND operation with another bitmap.
+				If the other bitmap is a different size, the new bitmap's size is the maximum width and height of either bitmap.
+			</description>
+		</method>
+		<method name="bitwise_or">
+			<return type="BitMap" />
+			<param index="0" name="other" type="BitMap" />
+			<description>
+				Creates a new bitmap from the boolean OR operation with another bitmap.
+				If the other bitmap is a different size, the new bitmap's size is the maximum width and height of either bitmap.
+			</description>
+		</method>
+		<method name="bitwise_xor">
+			<return type="BitMap" />
+			<param index="0" name="other" type="BitMap" />
+			<description>
+				Creates a new bitmap from the boolean XOR operation with another bitmap.
+				If the other bitmap is a different size, the new bitmap's size is the maximum width and height of either bitmap.
+			</description>
+		</method>
+		<method name="bitwise_not">
+			<return type="BitMap" />
+			<description>
+				Creates a new bitmap from the boolean NOT operation (i.e. every bit has been flipped from true to false and false to true).
+			</description>
+		</method>
 	</methods>
 </class>
