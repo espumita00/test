@@ -704,10 +704,10 @@ void BitMap::blit(const Vector2i &p_pos, const Ref<BitMap> &p_bitmap) {
 	}
 }
 
-Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b) {
-	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b, BitwiseSizeMode size_mode) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "Null reference to BitMap \"other\".");
 
-	Size2i new_size = get_size().max(b->get_size());
+	Size2i new_size = _get_size_from_mode(get_size(), b->get_size(), size_mode);
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -725,10 +725,10 @@ Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &b) {
 	return new_bitmap;
 }
 
-Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b) {
-	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b, BitwiseSizeMode size_mode) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "Null reference to BitMap \"other\".");
 
-	Size2i new_size = get_size().max(b->get_size());
+	Size2i new_size = _get_size_from_mode(get_size(), b->get_size(), size_mode);
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -746,10 +746,10 @@ Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &b) {
 	return new_bitmap;
 }
 
-Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &b) {
-	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "It's not a reference to a valid BitMap object.");
+Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &b, BitwiseSizeMode size_mode) {
+	ERR_FAIL_COND_V_MSG(b.is_null(), NULL, "Null reference to BitMap \"other\".");
 
-	Size2i new_size = get_size().max(b->get_size());
+	Size2i new_size = _get_size_from_mode(get_size(), b->get_size(), size_mode);
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -782,6 +782,20 @@ Ref<BitMap> BitMap::bitwise_not() {
 	return new_bitmap;
 }
 
+Size2i BitMap::_get_size_from_mode(Size2i a, Size2i b, BitwiseSizeMode size_mode) {
+	switch (size_mode) {
+		case BITWISE_SIZE_USE_CURRENT:
+			return a;
+		case BITWISE_SIZE_USE_OTHER:
+			return b;
+		case BITWISE_SIZE_INTERSECTION:
+			return a.min(b);
+		case BITWISE_SIZE_UNION:
+			return a.max(b);
+	}
+	ERR_FAIL_V_MSG(Vector2i(0, 0), "The supplied BitwiseSizeMode is not valid.");
+}
+
 void BitMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("create", "size"), &BitMap::create);
 	ClassDB::bind_method(D_METHOD("create_from_image_alpha", "image", "threshold"), &BitMap::create_from_image_alpha, DEFVAL(0.1));
@@ -804,10 +818,15 @@ void BitMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("convert_to_image"), &BitMap::convert_to_image);
 	ClassDB::bind_method(D_METHOD("opaque_to_polygons", "rect", "epsilon"), &BitMap::_opaque_to_polygons_bind, DEFVAL(2.0));
 
-	ClassDB::bind_method(D_METHOD("bitwise_and", "other"), &BitMap::bitwise_and);
-	ClassDB::bind_method(D_METHOD("bitwise_or", "other"), &BitMap::bitwise_or);
-	ClassDB::bind_method(D_METHOD("bitwise_xor", "other"), &BitMap::bitwise_xor);
+	ClassDB::bind_method(D_METHOD("bitwise_and", "other", "size_mode"), &BitMap::bitwise_and, DEFVAL(BitMap::BITWISE_SIZE_UNION));
+	ClassDB::bind_method(D_METHOD("bitwise_or", "other", "size_mode"), &BitMap::bitwise_or, DEFVAL((BitMap::BITWISE_SIZE_UNION)));
+	ClassDB::bind_method(D_METHOD("bitwise_xor", "other", "size_mode"), &BitMap::bitwise_xor, DEFVAL((BitMap::BITWISE_SIZE_UNION)));
 	ClassDB::bind_method(D_METHOD("bitwise_not"), &BitMap::bitwise_not);
+
+	BIND_ENUM_CONSTANT(BITWISE_SIZE_USE_CURRENT);
+	BIND_ENUM_CONSTANT(BITWISE_SIZE_USE_OTHER);
+	BIND_ENUM_CONSTANT(BITWISE_SIZE_INTERSECTION);
+	BIND_ENUM_CONSTANT(BITWISE_SIZE_UNION);
 
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_data", "_get_data");
 }
