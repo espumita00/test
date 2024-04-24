@@ -12,7 +12,7 @@
 		<method name="bitwise_and">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode", type="BitMap.BitwiseSizeMode" default="3"/>
+			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
 				Creates a new bitmap from the boolean AND operation with [param other].
 				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
@@ -21,24 +21,31 @@
 		<method name="bitwise_not">
 			<return type="BitMap" />
 			<description>
-				Creates a new bitmap from the boolean NOT operation (i.e. every bit has been flipped from true to false and false to true).
+				Creates a new bitmap from the boolean NOT operation (i.e. every bit has been flipped from [code]true[/code] to [code]false[/code] and [code]false[/code] to [code]true[/code]).
 			</description>
 		</method>
 		<method name="bitwise_or">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode", type="BitMap.BitwiseSizeMode" default="3"/>
+			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
 				Creates a new bitmap from the boolean OR operation with [param other].
-				[param size_mode] defines the size of the new bitmap based on this bitmap's size and [param other]'s size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
+				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
 			</description>
 		</method>
 		<method name="bitwise_xor">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode", type="BitMap.BitwiseSizeMode" default="3"/>
+			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
-				Creates a new bitmap from the boolean XOR operation with the other bitmap.
+				Creates a new bitmap from the boolean XOR operation with [param other].
+				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
+			</description>
+		</method>
+		<method name="convert_to_image" qualifiers="const">
+			<return type="Image" />
+			<description>
+				Returns an image of the same size as the bitmap and with a [enum Image.Format] of type [constant Image.FORMAT_L8]. [code]true[/code] bits of the bitmap are being converted into white pixels, and [code]false[/code] bits into black.
 			</description>
 		</method>
 		<method name="convert_to_image" qualifiers="const">
@@ -151,7 +158,7 @@
 			Uses the size of the other bitmap. Bits located outside this bitmap's width and height are false by default.
 		</constant>
 		<constant name="BITWISE_SIZE_INTERSECTION" value="2" enum="BitwiseSizeMode">
-			Uses the biggest size that both bitmaps have data for.
+			Uses the largest size that both bitmaps support.
 		</constant>
 		<constant name="BITWISE_SIZE_UNION" value="3" enum="BitwiseSizeMode">
 			Uses the maximum width and height that either bitmap has. Bits located outside a bitmap's width and height are false by default.
