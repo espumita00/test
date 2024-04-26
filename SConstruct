@@ -1,19 +1,33 @@
 #!/usr/bin/env python
 
+from SCons.Script import EnsureSConsVersion, EnsurePythonVersion
+
 EnsureSConsVersion(3, 0, 0)
 EnsurePythonVersion(3, 6)
 
 # System
-import atexit
-import glob
-import os
-import pickle
-import sys
-import time
-from types import ModuleType
-from collections import OrderedDict
-from importlib.util import spec_from_file_location, module_from_spec
-from SCons import __version__ as scons_raw_version
+import atexit  # noqa: E402
+import glob  # noqa: E402
+import os  # noqa: E402
+import pickle  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+from types import ModuleType  # noqa: E402
+from collections import OrderedDict  # noqa: E402
+from importlib.util import spec_from_file_location, module_from_spec  # noqa: E402
+from SCons.Script import (  # noqa: E402
+    ARGUMENTS,
+    Environment,
+    Variables,
+    EnumVariable,
+    BoolVariable,
+    Exit,
+    SConscript,
+    SetOption,
+    Configure,
+    GetBuildFailures,
+)
+from SCons import __version__ as scons_raw_version  # noqa: E402
 
 # Explicitly resolve the helper modules, this is done to avoid clash with
 # modules of the same name that might be randomly added (e.g. someone adding
@@ -53,11 +67,11 @@ _helper_module("main.main_builders", "main/main_builders.py")
 _helper_module("modules.modules_builders", "modules/modules_builders.py")
 
 # Local
-import methods
-import glsl_builders
-import gles3_builders
-import scu_builders
-from platform_methods import architectures, architecture_aliases, generate_export_icons
+import methods  # noqa: E402
+import glsl_builders  # noqa: E402
+import gles3_builders  # noqa: E402
+import scu_builders  # noqa: E402
+from platform_methods import architectures, architecture_aliases, generate_export_icons  # noqa: E402
 
 if ARGUMENTS.get("target", "editor") == "editor":
     _helper_module("editor.editor_builders", "editor/editor_builders.py")
@@ -154,7 +168,7 @@ env["x86_libtheora_opt_gcc"] = False
 env["x86_libtheora_opt_vc"] = False
 
 # avoid issues when building with different versions of python out of the same directory
-env.SConsignFile(File("#.sconsign{0}.dblite".format(pickle.HIGHEST_PROTOCOL)).abspath)
+env.SConsignFile(File("#.sconsign{0}.dblite".format(pickle.HIGHEST_PROTOCOL)).abspath)  # noqa: F821
 
 # Build options
 
@@ -418,7 +432,7 @@ methods.write_modules(modules_detected)
 # Update the environment again after all the module options are added.
 opts.Update(env)
 env["platform"] = selected_platform  # Must always be re-set after calling opts.Update().
-Help(opts.GenerateHelpText(env))
+Help(opts.GenerateHelpText(env))  # noqa: F821
 
 # add default include paths
 
@@ -496,7 +510,7 @@ if env["precision"] == "double":
 
 tmppath = "./platform/" + selected_platform
 sys.path.insert(0, tmppath)
-import detect
+import detect  # noqa: E402
 
 # Default num_jobs to local cpu count if not user specified.
 # SCons has a peculiarity where user-specified options won't be overridden
@@ -542,7 +556,7 @@ if env["build_profile"] != "":
             dbo = ft["disabled_build_options"]
             for c in dbo:
                 env[c] = dbo[c]
-    except:
+    except json.JSONDecodeError:
         print("Error opening feature build profile: " + env["build_profile"])
         Exit(255)
 methods.write_disabled_classes(disabled_classes)
@@ -551,7 +565,7 @@ methods.write_disabled_classes(disabled_classes)
 # These can sometimes override default options.
 flag_list = platform_flags[selected_platform]
 for f in flag_list:
-    if not (f[0] in ARGUMENTS) or ARGUMENTS[f[0]] == "auto":  # Allow command line to override platform flags
+    if f[0] not in ARGUMENTS or ARGUMENTS[f[0]] == "auto":  # Allow command line to override platform flags
         env[f[0]] = f[1]
 
 # 'dev_mode' and 'production' are aliases to set default options if they haven't been
@@ -572,7 +586,7 @@ if env["production"]:
 # Run SCU file generation script if in a SCU build.
 if env["scu_build"]:
     max_includes_per_scu = 8
-    if env.dev_build == True:
+    if env.dev_build:
         max_includes_per_scu = 1024
 
     read_scu_limit = int(env["scu_limit"])
@@ -705,7 +719,7 @@ else:
             env.Append(CCFLAGS=["-g2"])
         if env["debug_paths_relative"]:
             # Remap absolute paths to relative paths for debug symbols.
-            project_path = Dir("#").abspath
+            project_path = Dir("#").abspath  # noqa: F821
             env.Append(CCFLAGS=[f"-ffile-prefix-map={project_path}=."])
     else:
         if methods.using_clang(env) and not methods.is_vanilla_clang(env):
@@ -973,8 +987,8 @@ GLSL_BUILDERS = {
 env.Append(BUILDERS=GLSL_BUILDERS)
 
 scons_cache_path = os.environ.get("SCONS_CACHE")
-if scons_cache_path != None:
-    CacheDir(scons_cache_path)
+if scons_cache_path is not None:
+    CacheDir(scons_cache_path)  # noqa: F821
     print("Scons cache enabled... (path: '" + scons_cache_path + "')")
 
 if env["vsproj"]:
@@ -1008,7 +1022,7 @@ if env["threads"]:
     env.Append(CPPDEFINES=["THREADS_ENABLED"])
 
 # Build subdirs, the build order is dependent on link order.
-Export("env")
+Export("env")  # noqa: F821
 
 SConscript("core/SCsub")
 SConscript("servers/SCsub")
@@ -1027,7 +1041,7 @@ SConscript("platform/" + selected_platform + "/SCsub")  # Build selected platfor
 
 # Microsoft Visual Studio Project Generation
 if env["vsproj"]:
-    env["CPPPATH"] = [Dir(path) for path in env["CPPPATH"]]
+    env["CPPPATH"] = [Dir(path) for path in env["CPPPATH"]]  # noqa: F821
     methods.generate_vs_project(env, ARGUMENTS, env["vsproj_name"])
     methods.generate_cpp_hint_file("cpp.hint")
 

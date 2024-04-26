@@ -13,15 +13,19 @@ repos:
             .*-so_wrap.*
           )
 
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.2.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.5
     hooks:
-      - id: black
-        files: (\.py$|SConstruct|SCsub)
-        types_or: [text]
+      - id: ruff
+        files: (\.py$|SConstruct|SCub)
+        types_or: [ text ]
+        args: [ --fix ]
         exclude: .*thirdparty.*
-        args:
-          - --line-length=120
+      - id: ruff-format
+        files: (\.py$|SConstruct|SCub)
+        types_or: [ text ]
+        exclude: .*thirdparty.*
+        args: [ --line-length=120 ]
 
   - repo: local
     hooks:
