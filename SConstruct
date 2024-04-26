@@ -591,27 +591,30 @@ if env.dev_build:
     print("NOTE: Developer build, with debug optimization level and debug symbols (unless overridden).")
 
 # Enforce our minimal compiler version requirements
-cc_version = methods.get_compiler_version(env) or {
-    "major": None,
-    "minor": None,
-    "patch": None,
-    "metadata1": None,
-    "metadata2": None,
-    "date": None,
-}
-cc_version_major = int(cc_version["major"] or -1)
-cc_version_minor = int(cc_version["minor"] or -1)
-cc_version_metadata1 = cc_version["metadata1"] or ""
+cc_version = methods.get_compiler_version(env)
 
-if methods.using_gcc(env):
-    if cc_version_major == -1:
+if cc_version.major == -1:
+    print(
+        "Couldn't detect compiler version, skipping version checks. "
+        "Build may fail if the compiler doesn't support C++17 fully."
+    )
+elif env.msvc:
+    if cc_version.major == 15 and cc_version.minor < 7:
         print(
-            "Couldn't detect compiler version, skipping version checks. "
-            "Build may fail if the compiler doesn't support C++17 fully."
+            "Detected Visual Studio 2017 version older than 15.7, which does "
+            "not fully support C++17. Supported versions are 15.7 and later."
         )
+        Exit(255)
+    if cc_version.major < 15:
+        print(
+            "Detected Visual Studio 2015 or earlier, which does not fully support "
+            "C++17. Supported versions are Visual Studio 2017 15.7 and later."
+        )
+        Exit(255)
+elif methods.using_gcc(env):
     # GCC 8 before 8.4 has a regression in the support of guaranteed copy elision
     # which causes a build failure: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=86521
-    elif cc_version_major == 8 and cc_version_minor < 4:
+    if cc_version.major == 8 and cc_version.minor < 4:
         print(
             "Detected GCC 8 version < 8.4, which is not supported due to a "
             "regression in its C++17 guaranteed copy elision support. Use a "
@@ -619,7 +622,7 @@ if methods.using_gcc(env):
             "to the SCons command line."
         )
         Exit(255)
-    elif cc_version_major < 7:
+    elif cc_version.major < 7:
         print(
             "Detected GCC version older than 7, which does not fully support "
             "C++17. Supported versions are GCC 7, 9 and later. Use a newer GCC "
@@ -627,7 +630,7 @@ if methods.using_gcc(env):
             "SCons command line."
         )
         Exit(255)
-    elif cc_version_metadata1 == "win32":
+    elif cc_version.metadata1 == "win32":
         print(
             "Detected mingw version is not using posix threads. Only posix "
             "version of mingw is supported. "
@@ -635,41 +638,36 @@ if methods.using_gcc(env):
             "to switch to posix threads."
         )
         Exit(255)
-    if env["debug_paths_relative"] and cc_version_major < 8:
+    if env["debug_paths_relative"] and cc_version.major < 8:
         print("GCC < 8 doesn't support -ffile-prefix-map, disabling `debug_paths_relative` option.")
         env["debug_paths_relative"] = False
 elif methods.using_clang(env):
-    if cc_version_major == -1:
-        print(
-            "Couldn't detect compiler version, skipping version checks. "
-            "Build may fail if the compiler doesn't support C++17 fully."
-        )
     # Apple LLVM versions differ from upstream LLVM version \o/, compare
     # in https://en.wikipedia.org/wiki/Xcode#Toolchain_versions
-    elif env["platform"] == "macos" or env["platform"] == "ios":
+    if env["platform"] == "macos" or env["platform"] == "ios":
         vanilla = methods.is_vanilla_clang(env)
-        if vanilla and cc_version_major < 6:
+        if vanilla and cc_version.major < 6:
             print(
                 "Detected Clang version older than 6, which does not fully support "
                 "C++17. Supported versions are Clang 6 and later."
             )
             Exit(255)
-        elif not vanilla and cc_version_major < 10:
+        elif not vanilla and cc_version.major < 10:
             print(
                 "Detected Apple Clang version older than 10, which does not fully "
                 "support C++17. Supported versions are Apple Clang 10 and later."
             )
             Exit(255)
-        if env["debug_paths_relative"] and not vanilla and cc_version_major < 12:
+        if env["debug_paths_relative"] and not vanilla and cc_version.major < 12:
             print("Apple Clang < 12 doesn't support -ffile-prefix-map, disabling `debug_paths_relative` option.")
             env["debug_paths_relative"] = False
-    elif cc_version_major < 6:
+    elif cc_version.major < 6:
         print(
             "Detected Clang version older than 6, which does not fully support "
             "C++17. Supported versions are Clang 6 and later."
         )
         Exit(255)
-    if env["debug_paths_relative"] and cc_version_major < 10:
+    if env["debug_paths_relative"] and cc_version.major < 10:
         print("Clang < 10 doesn't support -ffile-prefix-map, disabling `debug_paths_relative` option.")
         env["debug_paths_relative"] = False
 
@@ -736,13 +734,18 @@ if env["lto"] != "none":
 # This needs to come after `configure`, otherwise we don't have env.msvc.
 if not env.msvc:
     # Specifying GNU extensions support explicitly, which are supported by
-    # both GCC and Clang. Both currently default to gnu11 and gnu++14.
+    # both GCC and Clang. Both currently default to gnu11 and gnu++17.
     env.Prepend(CFLAGS=["-std=gnu11"])
     env.Prepend(CXXFLAGS=["-std=gnu++17"])
 else:
-    # MSVC doesn't have clear C standard support, /std only covers C++.
-    # We apply it to CCFLAGS (both C and C++ code) in case it impacts C features.
-    env.Prepend(CCFLAGS=["/std:c++17"])
+    # MSVC started offering C standard support with Visual Studio 2019 16.8;
+    # earlier versions apply C++ Standard to CCFLAGS (both C and C++ code)
+    # in case it impacts C features.
+    if cc_version.major < 16 or (cc_version.major == 16 and cc_version.minor < 8):
+        env.Prepend(CCFLAGS=["/std:c++17"])
+    else:
+        env.Prepend(CFLAGS=["/std:c11"])
+        env.Prepend(CXXFLAGS=["/std:c++17"])
 
 # Disable exception handling. Godot doesn't use exceptions anywhere, and this
 # saves around 20% of binary size and very significant build time (GH-80513).
@@ -791,13 +794,13 @@ else:  # GCC, Clang
 
     if methods.using_gcc(env):
         common_warnings += ["-Wshadow", "-Wno-misleading-indentation"]
-        if cc_version_major == 7:  # Bogus warning fixed in 8+.
+        if cc_version.major == 7:  # Bogus warning fixed in 8+.
             common_warnings += ["-Wno-strict-overflow"]
-        if cc_version_major < 11:
+        if cc_version.major < 11:
             # Regression in GCC 9/10, spams so much in our variadic templates
             # that we need to outright disable it.
             common_warnings += ["-Wno-type-limits"]
-        if cc_version_major >= 12:  # False positives in our error macros, see GH-58747.
+        if cc_version.major >= 12:  # False positives in our error macros, see GH-58747.
             common_warnings += ["-Wno-return-type"]
     elif methods.using_clang(env) or methods.using_emcc(env):
         common_warnings += ["-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local"]
@@ -819,11 +822,11 @@ else:  # GCC, Clang
             )
             env.Append(CXXFLAGS=["-Wplacement-new=1"])
             # Need to fix a warning with AudioServer lambdas before enabling.
-            # if cc_version_major != 9:  # GCC 9 had a regression (GH-36325).
+            # if cc_version.major != 9:  # GCC 9 had a regression (GH-36325).
             #    env.Append(CXXFLAGS=["-Wnoexcept"])
-            if cc_version_major >= 9:
+            if cc_version.major >= 9:
                 env.Append(CCFLAGS=["-Wattribute-alias=2"])
-            if cc_version_major >= 11:  # Broke on MethodBind templates before GCC 11.
+            if cc_version.major >= 11:  # Broke on MethodBind templates before GCC 11.
                 env.Append(CCFLAGS=["-Wlogical-op"])
         elif methods.using_clang(env) or methods.using_emcc(env):
             env.Append(CCFLAGS=["-Wimplicit-fallthrough"])
