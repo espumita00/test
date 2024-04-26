@@ -234,6 +234,7 @@ opts.Add(BoolVariable("use_precise_math_checks", "Math checks use very precise e
 opts.Add(BoolVariable("scu_build", "Use single compilation unit build", False))
 opts.Add("scu_limit", "Max includes per SCU file when using scu_build (determines RAM use)", "0")
 opts.Add(BoolVariable("engine_update_check", "Enable engine update checks in the Project Manager", True))
+opts.Add("profile", "Path to a file containing build arguments (used in addition to root `custom.py`).", "")
 
 # Thirdparty libraries
 opts.Add(BoolVariable("builtin_brotli", "Use the built-in Brotli library", True))
@@ -419,6 +420,13 @@ methods.write_modules(modules_detected)
 opts.Update(env)
 env["platform"] = selected_platform  # Must always be re-set after calling opts.Update().
 Help(opts.GenerateHelpText(env))
+
+# Detect and print a warning listing unknown SCons variables to ease troubleshooting.
+unknown = opts.UnknownVariables()
+if unknown:
+    print("WARNING: Unknown SCons variables were passed and will be ignored:")
+    for key, value in unknown.items():
+        print(f"\t{key} = {value}")
 
 # add default include paths
 
