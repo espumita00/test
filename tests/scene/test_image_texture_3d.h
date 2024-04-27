@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_image_texture3d.h                                                  */
+/*  test_image_texture_3d.h                                               */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -26,6 +26,7 @@
 /* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
 /* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifndef TEST_IMAGE_TEXTURE_3D_H
 #define TEST_IMAGE_TEXTURE_3D_H
@@ -41,58 +42,58 @@ namespace TestImageTexture3d {
 // [SceneTree] in a test case name enables initializing a mock render server,
 // which ImageTexture3D is dependent on.
 TEST_CASE("[SceneTree][ImageTexture3D] constructor") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->get_format() == Image::FORMAT_L8);
-    CHECK(image_texture3D->get_width() == 1);
-    CHECK(image_texture3D->get_height() == 1);
-    CHECK(image_texture3D->get_depth() == 1);
-    CHECK(image_texture3D->has_mipmaps() == false);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->get_format() == Image::FORMAT_L8);
+	CHECK(image_texture3D->get_width() == 1);
+	CHECK(image_texture3D->get_height() == 1);
+	CHECK(image_texture3D->get_depth() == 1);
+	CHECK(image_texture3D->has_mipmaps() == false);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] get_format") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->get_format() == Image::FORMAT_L8);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->get_format() == Image::FORMAT_L8);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] get_width") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->get_width() == 1);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->get_width() == 1);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] get_height") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->get_height() == 1);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->get_height() == 1);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] get_depth") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->get_depth() == 1);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->get_depth() == 1);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] has_mipmaps") {
-    const Vector<Ref<Image>> images = {memnew(Image(8, 8, false, Image::FORMAT_RGBA8)), memnew(Image(8, 8, false, Image::FORMAT_RGBA8))};
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->has_mipmaps() == false); // no mipmaps
-    image_texture3D->create(Image::FORMAT_RGBA8, 2, 2, 2, true, images);
-    CHECK(image_texture3D->has_mipmaps() == true); // mipmaps
+	const Vector<Ref<Image>> images = { memnew(Image(8, 8, false, Image::FORMAT_RGBA8)), memnew(Image(8, 8, false, Image::FORMAT_RGBA8)) };
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->has_mipmaps() == false); // no mipmaps
+	image_texture3D->create(Image::FORMAT_RGBA8, 2, 2, 2, true, images);
+	CHECK(image_texture3D->has_mipmaps() == true); // mipmaps
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] create") {
-    const Vector<Ref<Image>> images = {memnew(Image(8, 8, false, Image::FORMAT_RGBA8)), memnew(Image(8, 8, false, Image::FORMAT_RGBA8))};
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    CHECK(image_texture3D->create(Image::FORMAT_RGBA8, 2, 2, 2, true, images) == OK); // run create and check return value simutaneously
-    CHECK(image_texture3D->get_format() == Image::FORMAT_RGBA8);
-    CHECK(image_texture3D->get_width() == 2);
-    CHECK(image_texture3D->get_height() == 2);
-    CHECK(image_texture3D->get_depth() == 2);
-    CHECK(image_texture3D->has_mipmaps() == true);
+	const Vector<Ref<Image>> images = { memnew(Image(8, 8, false, Image::FORMAT_RGBA8)), memnew(Image(8, 8, false, Image::FORMAT_RGBA8)) };
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	CHECK(image_texture3D->create(Image::FORMAT_RGBA8, 2, 2, 2, true, images) == OK); // run create and check return value simutaneously
+	CHECK(image_texture3D->get_format() == Image::FORMAT_RGBA8);
+	CHECK(image_texture3D->get_width() == 2);
+	CHECK(image_texture3D->get_height() == 2);
+	CHECK(image_texture3D->get_depth() == 2);
+	CHECK(image_texture3D->has_mipmaps() == true);
 }
 
 TEST_CASE("[SceneTree][ImageTexture3D] set_path") {
-    Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
-    String path = TestUtils::get_data_path("images/icon.png");
-    image_texture3D->set_path(path, true);
-    CHECK(image_texture3D->get_path() == path);
+	Ref<ImageTexture3D> image_texture3D = memnew(ImageTexture3D);
+	String path = TestUtils::get_data_path("images/icon.png");
+	image_texture3D->set_path(path, true);
+	CHECK(image_texture3D->get_path() == path);
 }
 
 } //namespace TestImageTexture3d
