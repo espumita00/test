@@ -51,8 +51,8 @@ template <typename TKey,
 		typename Comparator = HashMapComparatorDefault<TKey>>
 class HashSet {
 public:
+	// Must be 2^n.
 	static constexpr uint32_t INITIAL_CAPACITY = 32;
-	static constexpr float MAX_OCCUPANCY = 0.75;
 	static constexpr uint32_t EMPTY_HASH = 0;
 
 private:
@@ -75,19 +75,20 @@ private:
 		return hash;
 	}
 
-	_FORCE_INLINE_ uint32_t _get_probe_length(uint32_t p_pos, uint32_t p_hash) const {
-		const uint32_t original_pos = p_hash & capacity;
-		if (unlikely(p_pos < original_pos)) {
-			return capacity + 1 - original_pos + p_pos;
-		}
-		return p_pos - original_pos;
+	static _FORCE_INLINE_ uint32_t _get_resize_count(uint32_t p_capacity) {
+		return p_capacity ^ (p_capacity + 1) >> 2; // = get_capacity() * 0.75 - 1; Works only if p_capacity = 2^n - 1.
 	}
 
-	bool _lookup_pos(const TKey &p_key, uint32_t &r_pos) const {
+	static _FORCE_INLINE_ uint32_t _get_probe_length(uint32_t p_pos, uint32_t p_hash, uint32_t p_local_capacity) {
+		const uint32_t original_pos = p_hash & p_local_capacity;
+		return (p_pos - original_pos + p_local_capacity + 1) & p_local_capacity;
+	}
+
+	_FORCE_INLINE_ bool _lookup_pos(const TKey &p_key, uint32_t &r_pos) const {
 		return _lookup_pos_with_hash(p_key, r_pos, _hash(p_key));
 	}
 
-	bool _lookup_pos_with_hash(const TKey &p_key, uint32_t &r_pos, uint32_t p_hash) const {
+	_FORCE_INLINE_ bool _lookup_pos_with_hash(const TKey &p_key, uint32_t &r_pos, uint32_t p_hash) const {
 		if (unlikely(keys == nullptr)) {
 			return false; // Failed lookups, no elements.
 		}
@@ -116,7 +117,7 @@ private:
 				return false;
 			}
 
-			if (distance > _get_probe_length(pos, hashes[pos])) {
+			if (distance > _get_probe_length(pos, hashes[pos], capacity)) {
 				return false;
 			}
 
@@ -125,7 +126,7 @@ private:
 		}
 	}
 
-	uint32_t _insert_with_hash(uint32_t p_hash, uint32_t p_index) {
+	_FORCE_INLINE_ uint32_t _insert_with_hash(uint32_t p_hash, uint32_t p_index) {
 		uint32_t hash = p_hash;
 		uint32_t index = p_index;
 		uint32_t distance = 0;
@@ -140,7 +141,7 @@ private:
 			}
 
 			// Not an empty slot, let's check the probing length of the existing one.
-			uint32_t existing_probe_len = _get_probe_length(pos, hashes[pos]);
+			uint32_t existing_probe_len = _get_probe_length(pos, hashes[pos], capacity);
 			if (existing_probe_len < distance) {
 				key_to_hash[index] = pos;
 				SWAP(hash, hashes[pos]);
@@ -156,19 +157,18 @@ private:
 	void _resize_and_rehash(uint32_t p_new_capacity) {
 		// Capacity can't be 0 and must be 2^n - 1.
 		capacity = MAX(4u, p_new_capacity);
-		capacity = next_power_of_2(capacity - 1) - 1;
+		uint32_t real_capacity = next_power_of_2(capacity - 1);
+		capacity = real_capacity - 1;
 
 		uint32_t *old_hashes = hashes;
 		uint32_t *old_key_to_hash = key_to_hash;
 
-		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-		keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * (capacity + 1)));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_static(hash_to_key, sizeof(uint32_t) * (capacity + 1)));
+		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * (_get_resize_count(capacity) + 1)));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_static(hash_to_key, sizeof(uint32_t) * real_capacity));
 
-		for (uint32_t i = 0; i < capacity + 1; i++) {
-			hashes[i] = EMPTY_HASH;
-		}
+		memset(hashes, EMPTY_HASH, real_capacity * sizeof(uint32_t));
 
 		for (uint32_t i = 0; i < num_elements; i++) {
 			uint32_t h = old_hashes[old_key_to_hash[i]];
@@ -183,14 +183,13 @@ private:
 		if (unlikely(keys == nullptr)) {
 			// Allocate on demand to save memory.
 
-			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-			keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (capacity + 1)));
-			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-			hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
+			uint32_t real_capacity = capacity + 1;
+			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+			keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (_get_resize_count(capacity) + 1)));
+			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+			hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 
-			for (uint32_t i = 0; i < capacity + 1; i++) {
-				hashes[i] = EMPTY_HASH;
-			}
+			memset(hashes, EMPTY_HASH, real_capacity * sizeof(uint32_t));
 		}
 
 		uint32_t pos = 0;
@@ -200,7 +199,7 @@ private:
 		if (exists) {
 			return pos;
 		} else {
-			if (num_elements + 1 > MAX_OCCUPANCY * capacity) {
+			if (unlikely(num_elements > _get_resize_count(capacity))) {
 				_resize_and_rehash(capacity * 2);
 			}
 
@@ -219,31 +218,29 @@ private:
 
 	void _init_from(const HashSet &p_other) {
 		capacity = p_other.capacity;
+		uint32_t real_capacity = capacity + 1;
 		num_elements = p_other.num_elements;
 
 		if (p_other.num_elements == 0) {
 			return;
 		}
 
-		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-		keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (capacity + 1)));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
-		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (capacity + 1)));
+		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (_get_resize_count(capacity) + 1)));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 
-		for (uint32_t i = 0; i < num_elements; i++) {
-			if constexpr (!std::is_trivially_constructible_v<TKey>) {
+		if constexpr (!std::is_trivially_constructible_v<TKey>) {
+			for (uint32_t i = 0; i < num_elements; i++) {
 				memnew_placement(&keys[i], TKey(p_other.keys[i]));
-			} else {
-				TKey key = p_other.keys[i];
-				keys[i] = key;
 			}
-			key_to_hash[i] = p_other.key_to_hash[i];
+		} else {
+			memcpy(keys, p_other.keys, sizeof(TKey) * num_elements);
 		}
 
-		for (uint32_t i = 0; i < capacity + 1; i++) {
-			hashes[i] = p_other.hashes[i];
-			hash_to_key[i] = p_other.hash_to_key[i];
-		}
+		memcpy(key_to_hash, p_other.key_to_hash, sizeof(uint32_t) * num_elements);
+		memcpy(hashes, p_other.hashes, sizeof(uint32_t) * real_capacity);
+		memcpy(hash_to_key, p_other.hash_to_key, sizeof(uint32_t) * real_capacity);
 	}
 
 public:
@@ -260,9 +257,8 @@ public:
 		if (keys == nullptr || num_elements == 0) {
 			return;
 		}
-		for (uint32_t i = 0; i < capacity + 1; i++) {
-			hashes[i] = EMPTY_HASH;
-		}
+
+		memset(hashes, EMPTY_HASH, (capacity + 1) * sizeof(uint32_t));
 		if constexpr (!std::is_trivially_destructible_v<TKey>) {
 			for (uint32_t i = 0; i < num_elements; i++) {
 				keys[i].~TKey();
@@ -272,7 +268,7 @@ public:
 		num_elements = 0;
 	}
 
-	_FORCE_INLINE_ bool has(const TKey &p_key) const {
+	bool has(const TKey &p_key) const {
 		uint32_t _pos = 0;
 		return _lookup_pos(p_key, _pos);
 	}
@@ -289,7 +285,7 @@ public:
 		pos = key_to_hash[pos]; // Make hash pos.
 
 		uint32_t next_pos = (pos + 1) & capacity;
-		while (hashes[next_pos] != EMPTY_HASH && _get_probe_length(next_pos, hashes[next_pos]) != 0) {
+		while (hashes[next_pos] != EMPTY_HASH && _get_probe_length(next_pos, hashes[next_pos], capacity) != 0) {
 			uint32_t kpos = hash_to_key[pos];
 			uint32_t kpos_next = hash_to_key[next_pos];
 			SWAP(key_to_hash[kpos], key_to_hash[kpos_next]);
@@ -326,7 +322,7 @@ public:
 	// Reserves space for a number of elements, useful to avoid many resizes and rehashes.
 	// If adding a known (possibly large) number of elements at once, must be larger than old capacity.
 	void reserve(uint32_t p_new_capacity) {
-		ERR_FAIL_COND(p_new_capacity < capacity + 1);
+		ERR_FAIL_COND_MSG(p_new_capacity < get_capacity(), "It is impossible to reserve less capacity than is currently available.");
 		if (keys == nullptr) {
 			capacity = MAX(4u, p_new_capacity);
 			capacity = next_power_of_2(capacity - 1) - 1;
@@ -339,80 +335,62 @@ public:
 
 	struct Iterator {
 		_FORCE_INLINE_ const TKey &operator*() const {
-			return keys[index];
+			return *key;
 		}
 		_FORCE_INLINE_ const TKey *operator->() const {
-			return &keys[index];
+			return key;
 		}
 		_FORCE_INLINE_ Iterator &operator++() {
-			index++;
-			if (index >= (int32_t)num_keys) {
-				index = -1;
-				keys = nullptr;
-				num_keys = 0;
-			}
+			key++;
 			return *this;
 		}
 		_FORCE_INLINE_ Iterator &operator--() {
-			index--;
-			if (index < 0) {
-				index = -1;
-				keys = nullptr;
-				num_keys = 0;
-			}
+			key--;
 			return *this;
 		}
 
-		_FORCE_INLINE_ bool operator==(const Iterator &b) const { return keys == b.keys && index == b.index; }
-		_FORCE_INLINE_ bool operator!=(const Iterator &b) const { return keys != b.keys || index != b.index; }
+		_FORCE_INLINE_ bool operator==(const Iterator &b) const { return key == b.key; }
+		_FORCE_INLINE_ bool operator!=(const Iterator &b) const { return key != b.key; }
 
 		_FORCE_INLINE_ explicit operator bool() const {
-			return keys != nullptr;
+			return key != nullptr;
 		}
 
-		_FORCE_INLINE_ Iterator(const TKey *p_keys, uint32_t p_num_keys, int32_t p_index = -1) {
-			keys = p_keys;
-			num_keys = p_num_keys;
-			index = p_index;
+		_FORCE_INLINE_ Iterator(TKey *p_key) {
+			key = p_key;
 		}
 		_FORCE_INLINE_ Iterator() {}
 		_FORCE_INLINE_ Iterator(const Iterator &p_it) {
-			keys = p_it.keys;
-			num_keys = p_it.num_keys;
-			index = p_it.index;
+			key = p_it.key;
 		}
 		_FORCE_INLINE_ void operator=(const Iterator &p_it) {
-			keys = p_it.keys;
-			num_keys = p_it.num_keys;
-			index = p_it.index;
+			key = p_it.key;
 		}
 
 	private:
-		const TKey *keys = nullptr;
-		uint32_t num_keys = 0;
-		int32_t index = -1;
+		TKey *key = nullptr;
 	};
 
 	_FORCE_INLINE_ Iterator begin() const {
-		return num_elements ? Iterator(keys, num_elements, 0) : Iterator();
+		return Iterator(keys);
 	}
 	_FORCE_INLINE_ Iterator end() const {
-		return Iterator();
+		return Iterator(keys + num_elements);
 	}
 	_FORCE_INLINE_ Iterator last() const {
 		if (num_elements == 0) {
 			return Iterator();
 		}
-		return Iterator(keys, num_elements, num_elements - 1);
+		return Iterator(keys + num_elements - 1);
 	}
 
-	_FORCE_INLINE_ Iterator find(const TKey &p_key) const {
+	Iterator find(const TKey &p_key) const {
 		uint32_t pos = 0;
 		bool exists = _lookup_pos(p_key, pos);
 		if (!exists) {
-			return end();
+			return Iterator();
 		}
-		return Iterator(keys, num_elements, pos);
+		return Iterator(keys + pos);
 	}
 
 	_FORCE_INLINE_ void remove(const Iterator &p_iter) {
@@ -425,7 +403,7 @@ public:
 
 	Iterator insert(const TKey &p_key) {
 		uint32_t pos = _insert(p_key);
-		return Iterator(keys, num_elements, pos);
+		return Iterator(keys + pos);
 	}
 
 	/* Constructors */
@@ -439,18 +417,7 @@ public:
 			return; // Ignore self assignment.
 		}
 
-		clear();
-
-		if (keys != nullptr) {
-			Memory::free_static(keys);
-			Memory::free_static(key_to_hash);
-			Memory::free_static(hash_to_key);
-			Memory::free_static(hashes);
-			keys = nullptr;
-			hashes = nullptr;
-			hash_to_key = nullptr;
-			key_to_hash = nullptr;
-		}
+		reset();
 
 		_init_from(p_other);
 	}
@@ -460,16 +427,17 @@ public:
 		capacity = MAX(4u, p_initial_capacity);
 		capacity = next_power_of_2(capacity - 1) - 1;
 	}
-	HashSet() {
-		// Capacity can't be 0 and must be 2^n - 1.
-		capacity = MAX(4u, INITIAL_CAPACITY);
-		capacity = next_power_of_2(capacity - 1) - 1;
+	HashSet() :
+			capacity(INITIAL_CAPACITY - 1) {
 	}
 
 	void reset() {
-		clear();
-
 		if (keys != nullptr) {
+			if constexpr (!std::is_trivially_destructible_v<TKey>) {
+				for (uint32_t i = 0; i < num_elements; i++) {
+					keys[i].~TKey();
+				}
+			}
 			Memory::free_static(keys);
 			Memory::free_static(key_to_hash);
 			Memory::free_static(hash_to_key);
@@ -479,8 +447,7 @@ public:
 			hash_to_key = nullptr;
 			key_to_hash = nullptr;
 		}
-		capacity = MAX(4u, INITIAL_CAPACITY);
-		capacity = next_power_of_2(capacity - 1) - 1;
+		capacity = INITIAL_CAPACITY - 1;
 	}
 
 	~HashSet() {
