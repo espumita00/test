@@ -12,10 +12,9 @@
 		<method name="bitwise_and">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
 				Creates a new bitmap from the boolean AND operation with [param other].
-				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
+				Throws an error if the two bitmaps are not exactly the same size.
 			</description>
 		</method>
 		<method name="bitwise_not">
@@ -27,19 +26,17 @@
 		<method name="bitwise_or">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
 				Creates a new bitmap from the boolean OR operation with [param other].
-				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
+				Throws an error if the two bitmaps are not exactly the same size.
 			</description>
 		</method>
 		<method name="bitwise_xor">
 			<return type="BitMap" />
 			<param index="0" name="other" type="BitMap" />
-			<param index="1" name="size_mode" type="int" enum="BitMap.BitwiseSizeMode" default="3" />
 			<description>
 				Creates a new bitmap from the boolean XOR operation with [param other].
-				[param size_mode] defines the size of the new bitmap based on this bitmap size and [param other] size.  If this bitmap has the same size as [param other], the new bitmap will always be that size.
+				Throws an error if the two bitmaps are not exactly the same size.
 			</description>
 		</method>
 		<method name="convert_to_image" qualifiers="const">
@@ -144,18 +141,4 @@
 			</description>
 		</method>
 	</methods>
-	<constants>
-		<constant name="BITWISE_SIZE_USE_CURRENT" value="0" enum="BitwiseSizeMode">
-			Uses the size of the current bitmap (i.e. self). Bits located outside the other bitmap's width and height are false by default.
-		</constant>
-		<constant name="BITWISE_SIZE_USE_OTHER" value="1" enum="BitwiseSizeMode">
-			Uses the size of the other bitmap. Bits located outside this bitmap's width and height are false by default.
-		</constant>
-		<constant name="BITWISE_SIZE_INTERSECTION" value="2" enum="BitwiseSizeMode">
-			Uses the largest size that both bitmaps support.
-		</constant>
-		<constant name="BITWISE_SIZE_UNION" value="3" enum="BitwiseSizeMode">
-			Uses the maximum width and height that either bitmap has. Bits located outside a bitmap's width and height are false by default.
-		</constant>
-	</constants>
 </class>

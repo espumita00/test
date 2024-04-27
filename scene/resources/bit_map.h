@@ -79,25 +79,12 @@ public:
 
 	Vector<Vector<Vector2>> clip_opaque_to_polygons(const Rect2i &p_rect, float p_epsilon = 2.0) const;
 
-	enum BitwiseSizeMode {
-		BITWISE_SIZE_USE_CURRENT = 0,
-		BITWISE_SIZE_USE_OTHER = 1,
-		BITWISE_SIZE_INTERSECTION = 2,
-		BITWISE_SIZE_UNION = 3,
-	};
-
-private:
-	static Size2i _get_size_from_mode(Size2i a, Size2i b, BitwiseSizeMode size_mode);
-
-public:
-	Ref<BitMap> bitwise_and(const Ref<BitMap> &b, BitwiseSizeMode size_mode = BITWISE_SIZE_UNION);
-	Ref<BitMap> bitwise_or(const Ref<BitMap> &b, BitwiseSizeMode size_mode = BITWISE_SIZE_UNION);
-	Ref<BitMap> bitwise_xor(const Ref<BitMap> &b, BitwiseSizeMode size_mode = BITWISE_SIZE_UNION);
+	Ref<BitMap> bitwise_and(const Ref<BitMap> &p_b);
 	Ref<BitMap> bitwise_not();
+	Ref<BitMap> bitwise_or(const Ref<BitMap> &p_b);
+	Ref<BitMap> bitwise_xor(const Ref<BitMap> &p_b);
 
 	BitMap();
 };
-
-VARIANT_ENUM_CAST(BitMap::BitwiseSizeMode);
 
 #endif // BIT_MAP_H
