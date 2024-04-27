@@ -704,9 +704,9 @@ void BitMap::blit(const Vector2i &p_pos, const Ref<BitMap> &p_bitmap) {
 	}
 }
 
-Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &p_b) {
-	ERR_FAIL_COND_V_EDMSG(p_b.is_null(), NULL, "Null reference to supplied BitMap other.");
-	ERR_FAIL_COND_V_EDMSG(get_size() != p_b->get_size(), NULL, "The given bitmap is not the expected size for the specified operation.");
+Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &p_other) const {
+	ERR_FAIL_COND_V_EDMSG(p_other.is_null(), Ref<BitMap>(), "Null reference to supplied BitMap other.");
+	ERR_FAIL_COND_V_EDMSG(get_size() != p_other->get_size(), Ref<BitMap>(), "The given bitmap is not the expected size for the specified operation.");
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -714,7 +714,7 @@ Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &p_b) {
 
 	int ds = bitmask.size();
 	const uint8_t *d = bitmask.ptr();
-	const uint8_t *d2 = p_b->bitmask.ptr();
+	const uint8_t *d2 = p_other->bitmask.ptr();
 	uint8_t *w = new_bitmap->bitmask.ptrw();
 
 	for (int i = 0; i < ds; i++) {
@@ -724,7 +724,7 @@ Ref<BitMap> BitMap::bitwise_and(const Ref<BitMap> &p_b) {
 	return new_bitmap;
 }
 
-Ref<BitMap> BitMap::bitwise_not() {
+Ref<BitMap> BitMap::bitwise_not() const {
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
 	new_bitmap->create(get_size());
@@ -740,9 +740,9 @@ Ref<BitMap> BitMap::bitwise_not() {
 	return new_bitmap;
 }
 
-Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &p_b) {
-	ERR_FAIL_COND_V_EDMSG(p_b.is_null(), NULL, "Null reference to supplied BitMap other.");
-	ERR_FAIL_COND_V_EDMSG(get_size() != p_b->get_size(), NULL, "The given bitmap is not the expected size for the specified operation.");
+Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &p_other) const {
+	ERR_FAIL_COND_V_EDMSG(p_other.is_null(), Ref<BitMap>(), "Null reference to supplied BitMap other.");
+	ERR_FAIL_COND_V_EDMSG(get_size() != p_other->get_size(), Ref<BitMap>(), "The given bitmap is not the expected size for the specified operation.");
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -750,7 +750,7 @@ Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &p_b) {
 
 	int ds = bitmask.size();
 	const uint8_t *d = bitmask.ptr();
-	const uint8_t *d2 = p_b->bitmask.ptr();
+	const uint8_t *d2 = p_other->bitmask.ptr();
 	uint8_t *w = new_bitmap->bitmask.ptrw();
 
 	for (int i = 0; i < ds; i++) {
@@ -760,9 +760,9 @@ Ref<BitMap> BitMap::bitwise_or(const Ref<BitMap> &p_b) {
 	return new_bitmap;
 }
 
-Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &p_b) {
-	ERR_FAIL_COND_V_EDMSG(p_b.is_null(), NULL, "Null reference to supplied BitMap other.");
-	ERR_FAIL_COND_V_EDMSG(get_size() != p_b->get_size(), NULL, "The given bitmap is not the expected size for the specified operation.");
+Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &p_other) const {
+	ERR_FAIL_COND_V_EDMSG(p_other.is_null(), Ref<BitMap>(), "Null reference to supplied BitMap other.");
+	ERR_FAIL_COND_V_EDMSG(get_size() != p_other->get_size(), Ref<BitMap>(), "The given bitmap is not the expected size for the specified operation.");
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
@@ -770,7 +770,7 @@ Ref<BitMap> BitMap::bitwise_xor(const Ref<BitMap> &p_b) {
 
 	int ds = bitmask.size();
 	const uint8_t *d = bitmask.ptr();
-	const uint8_t *d2 = p_b->bitmask.ptr();
+	const uint8_t *d2 = p_other->bitmask.ptr();
 	uint8_t *w = new_bitmap->bitmask.ptrw();
 
 	for (int i = 0; i < ds; i++) {
