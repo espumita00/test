@@ -131,7 +131,7 @@ void ProjectExportDialog::popup_export() {
 	if (saved_size != Rect2()) {
 		popup(saved_size);
 	} else {
-		popup_centered_clamped(Size2(900, 700) * EDSCALE, 0.8);
+		popup_centered_clamped(Size2(900, 500) * EDSCALE, 0.7);
 	}
 }
 
@@ -1311,9 +1311,15 @@ ProjectExportDialog::ProjectExportDialog() {
 
 	// Resources export parameters.
 
+	ScrollContainer *resources_scroll_container = memnew(ScrollContainer);
+	resources_scroll_container->set_name(TTR("Resources"));
+	resources_scroll_container->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+	sections->add_child(resources_scroll_container);
+
 	VBoxContainer *resources_vb = memnew(VBoxContainer);
-	sections->add_child(resources_vb);
-	resources_vb->set_name(TTR("Resources"));
+	resources_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	resources_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	resources_scroll_container->add_child(resources_vb);
 
 	export_filter = memnew(OptionButton);
 	export_filter->add_item(TTR("Export all resources in the project"));
@@ -1382,20 +1388,33 @@ ProjectExportDialog::ProjectExportDialog() {
 
 	// Feature tags.
 
+	ScrollContainer *feature_scroll_container = memnew(ScrollContainer);
+	feature_scroll_container->set_name(TTR("Features"));
+	feature_scroll_container->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+	sections->add_child(feature_scroll_container);
+
 	VBoxContainer *feature_vb = memnew(VBoxContainer);
-	feature_vb->set_name(TTR("Features"));
+	feature_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	feature_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	feature_scroll_container->add_child(feature_vb);
+
 	custom_features = memnew(LineEdit);
 	custom_features->connect("text_changed", callable_mp(this, &ProjectExportDialog::_custom_features_changed));
 	feature_vb->add_margin_child(TTR("Custom (comma-separated):"), custom_features);
 	custom_feature_display = memnew(RichTextLabel);
 	custom_feature_display->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	feature_vb->add_margin_child(TTR("Feature List:"), custom_feature_display, true);
-	sections->add_child(feature_vb);
 
 	// Encryption export parameters.
 
+	ScrollContainer *sec_scroll_container = memnew(ScrollContainer);
+	sec_scroll_container->set_name(TTR("Encryption"));
+	sec_scroll_container->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+
 	VBoxContainer *sec_vb = memnew(VBoxContainer);
-	sec_vb->set_name(TTR("Encryption"));
+	sec_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	sec_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	sec_scroll_container->add_child(sec_vb);
 
 	enc_pck = memnew(CheckButton);
 	enc_pck->connect("toggled", callable_mp(this, &ProjectExportDialog::_enc_pck_changed));
@@ -1426,7 +1445,7 @@ ProjectExportDialog::ProjectExportDialog() {
 	script_key_error->add_theme_color_override("font_color", EditorNode::get_singleton()->get_editor_theme()->get_color(SNAME("error_color"), EditorStringName(Editor)));
 	sec_vb->add_margin_child(TTR("Encryption Key (256-bits as hexadecimal):"), script_key);
 	sec_vb->add_child(script_key_error);
-	sections->add_child(sec_vb);
+	sections->add_child(sec_scroll_container);
 
 	Label *sec_info = memnew(Label);
 	sec_info->set_text(TTR("Note: Encryption key needs to be stored in the binary,\nyou need to build the export templates from source."));
@@ -1439,8 +1458,14 @@ ProjectExportDialog::ProjectExportDialog() {
 
 	// Script export parameters.
 
+	ScrollContainer *script_scroll_container = memnew(ScrollContainer);
+	script_scroll_container->set_name(TTR("Scripts"));
+	script_scroll_container->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+
 	VBoxContainer *script_vb = memnew(VBoxContainer);
-	script_vb->set_name(TTR("Scripts"));
+	script_vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	script_vb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	script_scroll_container->add_child(script_vb);
 
 	script_mode = memnew(OptionButton);
 	script_vb->add_margin_child(TTR("GDScript Export Mode:"), script_mode);
@@ -1449,7 +1474,7 @@ ProjectExportDialog::ProjectExportDialog() {
 	script_mode->add_item(TTR("Compressed binary tokens (smaller files)"), (int)EditorExportPreset::MODE_SCRIPT_BINARY_TOKENS_COMPRESSED);
 	script_mode->connect("item_selected", callable_mp(this, &ProjectExportDialog::_script_export_mode_changed));
 
-	sections->add_child(script_vb);
+	sections->add_child(script_scroll_container);
 
 	sections->connect("tab_changed", callable_mp(this, &ProjectExportDialog::_tab_changed));
 
