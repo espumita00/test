@@ -85,11 +85,14 @@ private:
 	}
 
 	_FORCE_INLINE_ bool _lookup_pos(const TKey &p_key, uint32_t &r_pos) const {
+		if (unlikely(hashes == nullptr)) {
+			return false; // Failed lookups, no elements.
+		}
 		return _lookup_pos_with_hash(p_key, r_pos, _hash(p_key));
 	}
 
 	_FORCE_INLINE_ bool _lookup_pos_with_hash(const TKey &p_key, uint32_t &r_pos, uint32_t p_hash) const {
-		if (unlikely(keys == nullptr)) {
+		if (unlikely(hashes == nullptr)) {
 			return false; // Failed lookups, no elements.
 		}
 
@@ -165,7 +168,7 @@ private:
 
 		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 		keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * (_get_resize_count(capacity) + 1)));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (_get_resize_count(capacity) + 1)));
 		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_static(hash_to_key, sizeof(uint32_t) * real_capacity));
 
 		memset(hashes, EMPTY_HASH, real_capacity * sizeof(uint32_t));
@@ -180,13 +183,13 @@ private:
 	}
 
 	_FORCE_INLINE_ int32_t _insert(const TKey &p_key) {
-		if (unlikely(keys == nullptr)) {
+		if (unlikely(hashes == nullptr)) {
 			// Allocate on demand to save memory.
 
 			uint32_t real_capacity = capacity + 1;
 			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 			keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (_get_resize_count(capacity) + 1)));
-			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (_get_resize_count(capacity) + 1)));
 			hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 
 			memset(hashes, EMPTY_HASH, real_capacity * sizeof(uint32_t));
@@ -227,15 +230,15 @@ private:
 
 		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 		keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * (_get_resize_count(capacity) + 1)));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * (_get_resize_count(capacity) + 1)));
 		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * real_capacity));
 
-		if constexpr (!std::is_trivially_constructible_v<TKey>) {
+		if constexpr (std::is_trivially_copyable_v<TKey>) {
+			memcpy(keys, p_other.keys, sizeof(TKey) * num_elements);
+		} else {
 			for (uint32_t i = 0; i < num_elements; i++) {
 				memnew_placement(&keys[i], TKey(p_other.keys[i]));
 			}
-		} else {
-			memcpy(keys, p_other.keys, sizeof(TKey) * num_elements);
 		}
 
 		memcpy(key_to_hash, p_other.key_to_hash, sizeof(uint32_t) * num_elements);
@@ -254,7 +257,7 @@ public:
 	}
 
 	void clear() {
-		if (keys == nullptr || num_elements == 0) {
+		if (hashes == nullptr || num_elements == 0) {
 			return;
 		}
 
@@ -323,7 +326,7 @@ public:
 	// If adding a known (possibly large) number of elements at once, must be larger than old capacity.
 	void reserve(uint32_t p_new_capacity) {
 		ERR_FAIL_COND_MSG(p_new_capacity < get_capacity(), "It is impossible to reserve less capacity than is currently available.");
-		if (keys == nullptr) {
+		if (hashes == nullptr) {
 			capacity = MAX(4u, p_new_capacity);
 			capacity = next_power_of_2(capacity - 1) - 1;
 			return; // Unallocated yet.
@@ -353,44 +356,45 @@ public:
 		_FORCE_INLINE_ bool operator!=(const Iterator &b) const { return key != b.key; }
 
 		_FORCE_INLINE_ explicit operator bool() const {
-			return key != nullptr;
+			return key != end;
 		}
 
-		_FORCE_INLINE_ Iterator(TKey *p_key) {
+		_FORCE_INLINE_ Iterator(TKey *p_key, TKey *p_end) {
 			key = p_key;
+			end = p_end;
 		}
 		_FORCE_INLINE_ Iterator() {}
 		_FORCE_INLINE_ Iterator(const Iterator &p_it) {
 			key = p_it.key;
+			end = p_it.end;
 		}
 		_FORCE_INLINE_ void operator=(const Iterator &p_it) {
 			key = p_it.key;
+			end = p_it.end;
 		}
 
 	private:
 		TKey *key = nullptr;
+		TKey *end = nullptr;
 	};
 
 	_FORCE_INLINE_ Iterator begin() const {
-		return Iterator(keys);
+		return Iterator(keys, keys + num_elements);
 	}
 	_FORCE_INLINE_ Iterator end() const {
-		return Iterator(keys + num_elements);
+		return Iterator(keys + num_elements, keys + num_elements);
 	}
 	_FORCE_INLINE_ Iterator last() const {
-		if (num_elements == 0) {
-			return Iterator();
-		}
-		return Iterator(keys + num_elements - 1);
+		return Iterator(keys + num_elements - 1, keys + num_elements);
 	}
 
 	Iterator find(const TKey &p_key) const {
 		uint32_t pos = 0;
 		bool exists = _lookup_pos(p_key, pos);
 		if (!exists) {
-			return Iterator();
+			return end();
 		}
-		return Iterator(keys + pos);
+		return Iterator(keys + pos, keys + num_elements);
 	}
 
 	_FORCE_INLINE_ void remove(const Iterator &p_iter) {
@@ -403,7 +407,7 @@ public:
 
 	Iterator insert(const TKey &p_key) {
 		uint32_t pos = _insert(p_key);
-		return Iterator(keys + pos);
+		return Iterator(keys + pos, keys + num_elements);
 	}
 
 	/* Constructors */
@@ -432,7 +436,7 @@ public:
 	}
 
 	void reset() {
-		if (keys != nullptr) {
+		if (hashes != nullptr) {
 			if constexpr (!std::is_trivially_destructible_v<TKey>) {
 				for (uint32_t i = 0; i < num_elements; i++) {
 					keys[i].~TKey();
