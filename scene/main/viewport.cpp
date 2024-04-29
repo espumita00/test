@@ -672,7 +672,7 @@ void Viewport::_notification(int p_what) {
 		} break;
 	}
 }
-
+constexpr char const *const LEGACY_INPUT_SETTING = "physics/legacy_picking_input_processing";
 void Viewport::_process_picking() {
 	if (!is_inside_tree()) {
 		return;
@@ -680,9 +680,12 @@ void Viewport::_process_picking() {
 	if (!physics_object_picking) {
 		return;
 	}
-	if (Object::cast_to<Window>(this) && Input::get_singleton()->get_mouse_mode() == Input::MOUSE_MODE_CAPTURED) {
+	auto const ps = ProjectSettings::get_singleton();
+	auto const is_captured = Input::get_singleton()->get_mouse_mode() == Input::MOUSE_MODE_CAPTURED;
+	if (ps->has_setting(LEGACY_INPUT_SETTING) && ps->get_setting(LEGACY_INPUT_SETTING).is_one() && Object::cast_to<Window>(this) && is_captured) {
 		return;
 	}
+
 	if (!gui.mouse_in_viewport) {
 		// Clear picking events if mouse has left viewport.
 		physics_picking_events.clear();
@@ -3297,14 +3300,18 @@ void Viewport::_push_unhandled_input_internal(const Ref<InputEvent> &p_event) {
 	}
 
 	if (physics_object_picking && !is_input_handled()) {
-		if (Input::get_singleton()->get_mouse_mode() != Input::MOUSE_MODE_CAPTURED &&
-				(Object::cast_to<InputEventMouse>(*p_event) ||
-						Object::cast_to<InputEventScreenDrag>(*p_event) ||
-						Object::cast_to<InputEventScreenTouch>(*p_event)
+		if (Object::cast_to<InputEventMouse>(*p_event) ||
+				Object::cast_to<InputEventScreenDrag>(*p_event) ||
+				Object::cast_to<InputEventScreenTouch>(*p_event)) {
+			auto const ps = ProjectSettings::get_singleton();
+			auto const is_captured = Input::get_singleton()->get_mouse_mode() == Input::MOUSE_MODE_CAPTURED;
 
-								)) {
-			physics_picking_events.push_back(p_event);
-			set_input_as_handled();
+			if (ps->has_setting(LEGACY_INPUT_SETTING) && ps->get_setting(LEGACY_INPUT_SETTING).is_one() && is_captured)
+				return;
+			else {
+				physics_picking_events.push_back(p_event);
+				set_input_as_handled();
+			}
 		}
 	}
 }
