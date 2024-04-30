@@ -1226,8 +1226,10 @@ Error RenderingServer::mesh_create_surface_data_from_arrays(SurfaceData *r_surfa
 					bsformat |= (1 << j);
 				}
 			}
-
-			ERR_FAIL_COND_V_MSG(bsformat != (format & RS::ARRAY_FORMAT_BLEND_SHAPE_MASK), ERR_INVALID_PARAMETER, "Blend shape format must match the main array format for Vertex, Normal and Tangent arrays.");
+			bool has_vertex = bsformat & RS::ARRAY_FORMAT_VERTEX;
+			bool has_normal = bsformat & RS::ARRAY_FORMAT_NORMAL;
+			bool has_tangent = bsformat & RS::ARRAY_FORMAT_TANGENT;
+			ERR_FAIL_COND_V_MSG(bsformat != (format & RS::ARRAY_FORMAT_BLEND_SHAPE_MASK), ERR_INVALID_PARAMETER, vformat("Blend shape format must match the main array format for Vertex, Normal and Tangent arrays. Vertex status: %s, Normal status: %s, Tangent status: %s, Current blend shape format: %d, Main array format: %d", has_vertex ? "OK" : "Not OK", has_normal ? "OK" : "Not OK", has_tangent ? "OK" : "Not OK", bsformat, format & RS::ARRAY_FORMAT_BLEND_SHAPE_MASK));
 		}
 	}
 
