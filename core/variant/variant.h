@@ -54,6 +54,7 @@
 #include "core/os/keyboard.h"
 #include "core/string/node_path.h"
 #include "core/string/ustring.h"
+#include "core/templates/hashfuncs.h"
 #include "core/templates/paged_allocator.h"
 #include "core/templates/rid.h"
 #include "core/variant/array.h"
@@ -818,7 +819,7 @@ Vector<Variant> varray(VarArgs... p_args) {
 }
 
 struct VariantHasher {
-	static _FORCE_INLINE_ uint32_t hash(const Variant &p_variant) { return p_variant.hash(); }
+	static _FORCE_INLINE_ uint32_t hash(const Variant &p_variant) { return hash_fmix32(p_variant.hash()); }
 };
 
 struct VariantComparator {

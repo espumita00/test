@@ -147,19 +147,31 @@ private:
 	}
 
 	_FORCE_INLINE_ void _insert_with_hash_and_element(uint32_t p_hash, HashMapElement<TKey, TValue> *p_value) {
-		uint32_t hash = p_hash;
-		HashMapElement<TKey, TValue> *value = p_value;
-		uint32_t distance = 0;
 		const uint32_t local_capacity = capacity;
 		uint32_t pos = p_hash & local_capacity;
 
+		if (hashes[pos] == EMPTY_HASH) {
+			elements[pos] = p_value;
+			hashes[pos] = p_hash;
+			num_elements++;
+			return;
+		}
+
+		uint32_t hash = p_hash;
+		HashMapElement<TKey, TValue> *value = p_value;
+		uint32_t distance = 1;
+		pos = (pos + 1) & local_capacity;
 		while (true) {
 			if (hashes[pos] == EMPTY_HASH) {
 				elements[pos] = value;
 				hashes[pos] = hash;
-
 				num_elements++;
-
+#ifdef DEV_ENABLED
+				if (unlikely(distance > 12)) {
+					WARN_PRINT("Excessive collision count (" +
+							itos(distance) + "), is the right hash function being used?\nClass Name:" + __PRETTY_FUNCTION__);
+				}
+#endif
 				return;
 			}
 
