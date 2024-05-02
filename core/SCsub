@@ -3,6 +3,7 @@
 Import("env")
 
 import core_builders
+import methods
 
 env.core_sources = []
 
@@ -28,17 +29,19 @@ if "SCRIPT_AES256_ENCRYPTION_KEY" in os.environ:
                 ec_valid = False
             txt += txts
     if not ec_valid:
-        print("Error: Invalid AES256 encryption key, not 64 hexadecimal characters: '" + key + "'.")
-        print(
+        methods.print_error(
+            f'Invalid AES256 encryption key, not 64 hexadecimal characters: "{key}".\n'
             "Unset 'SCRIPT_AES256_ENCRYPTION_KEY' in your environment "
             "or make sure that it contains exactly 64 hexadecimal characters."
         )
         Exit(255)
 
-# NOTE: It is safe to generate this file here, since this is still executed serially
-with open("script_encryption_key.gen.cpp", "w", encoding="utf-8", newline="\n") as f:
-    f.write('#include "core/config/project_settings.h"\nuint8_t script_encryption_key[32]={' + txt + "};\n")
 
+script_encryption_key_contents = (
+    '#include "core/config/project_settings.h"\nuint8_t script_encryption_key[32]={' + txt + "};\n"
+)
+
+methods.write_file_if_needed("script_encryption_key.gen.cpp", script_encryption_key_contents)
 
 # Add required thirdparty code.
 
@@ -58,7 +61,6 @@ thirdparty_misc_sources = [
     # C++ sources
     "pcg.cpp",
     "polypartition.cpp",
-    "clipper.cpp",
     "smolv.cpp",
 ]
 thirdparty_misc_sources = [thirdparty_misc_dir + file for file in thirdparty_misc_sources]

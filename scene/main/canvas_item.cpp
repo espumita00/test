@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "canvas_item.h"
+#include "canvas_item.compat.inc"
 
 #include "scene/2d/canvas_group.h"
 #include "scene/main/canvas_layer.h"
@@ -726,11 +727,40 @@ void CanvasItem::draw_rect(const Rect2 &p_rect, const Color &p_color, bool p_fil
 	}
 }
 
-void CanvasItem::draw_circle(const Point2 &p_pos, real_t p_radius, const Color &p_color) {
+void CanvasItem::draw_circle(const Point2 &p_pos, real_t p_radius, const Color &p_color, bool p_filled, real_t p_width, bool p_antialiased) {
 	ERR_THREAD_GUARD;
 	ERR_DRAW_GUARD;
 
-	RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius, p_color);
+	if (p_filled) {
+		if (p_width != -1.0) {
+			WARN_PRINT("The draw_circle() \"width\" argument has no effect when \"filled\" is \"true\".");
+		}
+
+		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius, p_color);
+	} else if (p_width >= 2.0 * p_radius) {
+		RenderingServer::get_singleton()->canvas_item_add_circle(canvas_item, p_pos, p_radius + 0.5 * p_width, p_color);
+	} else {
+		// Tessellation count is hardcoded. Keep in sync with the same variable in `RendererCanvasCull::canvas_item_add_circle()`.
+		const int circle_segments = 64;
+
+		Vector<Vector2> points;
+		points.resize(circle_segments + 1);
+
+		Vector2 *points_ptr = points.ptrw();
+		const real_t circle_point_step = Math_TAU / circle_segments;
+
+		for (int i = 0; i < circle_segments; i++) {
+			float angle = i * circle_point_step;
+			points_ptr[i].x = Math::cos(angle) * p_radius;
+			points_ptr[i].y = Math::sin(angle) * p_radius;
+			points_ptr[i] += p_pos;
+		}
+		points_ptr[circle_segments] = points_ptr[0];
+
+		Vector<Color> colors = { p_color };
+
+		RenderingServer::get_singleton()->canvas_item_add_polyline(canvas_item, points, colors, p_width, p_antialiased);
+	}
 }
 
 void CanvasItem::draw_texture(const Ref<Texture2D> &p_texture, const Point2 &p_pos, const Color &p_modulate) {
@@ -1163,7 +1193,7 @@ void CanvasItem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("draw_multiline", "points", "color", "width"), &CanvasItem::draw_multiline, DEFVAL(-1.0));
 	ClassDB::bind_method(D_METHOD("draw_multiline_colors", "points", "colors", "width"), &CanvasItem::draw_multiline_colors, DEFVAL(-1.0));
 	ClassDB::bind_method(D_METHOD("draw_rect", "rect", "color", "filled", "width"), &CanvasItem::draw_rect, DEFVAL(true), DEFVAL(-1.0));
-	ClassDB::bind_method(D_METHOD("draw_circle", "position", "radius", "color"), &CanvasItem::draw_circle);
+	ClassDB::bind_method(D_METHOD("draw_circle", "position", "radius", "color", "filled", "width", "antialiased"), &CanvasItem::draw_circle, DEFVAL(true), DEFVAL(-1.0), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("draw_texture", "texture", "position", "modulate"), &CanvasItem::draw_texture, DEFVAL(Color(1, 1, 1, 1)));
 	ClassDB::bind_method(D_METHOD("draw_texture_rect", "texture", "rect", "tile", "modulate", "transpose"), &CanvasItem::draw_texture_rect, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("draw_texture_rect_region", "texture", "rect", "src_rect", "modulate", "transpose", "clip_uv"), &CanvasItem::draw_texture_rect_region, DEFVAL(Color(1, 1, 1, 1)), DEFVAL(false), DEFVAL(true));
@@ -1401,14 +1431,17 @@ void CanvasItem::_refresh_texture_filter_cache() const {
 	}
 }
 
+void CanvasItem::_update_self_texture_filter(RS::CanvasItemTextureFilter p_texture_filter) {
+	RS::get_singleton()->canvas_item_set_default_texture_filter(get_canvas_item(), p_texture_filter);
+	queue_redraw();
+}
+
 void CanvasItem::_update_texture_filter_changed(bool p_propagate) {
 	if (!is_inside_tree()) {
 		return;
 	}
 	_refresh_texture_filter_cache();
-
-	RS::get_singleton()->canvas_item_set_default_texture_filter(get_canvas_item(), texture_filter_cache);
-	queue_redraw();
+	_update_self_texture_filter(texture_filter_cache);
 
 	if (p_propagate) {
 		for (CanvasItem *E : children_items) {
@@ -1452,14 +1485,18 @@ void CanvasItem::_refresh_texture_repeat_cache() const {
 	}
 }
 
+void CanvasItem::_update_self_texture_repeat(RS::CanvasItemTextureRepeat p_texture_repeat) {
+	RS::get_singleton()->canvas_item_set_default_texture_repeat(get_canvas_item(), p_texture_repeat);
+	queue_redraw();
+}
+
 void CanvasItem::_update_texture_repeat_changed(bool p_propagate) {
 	if (!is_inside_tree()) {
 		return;
 	}
 	_refresh_texture_repeat_cache();
+	_update_self_texture_repeat(texture_repeat_cache);
 
-	RS::get_singleton()->canvas_item_set_default_texture_repeat(get_canvas_item(), texture_repeat_cache);
-	queue_redraw();
 	if (p_propagate) {
 		for (CanvasItem *E : children_items) {
 			if (!E->top_level && E->texture_repeat == TEXTURE_REPEAT_PARENT_NODE) {

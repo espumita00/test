@@ -739,10 +739,18 @@ Error GDScript::reload(bool p_keep_state) {
 		if (source_path.is_empty()) {
 			source_path = get_path();
 		}
-		Ref<GDScript> cached_script = GDScriptCache::get_cached_script(source_path);
-		if (!source_path.is_empty() && cached_script.is_null()) {
-			MutexLock lock(GDScriptCache::singleton->mutex);
-			GDScriptCache::singleton->shallow_gdscript_cache[source_path] = Ref<GDScript>(this);
+		if (!source_path.is_empty()) {
+			if (GDScriptCache::get_cached_script(source_path).is_null()) {
+				MutexLock lock(GDScriptCache::singleton->mutex);
+				GDScriptCache::singleton->shallow_gdscript_cache[source_path] = Ref<GDScript>(this);
+			}
+			if (GDScriptCache::has_parser(source_path)) {
+				Error err = OK;
+				Ref<GDScriptParserRef> parser_ref = GDScriptCache::get_parser(source_path, GDScriptParserRef::EMPTY, err);
+				if (parser_ref.is_valid() && parser_ref->get_source_hash() != source.hash()) {
+					GDScriptCache::remove_parser(source_path);
+				}
+			}
 		}
 	}
 
@@ -1950,19 +1958,22 @@ int GDScriptInstance::get_method_argument_count(const StringName &p_method, bool
 	return 0;
 }
 
+void GDScriptInstance::_call_implicit_ready_recursively(GDScript *p_script) {
+	// Call base class first.
+	if (p_script->_base) {
+		_call_implicit_ready_recursively(p_script->_base);
+	}
+	if (p_script->implicit_ready) {
+		Callable::CallError err;
+		p_script->implicit_ready->call(this, nullptr, 0, err);
+	}
+}
+
 Variant GDScriptInstance::callp(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
 	GDScript *sptr = script.ptr();
 	if (unlikely(p_method == SNAME("_ready"))) {
-		// Call implicit ready first, including for the super classes.
-		while (sptr) {
-			if (sptr->implicit_ready) {
-				sptr->implicit_ready->call(this, nullptr, 0, r_error);
-			}
-			sptr = sptr->_base;
-		}
-
-		// Reset this back for the regular call.
-		sptr = script.ptr();
+		// Call implicit ready first, including for the super classes recursively.
+		_call_implicit_ready_recursively(sptr);
 	}
 	while (sptr) {
 		HashMap<StringName, GDScriptFunction *>::Iterator E = sptr->member_functions.find(p_method);
@@ -2884,7 +2895,7 @@ String ResourceFormatLoaderGDScript::get_resource_type(const String &p_path) con
 	return "";
 }
 
-void ResourceFormatLoaderGDScript::get_dependencies(const String &p_path, List<String> *p_dependencies, bool p_add_types) {
+void ResourceFormatLoaderGDScript::get_dependencies(const String &p_path, List<String> *r_dependencies, bool p_add_types) {
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_MSG(file.is_null(), "Cannot open file '" + p_path + "'.");
 
@@ -2898,8 +2909,13 @@ void ResourceFormatLoaderGDScript::get_dependencies(const String &p_path, List<S
 		return;
 	}
 
+	GDScriptAnalyzer analyzer(&parser);
+	if (OK != analyzer.analyze()) {
+		return;
+	}
+
 	for (const String &E : parser.get_dependencies()) {
-		p_dependencies->push_back(E);
+		r_dependencies->push_back(E);
 	}
 }
 

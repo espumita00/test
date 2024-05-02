@@ -41,7 +41,7 @@
 #include "core/templates/self_list.h"
 
 #ifdef TOOLS_ENABLED
-#include "editor/editor_plugin.h"
+#include "editor/plugins/editor_plugin.h"
 #endif
 
 class CSharpScript;
@@ -442,7 +442,7 @@ class CSharpLanguage : public ScriptLanguage {
 public:
 	static void *get_instance_binding(Object *p_object);
 	static void *get_existing_instance_binding(Object *p_object);
-	static void set_instance_binding(Object *p_object, void *p_binding);
+	static void *get_instance_binding_with_setup(Object *p_object);
 	static bool has_instance_binding(Object *p_object);
 
 	const Mutex &get_language_bind_mutex() {

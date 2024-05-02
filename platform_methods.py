@@ -5,6 +5,7 @@ import platform
 import uuid
 import functools
 import subprocess
+import methods
 
 # NOTE: The multiprocessing module is not compatible with SCons due to conflict on cPickle
 
@@ -38,8 +39,7 @@ def detect_arch():
         # Catches x86, i386, i486, i586, i686, etc.
         return "x86_32"
     else:
-        print("Unsupported CPU architecture: " + host_machine)
-        print("Falling back to x86_64.")
+        methods.print_warning(f'Unsupported CPU architecture: "{host_machine}". Falling back to x86_64.')
         return "x86_64"
 
 
@@ -65,10 +65,9 @@ def generate_export_icons(platform_path, platform_name):
 
             svg_str += '";\n'
 
-        # NOTE: It is safe to generate this file here, since this is still executed serially.
         wf = export_path + "/" + name + "_svg.gen.h"
-        with open(wf, "w", encoding="utf-8", newline="\n") as svgw:
-            svgw.write(svg_str)
+
+        methods.write_file_if_needed(wf, svg_str)
 
 
 def get_build_version(short):

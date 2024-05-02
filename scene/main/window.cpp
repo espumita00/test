@@ -415,7 +415,7 @@ Size2i Window::_clamp_limit_size(const Size2i &p_limit_size) {
 	if (max_window_size != Size2i()) {
 		return p_limit_size.clamp(Vector2i(), max_window_size);
 	} else {
-		return p_limit_size.max(Vector2i());
+		return p_limit_size.maxi(0);
 	}
 }
 
@@ -724,6 +724,9 @@ void Window::_event_callback(DisplayServer::WindowEvent p_event) {
 			if (!is_inside_tree()) {
 				return;
 			}
+			// Ensure keeping the order of input events and window events when input events are buffered or accumulated.
+			Input::get_singleton()->flush_buffered_events();
+
 			Window *root = get_tree()->get_root();
 			if (!root->gui.windowmanager_window_over) {
 #ifdef DEV_ENABLED
@@ -1033,7 +1036,7 @@ void Window::_update_window_size() {
 	}
 
 	if (embedder) {
-		size = size.max(Size2i(1, 1));
+		size = size.maxi(1);
 
 		embedder->_sub_window_update(this);
 	} else if (window_id != DisplayServer::INVALID_WINDOW_ID) {
@@ -1212,10 +1215,10 @@ void Window::set_force_native(bool p_force_native) {
 	if (force_native == p_force_native) {
 		return;
 	}
-	force_native = p_force_native;
 	if (is_visible() && !is_in_edited_scene_root()) {
-		WARN_PRINT("Can't change \"force_native\" while a window is displayed. Consider hiding window before changing this value.");
+		ERR_FAIL_MSG("Can't change \"force_native\" while a window is displayed. Consider hiding window before changing this value.");
 	}
+	force_native = p_force_native;
 }
 
 bool Window::get_force_native() const {
@@ -1576,6 +1579,7 @@ bool Window::_can_consume_input_events() const {
 }
 
 void Window::_window_input(const Ref<InputEvent> &p_ev) {
+	ERR_MAIN_THREAD_GUARD;
 	if (EngineDebugger::is_active()) {
 		// Quit from game window using the stop shortcut (F8 by default).
 		// The custom shortcut is provided via environment variable when running from the editor.
@@ -2717,9 +2721,6 @@ void Window::_update_mouse_over(Vector2 p_pos) {
 		if (is_embedded()) {
 			mouse_in_window = true;
 			_propagate_window_notification(this, NOTIFICATION_WM_MOUSE_ENTER);
-		} else {
-			// Prevent update based on delayed InputEvents from DisplayServer.
-			return;
 		}
 	}
 
