@@ -152,7 +152,7 @@ int Image::get_format_pixel_size(Format p_format) {
 		case FORMAT_RGTC_RG:
 			return 1; //bc5
 		case FORMAT_BPTC_RGBA:
-			return 1; //btpc bc6h
+			return 4; //btpc bc6h
 		case FORMAT_BPTC_RGBF:
 			return 1; //float /
 		case FORMAT_BPTC_RGBFU:
