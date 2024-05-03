@@ -3631,3 +3631,7 @@ void Variant::unregister_types() {
 	_unregister_variant_destructors();
 	_unregister_variant_utility_functions();
 }
+
+uint32_t VariantHasher::hash(const Variant &p_variant) {
+	return hash_fmix32(p_variant.hash());
+}
