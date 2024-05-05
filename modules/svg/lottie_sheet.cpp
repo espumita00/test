@@ -45,24 +45,24 @@ void LottieSheet::_load_data(String p_string, float p_scale) {
 	float fw, fh;
 	picture->size(&fw, &fh);
 
-	uint32_t width = MAX(1, round(fw * p_scale));
-	uint32_t height = MAX(1, round(fh * p_scale));
+	uint32_t _width = MAX(1, round(fw * p_scale));
+	uint32_t _height = MAX(1, round(fh * p_scale));
 
 	const uint32_t max_dimension = 16384;
-	if (width > max_dimension || height > max_dimension) {
+	if (_width > max_dimension || _height > max_dimension) {
 		WARN_PRINT(vformat(
 				String::utf8("LottieSheet: Target canvas dimensions %d×%d (with scale %.2f) exceed the max supported dimensions %d×%d. The target canvas will be scaled down."),
-				width, height, p_scale, max_dimension, max_dimension));
-		width = MIN(width, max_dimension);
-		height = MIN(height, max_dimension);
+				_width, _height, p_scale, max_dimension, max_dimension));
+		_width = MIN(_width, max_dimension);
+		_height = MIN(_height, max_dimension);
 	}
 
-	picture->size(width, height);
-	this->width = width;
-	this->height = height;
-	image = Image::create_empty(width, height, false, Image::FORMAT_RGBA8);
+	picture->size(_width, _height);
+	this->width = _width;
+	this->height = _height;
+	image = Image::create_empty(_width, _height, false, Image::FORMAT_RGBA8);
 	// Note: memalloc here, be sure to memfree before any return.
-	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * width * height) : memrealloc(buffer, sizeof(uint32_t) * width * height));
+	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * _width * _height) : memrealloc(buffer, sizeof(uint32_t) * _width * _height));
 }
 
 Ref<LottieSheet> LottieSheet::load_json(Ref<JSON> p_json, float p_scale) {
