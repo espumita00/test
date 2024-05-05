@@ -127,6 +127,7 @@ private:
 	Control *label_reference = nullptr;
 	Control *bottom_editor = nullptr;
 	PopupMenu *menu = nullptr;
+	bool updating_theme = false;
 
 	HashMap<StringName, Variant> cache;
 
