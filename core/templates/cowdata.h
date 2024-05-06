@@ -190,19 +190,19 @@ public:
 	_FORCE_INLINE_ bool is_empty() const { return _ptr == nullptr; }
 
 	_FORCE_INLINE_ void set(Size p_index, const T &p_elem) {
-		ERR_FAIL_INDEX(p_index, size());
+		ERR_FAIL_UNSIGNED_INDEX((USize)p_index, (USize)size());
 		_copy_on_write();
 		_ptr[p_index] = p_elem;
 	}
 
 	_FORCE_INLINE_ T &get_m(Size p_index) {
-		CRASH_BAD_INDEX(p_index, size());
+		CRASH_BAD_UNSIGNED_INDEX((USize)p_index, (USize)size());
 		_copy_on_write();
 		return _ptr[p_index];
 	}
 
 	_FORCE_INLINE_ const T &get(Size p_index) const {
-		CRASH_BAD_INDEX(p_index, size());
+		CRASH_BAD_UNSIGNED_INDEX((USize)p_index, (USize)size());
 
 		return _ptr[p_index];
 	}
@@ -211,7 +211,7 @@ public:
 	Error resize(Size p_size);
 
 	_FORCE_INLINE_ void remove_at(Size p_index) {
-		ERR_FAIL_INDEX(p_index, size());
+		ERR_FAIL_UNSIGNED_INDEX((USize)p_index, (USize)size());
 		T *p = ptrw();
 		Size len = size();
 		for (Size i = p_index; i < len - 1; i++) {
@@ -222,7 +222,7 @@ public:
 	}
 
 	Error insert(Size p_pos, const T &p_val) {
-		ERR_FAIL_INDEX_V(p_pos, size() + 1, ERR_INVALID_PARAMETER);
+		ERR_FAIL_UNSIGNED_INDEX_V((USize)p_pos, (USize)size() + 1, ERR_INVALID_PARAMETER);
 		resize(size() + 1);
 		for (Size i = (size() - 1); i > p_pos; i--) {
 			set(i, get(i - 1));
