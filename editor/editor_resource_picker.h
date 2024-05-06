@@ -83,6 +83,8 @@ class EditorResourcePicker : public HBoxContainer {
 		CONVERT_BASE_ID = 1000,
 	};
 
+	Object *_owner = nullptr;
+
 	PopupMenu *edit_menu = nullptr;
 
 	void _update_resource_preview(const String &p_path, const Ref<Texture2D> &p_preview, const Ref<Texture2D> &p_small_preview, ObjectID p_obj);
@@ -135,6 +137,8 @@ public:
 	void set_toggle_mode(bool p_enable);
 	bool is_toggle_mode() const;
 	void set_toggle_pressed(bool p_pressed);
+
+	void set_resource_owner(Object *p_object);
 
 	void set_editable(bool p_editable);
 	bool is_editable() const;
