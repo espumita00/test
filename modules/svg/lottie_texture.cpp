@@ -85,8 +85,8 @@ void LottieTexture2D::set_frame(float _frame) {
 		sw_canvas->update(picture);
 	}
 
-	int width = image->get_width();
-	int height = image->get_height();
+	uint32_t width = image->get_width();
+	uint32_t height = image->get_height();
 	res = sw_canvas->target(buffer, width, width, height, tvg::SwCanvas::ARGB8888S);
 	if (res != tvg::Result::Success) {
 		ERR_FAIL_MSG("LottieTexture2D: Couldn't set target on ThorVG canvas.");
@@ -142,7 +142,8 @@ float LottieTexture2D::get_duration() { return animation->duration(); };
 void LottieTexture2D::set_json(Ref<JSON> p_json) {
 	String data = p_json.is_valid() ? p_json->get_parsed_text() : "";
 	if (p_json.is_valid() && data.is_empty()) {
-		data = JSON::stringify(p_json->get_data());
+		// don't sort keys, otherwise ThorVG can't load it
+		data = JSON::stringify(p_json->get_data(), "", false);
 	}
 	tvg::Result result = picture->load(data.utf8(), data.utf8().size(), "lottie", true);
 	if (result != tvg::Result::Success) {
