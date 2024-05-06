@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  editor_export_shared_object.h                                         */
+/*  text_server.compat.inc                                                */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,24 +28,14 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef EDITOR_EXPORT_SHARED_OBJECT_H
-#define EDITOR_EXPORT_SHARED_OBJECT_H
+#ifndef DISABLE_DEPRECATED
 
-#include "core/string/ustring.h"
-#include "core/templates/vector.h"
+PackedInt32Array TextServer::_shaped_text_get_word_breaks_bind_compat_90732(const RID &p_shaped, BitField<TextServer::GraphemeFlag> p_grapheme_flags) const {
+	return shaped_text_get_word_breaks(p_shaped, p_grapheme_flags, 0);
+}
 
-struct SharedObject {
-	String path;
-	Vector<String> tags;
-	String target;
+void TextServer::_bind_compatibility_methods() {
+	ClassDB::bind_compatibility_method(D_METHOD("shaped_text_get_word_breaks", "shaped", "grapheme_flags"), &TextServer::_shaped_text_get_word_breaks_bind_compat_90732, DEFVAL(GRAPHEME_IS_SPACE | GRAPHEME_IS_PUNCTUATION));
+}
 
-	SharedObject(const String &p_path, const Vector<String> &p_tags, const String &p_target) :
-			path(p_path),
-			tags(p_tags),
-			target(p_target) {
-	}
-
-	SharedObject() {}
-};
-
-#endif // EDITOR_EXPORT_SHARED_OBJECT_H
+#endif

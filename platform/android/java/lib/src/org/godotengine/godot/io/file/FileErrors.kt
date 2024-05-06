@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  editor_plugin_settings.h                                              */
+/*  FileErrors.kt                                                         */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,51 +28,26 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef EDITOR_PLUGIN_SETTINGS_H
-#define EDITOR_PLUGIN_SETTINGS_H
+package org.godotengine.godot.io.file
 
-#include "editor/editor_data.h"
-#include "editor/plugin_config_dialog.h"
+/**
+ * Set of errors that may occur when performing data access.
+ */
+internal enum class FileErrors(val nativeValue: Int) {
+	OK(0),
+	FAILED(-1),
+	FILE_NOT_FOUND(-2),
+	FILE_CANT_OPEN(-3),
+	INVALID_PARAMETER(-4);
 
-class Tree;
-
-class EditorPluginSettings : public VBoxContainer {
-	GDCLASS(EditorPluginSettings, VBoxContainer);
-
-	enum {
-		BUTTON_PLUGIN_EDIT
-	};
-
-	enum {
-		COLUMN_PADDING_LEFT,
-		COLUMN_STATUS,
-		COLUMN_NAME,
-		COLUMN_VERSION,
-		COLUMN_AUTHOR,
-		COLUMN_EDIT,
-		COLUMN_PADDING_RIGHT,
-		COLUMN_MAX,
-	};
-
-	PluginConfigDialog *plugin_config_dialog = nullptr;
-	Tree *plugin_list = nullptr;
-	bool updating = false;
-
-	void _plugin_activity_changed();
-	void _create_clicked();
-	void _cell_button_pressed(Object *p_item, int p_column, int p_id, MouseButton p_button);
-
-	static Vector<String> _get_plugins(const String &p_dir);
-
-protected:
-	void _notification(int p_what);
-
-	static void _bind_methods();
-
-public:
-	void update_plugins();
-
-	EditorPluginSettings();
-};
-
-#endif // EDITOR_PLUGIN_SETTINGS_H
+	companion object {
+		fun fromNativeError(error: Int): FileErrors? {
+			for (fileError in entries) {
+				if (fileError.nativeValue == error) {
+					return fileError
+				}
+			}
+			return null
+		}
+	}
+}

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  plugin_config_dialog.h                                                */
+/*  xr_tracker.cpp                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,61 +28,43 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef PLUGIN_CONFIG_DIALOG_H
-#define PLUGIN_CONFIG_DIALOG_H
+#include "xr_tracker.h"
 
-#include "scene/gui/check_box.h"
-#include "scene/gui/dialogs.h"
-#include "scene/gui/line_edit.h"
-#include "scene/gui/option_button.h"
-#include "scene/gui/panel_container.h"
-#include "scene/gui/text_edit.h"
-#include "scene/gui/texture_rect.h"
+void XRTracker::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_tracker_type"), &XRTracker::get_tracker_type);
+	ClassDB::bind_method(D_METHOD("set_tracker_type", "type"), &XRTracker::set_tracker_type);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "type"), "set_tracker_type", "get_tracker_type");
 
-class EditorValidationPanel;
+	ClassDB::bind_method(D_METHOD("get_tracker_name"), &XRTracker::get_tracker_name);
+	ClassDB::bind_method(D_METHOD("set_tracker_name", "name"), &XRTracker::set_tracker_name);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "name"), "set_tracker_name", "get_tracker_name");
 
-class PluginConfigDialog : public ConfirmationDialog {
-	GDCLASS(PluginConfigDialog, ConfirmationDialog);
-
-	enum {
-		MSG_ID_PLUGIN,
-		MSG_ID_SUBFOLDER,
-		MSG_ID_SCRIPT,
-		MSG_ID_ACTIVE,
-	};
-
-	LineEdit *name_edit = nullptr;
-	LineEdit *subfolder_edit = nullptr;
-	TextEdit *desc_edit = nullptr;
-	LineEdit *author_edit = nullptr;
-	LineEdit *version_edit = nullptr;
-	OptionButton *script_option_edit = nullptr;
-	LineEdit *script_edit = nullptr;
-	CheckBox *active_edit = nullptr;
-
-	LocalVector<Control *> plugin_edit_hidden_controls;
-
-	EditorValidationPanel *validation_panel = nullptr;
-
-	bool _edit_mode = false;
-
-	void _clear_fields();
-	void _on_confirmed();
-	void _on_canceled();
-	void _on_required_text_changed();
-	String _get_subfolder();
-
-	static String _to_absolute_plugin_path(const String &p_plugin_name);
-
-protected:
-	virtual void _notification(int p_what);
-	static void _bind_methods();
-
-public:
-	void config(const String &p_config_path);
-
-	PluginConfigDialog();
-	~PluginConfigDialog();
+	ClassDB::bind_method(D_METHOD("get_tracker_desc"), &XRTracker::get_tracker_desc);
+	ClassDB::bind_method(D_METHOD("set_tracker_desc", "description"), &XRTracker::set_tracker_desc);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "description"), "set_tracker_desc", "get_tracker_desc");
 };
 
-#endif // PLUGIN_CONFIG_DIALOG_H
+void XRTracker::set_tracker_type(XRServer::TrackerType p_type) {
+	type = p_type;
+};
+
+XRServer::TrackerType XRTracker::get_tracker_type() const {
+	return type;
+};
+
+void XRTracker::set_tracker_name(const StringName &p_name) {
+	// Note: this should not be changed after the tracker is registered with the XRServer!
+	name = p_name;
+};
+
+StringName XRTracker::get_tracker_name() const {
+	return name;
+};
+
+void XRTracker::set_tracker_desc(const String &p_desc) {
+	description = p_desc;
+}
+
+String XRTracker::get_tracker_desc() const {
+	return description;
+}

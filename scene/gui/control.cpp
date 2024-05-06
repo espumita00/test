@@ -142,8 +142,8 @@ Size2 Control::_edit_get_scale() const {
 
 void Control::_edit_set_rect(const Rect2 &p_edit_rect) {
 	ERR_FAIL_COND_MSG(!Engine::get_singleton()->is_editor_hint(), "This function can only be used from editor plugins.");
-	set_position((get_position() + get_transform().basis_xform(p_edit_rect.position)).snapped(Vector2(1, 1)), ControlEditorToolbar::get_singleton()->is_anchors_mode_enabled());
-	set_size(p_edit_rect.size.snapped(Vector2(1, 1)), ControlEditorToolbar::get_singleton()->is_anchors_mode_enabled());
+	set_position((get_position() + get_transform().basis_xform(p_edit_rect.position)).snappedf(1), ControlEditorToolbar::get_singleton()->is_anchors_mode_enabled());
+	set_size(p_edit_rect.size.snappedf(1), ControlEditorToolbar::get_singleton()->is_anchors_mode_enabled());
 }
 
 Rect2 Control::_edit_get_rect() const {
@@ -1383,6 +1383,15 @@ void Control::_set_position(const Point2 &p_point) {
 
 void Control::set_position(const Point2 &p_point, bool p_keep_offsets) {
 	ERR_MAIN_THREAD_GUARD;
+
+#ifdef TOOLS_ENABLED
+	// Can't compute anchors, set position directly and return immediately.
+	if (saving && !is_inside_tree()) {
+		data.pos_cache = p_point;
+		return;
+	}
+#endif
+
 	if (p_keep_offsets) {
 		_compute_anchors(Rect2(p_point, data.size_cache), data.offset, data.anchor);
 	} else {
@@ -1440,6 +1449,14 @@ void Control::set_size(const Size2 &p_size, bool p_keep_offsets) {
 	if (new_size.y < min.y) {
 		new_size.y = min.y;
 	}
+
+#ifdef TOOLS_ENABLED
+	// Can't compute anchors, set size directly and return immediately.
+	if (saving && !is_inside_tree()) {
+		data.size_cache = new_size;
+		return;
+	}
+#endif
 
 	if (p_keep_offsets) {
 		_compute_anchors(Rect2(data.pos_cache, new_size), data.offset, data.anchor);
@@ -3140,6 +3157,14 @@ Control *Control::make_custom_tooltip(const String &p_text) const {
 void Control::_notification(int p_notification) {
 	ERR_MAIN_THREAD_GUARD;
 	switch (p_notification) {
+#ifdef TOOLS_ENABLED
+		case NOTIFICATION_EDITOR_PRE_SAVE: {
+			saving = true;
+		} break;
+		case NOTIFICATION_EDITOR_POST_SAVE: {
+			saving = false;
+		} break;
+#endif
 		case NOTIFICATION_POSTINITIALIZE: {
 			data.initialized = true;
 

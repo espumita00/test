@@ -479,6 +479,8 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "interface/inspector/max_array_dictionary_items_per_page", 20, "10,100,1")
 	EDITOR_SETTING(Variant::BOOL, PROPERTY_HINT_NONE, "interface/inspector/show_low_level_opentype_features", false, "")
 	EDITOR_SETTING(Variant::FLOAT, PROPERTY_HINT_RANGE, "interface/inspector/float_drag_speed", 5.0, "0.1,100,0.01")
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_ENUM, "interface/inspector/nested_color_mode", 0, "Containers & Resources,Resources,External Resources")
+	EDITOR_SETTING(Variant::BOOL, PROPERTY_HINT_NONE, "interface/inspector/delimitate_all_container_and_resources", true, "")
 	EDITOR_SETTING_USAGE(Variant::INT, PROPERTY_HINT_ENUM, "interface/inspector/default_property_name_style", EditorPropertyNameProcessor::STYLE_CAPITALIZED, "Raw,Capitalized,Localized", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED);
 	// The lowest value is equal to the minimum float step for 32-bit floats.
 	// The step must be set manually, as changing this setting should not change the step here.
@@ -821,6 +823,8 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("run/output/always_open_output_on_play", true);
 	_initial_set("run/output/always_close_output_on_stop", false);
 
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "run/output/max_lines", 10000, "100,100000,1")
+
 	// Platform
 	_initial_set("run/platforms/linuxbsd/prefer_wayland", false);
 	set_restart_if_changed("run/platforms/linuxbsd/prefer_wayland", true);
@@ -990,6 +994,29 @@ EditorSettings *EditorSettings::get_singleton() {
 	return singleton.ptr();
 }
 
+String EditorSettings::get_existing_settings_path() {
+	const String config_dir = EditorPaths::get_singleton()->get_config_dir();
+	int minor = VERSION_MINOR;
+	String filename;
+
+	do {
+		if (VERSION_MAJOR == 4 && minor < 3) {
+			// Minor version is used since 4.3, so special case to load older settings.
+			filename = vformat("editor_settings-%d.tres", VERSION_MAJOR);
+			minor = -1;
+		} else {
+			filename = vformat("editor_settings-%d.%d.tres", VERSION_MAJOR, minor);
+			minor--;
+		}
+	} while (minor >= 0 && !FileAccess::exists(config_dir.path_join(filename)));
+	return config_dir.path_join(filename);
+}
+
+String EditorSettings::get_newest_settings_path() {
+	const String config_file_name = vformat("editor_settings-%d.%d.tres", VERSION_MAJOR, VERSION_MINOR);
+	return EditorPaths::get_singleton()->get_config_dir().path_join(config_file_name);
+}
+
 void EditorSettings::create() {
 	// IMPORTANT: create() *must* create a valid EditorSettings singleton,
 	// as the rest of the engine code will assume it. As such, it should never
@@ -1017,16 +1044,16 @@ void EditorSettings::create() {
 
 	if (EditorPaths::get_singleton()->are_paths_valid()) {
 		// Validate editor config file.
-		Ref<DirAccess> dir = DirAccess::open(EditorPaths::get_singleton()->get_config_dir());
-		ERR_FAIL_COND(dir.is_null());
+		ERR_FAIL_COND(!DirAccess::dir_exists_absolute(EditorPaths::get_singleton()->get_config_dir()));
 
-		String config_file_name = "editor_settings-" + itos(VERSION_MAJOR) + ".tres";
-		config_file_path = EditorPaths::get_singleton()->get_config_dir().path_join(config_file_name);
-		if (!dir->file_exists(config_file_name)) {
+		config_file_path = get_existing_settings_path();
+		if (!FileAccess::exists(config_file_path)) {
+			config_file_path = get_newest_settings_path();
 			goto fail;
 		}
 
 		singleton = ResourceLoader::load(config_file_path, "EditorSettings");
+		singleton->set_path(get_newest_settings_path()); // Settings can be loaded from older version file, so make sure it's newest.
 
 		if (singleton.is_null()) {
 			ERR_PRINT("Could not load editor settings from path: " + config_file_path);
@@ -1616,7 +1643,9 @@ Ref<Shortcut> ED_GET_SHORTCUT(const String &p_path) {
 }
 
 void ED_SHORTCUT_OVERRIDE(const String &p_path, const String &p_feature, Key p_keycode, bool p_physical) {
-	ERR_FAIL_NULL_MSG(EditorSettings::get_singleton(), "EditorSettings not instantiated yet.");
+	if (!EditorSettings::get_singleton()) {
+		return;
+	}
 
 	Ref<Shortcut> sc = EditorSettings::get_singleton()->get_shortcut(p_path);
 	ERR_FAIL_COND_MSG(!sc.is_valid(), "Used ED_SHORTCUT_OVERRIDE with invalid shortcut: " + p_path);
@@ -1628,7 +1657,9 @@ void ED_SHORTCUT_OVERRIDE(const String &p_path, const String &p_feature, Key p_k
 }
 
 void ED_SHORTCUT_OVERRIDE_ARRAY(const String &p_path, const String &p_feature, const PackedInt32Array &p_keycodes, bool p_physical) {
-	ERR_FAIL_NULL_MSG(EditorSettings::get_singleton(), "EditorSettings not instantiated yet.");
+	if (!EditorSettings::get_singleton()) {
+		return;
+	}
 
 	Ref<Shortcut> sc = EditorSettings::get_singleton()->get_shortcut(p_path);
 	ERR_FAIL_COND_MSG(!sc.is_valid(), "Used ED_SHORTCUT_OVERRIDE_ARRAY with invalid shortcut: " + p_path);
