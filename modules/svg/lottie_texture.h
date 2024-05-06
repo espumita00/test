@@ -48,17 +48,17 @@ class LottieTexture2D : public Texture2D {
 	Ref<JSON> json;
 
 	float scale = 1.0;
-	uint32_t width, height;
+	float origin_width = -1, origin_height = -1;
 	float frame = 0;
 
-	void _load_data(String p_string, float p_scale);
+	void _update_image(float p_scale);
 
 protected:
 	static void _bind_methods();
 
 public:
-	static Ref<LottieTexture2D> load_string(String p_string, float p_scale = 1);
-	static Ref<LottieTexture2D> load_json(Ref<JSON> p_json, float p_scale = 1);
+	static Ref<LottieTexture2D> create_from_string(String p_string, float p_scale = 1);
+	static Ref<LottieTexture2D> create_from_json(Ref<JSON> p_json, float p_scale = 1);
 
 	void set_json(Ref<JSON> p_json);
 	Ref<JSON> get_json() { return json; };
@@ -72,15 +72,13 @@ public:
 	float get_total_frame();
 	float get_duration();
 
-	int get_width() const override { return width; };
-	int get_height() const override { return height; };
-	Size2 get_size() const override { return Size2(width, height); };
-	bool is_pixel_opaque(int p_x, int p_y) const override { return image.is_valid() ? image->get_pixel(p_x, p_y).a > 0.1 : true; };
-	bool has_alpha() const override { return true; };
-	void draw(RID p_canvas_item, const Point2 &p_pos, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false) const override;
-	void draw_rect(RID p_canvas_item, const Rect2 &p_rect, bool p_tile = false, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false) const override;
-	void draw_rect_region(RID p_canvas_item, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate = Color(1, 1, 1), bool p_transpose = false, bool p_clip_uv = true) const override;
-	Ref<Image> get_image() const override { return image; };
+	int get_width() const override { return image->get_width(); };
+	int get_height() const override { return image->get_height(); };
+	Size2 get_size() const override { return image->get_size(); };
+	virtual bool is_pixel_opaque(int p_x, int p_y) const override { return image.is_valid() ? image->get_pixel(p_x, p_y).a > 0.1 : true; };
+	virtual bool has_alpha() const override { return true; };
+	virtual Ref<Image> get_image() const override { return image; };
+	virtual RID get_rid() const override;
 
 	~LottieTexture2D();
 };

@@ -7,6 +7,20 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="create_from_json" qualifiers="static">
+			<return type="LottieTexture2D" />
+			<param index="0" name="p_json" type="JSON" />
+			<param index="1" name="p_scale" type="float" default="1" />
+			<description>
+			</description>
+		</method>
+		<method name="create_from_string" qualifiers="static">
+			<return type="LottieTexture2D" />
+			<param index="0" name="p_string" type="String" />
+			<param index="1" name="p_scale" type="float" default="1" />
+			<description>
+			</description>
+		</method>
 		<method name="get_duration">
 			<return type="float" />
 			<description>
@@ -17,22 +31,6 @@
 			<return type="float" />
 			<description>
 				Returns the total number of frames in the animation.
-			</description>
-		</method>
-		<method name="load_json" qualifiers="static">
-			<return type="LottieTexture2D" />
-			<param index="0" name="p_json" type="JSON" />
-			<param index="1" name="p_scale" type="float" default="1" />
-			<description>
-				Loads Lottie from the json.
-			</description>
-		</method>
-		<method name="load_string" qualifiers="static">
-			<return type="LottieTexture2D" />
-			<param index="0" name="p_string" type="String" />
-			<param index="1" name="p_scale" type="float" default="1" />
-			<description>
-				Loads Lottie from the string.
 			</description>
 		</method>
 	</methods>
