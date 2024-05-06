@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="LottieTexture2D" inherits="Texture2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_duration">
+			<return type="float" />
+			<description>
+				Returns the duration of the Lottie animation in seconds.
+			</description>
+		</method>
+		<method name="get_total_frame">
+			<return type="float" />
+			<description>
+				Returns the total number of frames in the animation.
+			</description>
+		</method>
+		<method name="load_json" qualifiers="static">
+			<return type="LottieTexture2D" />
+			<param index="0" name="p_json" type="JSON" />
+			<param index="1" name="p_scale" type="float" default="1" />
+			<description>
+				Loads Lottie from the json.
+			</description>
+		</method>
+		<method name="load_string" qualifiers="static">
+			<return type="LottieTexture2D" />
+			<param index="0" name="p_string" type="String" />
+			<param index="1" name="p_scale" type="float" default="1" />
+			<description>
+				Loads Lottie from the string.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="frame" type="float" setter="set_frame" getter="get_frame" default="0.0">
+			The current frame in the animation.
+		</member>
+		<member name="json" type="JSON" setter="set_json" getter="get_json">
+			The Lottie JSON file.
+		</member>
+		<member name="resource_local_to_scene" type="bool" setter="set_local_to_scene" getter="is_local_to_scene" overrides="Resource" default="false" />
+		<member name="scale" type="float" setter="set_scale" getter="get_scale" default="1.0">
+			The scaling factor of the Lottie animation. Set it to change the texture size.
+		</member>
+	</members>
+</class>

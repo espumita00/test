@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  lottie_sheet.cpp                                                      */
+/*  lottie_texture.cpp                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,14 +28,14 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "lottie_sheet.h"
+#include "lottie_texture.h"
 
 #include "core/os/memory.h"
 #include "core/variant/variant.h"
 
 #include <thorvg.h>
 
-void LottieSheet::_load_data(String p_string, float p_scale) {
+void LottieTexture2D::_load_data(String p_string, float p_scale) {
 	ERR_FAIL_COND_MSG(Math::is_zero_approx(p_scale), "LottieSheet: Can't load Lottie with a scale of 0.");
 
 	tvg::Result result = picture->load(p_string.utf8(), p_string.utf8().size(), "lottie", true);
@@ -45,45 +45,49 @@ void LottieSheet::_load_data(String p_string, float p_scale) {
 	float fw, fh;
 	picture->size(&fw, &fh);
 
-	uint32_t _width = MAX(1, round(fw * p_scale));
-	uint32_t _height = MAX(1, round(fh * p_scale));
+	uint32_t w = MAX(1, round(fw * p_scale));
+	uint32_t h = MAX(1, round(fh * p_scale));
 
 	const uint32_t max_dimension = 16384;
-	if (_width > max_dimension || _height > max_dimension) {
+	if (w > max_dimension || h > max_dimension) {
 		WARN_PRINT(vformat(
 				String::utf8("LottieSheet: Target canvas dimensions %d×%d (with scale %.2f) exceed the max supported dimensions %d×%d. The target canvas will be scaled down."),
-				_width, _height, p_scale, max_dimension, max_dimension));
-		_width = MIN(_width, max_dimension);
-		_height = MIN(_height, max_dimension);
+				w, h, p_scale, max_dimension, max_dimension));
+		w = MIN(w, max_dimension);
+		h = MIN(h, max_dimension);
 	}
 
-	picture->size(_width, _height);
-	this->width = _width;
-	this->height = _height;
-	image = Image::create_empty(_width, _height, false, Image::FORMAT_RGBA8);
+	picture->size(w, h);
+	this->width = w;
+	this->height = h;
+	image = Image::create_empty(w, h, false, Image::FORMAT_RGBA8);
 	// Note: memalloc here, be sure to memfree before any return.
-	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * _width * _height) : memrealloc(buffer, sizeof(uint32_t) * _width * _height));
+	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * w * h) : memrealloc(buffer, sizeof(uint32_t) * w * h));
+
+	if (texture.is_null()) {
+		texture = RenderingServer::get_singleton()->texture_2d_create(image);
+	} else {
+		RID new_texture = RenderingServer::get_singleton()->texture_2d_create(image);
+		RenderingServer::get_singleton()->texture_replace(texture, new_texture);
+	}
+	set_frame(frame);
 }
 
-Ref<LottieSheet> LottieSheet::load_json(Ref<JSON> p_json, float p_scale) {
-	String data = p_json->get_parsed_text();
-	if (data.is_empty()) {
-		data = p_json->to_string();
-	}
-	Ref<LottieSheet> ret = memnew(LottieSheet);
-	ret->_load_data(data, p_scale);
-	ret->json = p_json;
+Ref<LottieTexture2D> LottieTexture2D::load_json(Ref<JSON> p_json, float p_scale) {
+	Ref<LottieTexture2D> ret = memnew(LottieTexture2D);
+	ret->set_json(p_json);
 	return ret;
 }
 
-Ref<LottieSheet> LottieSheet::load_string(String p_string, float p_scale) {
-	Ref<LottieSheet> ret = memnew(LottieSheet);
+Ref<LottieTexture2D> LottieTexture2D::load_string(String p_string, float p_scale) {
+	Ref<LottieTexture2D> ret = memnew(LottieTexture2D);
 	ret->_load_data(p_string, p_scale);
+	ret->json.instantiate();
 	ret->json->parse(p_string, true);
 	return ret;
 }
 
-void LottieSheet::update_frame(float frame) {
+void LottieTexture2D::set_frame(float frame) {
 	tvg::Result res = animation->frame(frame);
 	if (res == tvg::Result::Success) {
 		sw_canvas->update(picture);
@@ -126,60 +130,81 @@ void LottieSheet::update_frame(float frame) {
 	res = sw_canvas->clear(true);
 
 	image->set_data(width, height, false, Image::FORMAT_RGBA8, image_data);
+
+	if (texture.is_null()) {
+		texture = RenderingServer::get_singleton()->texture_2d_create(image);
+	} else {
+		RID new_texture = RenderingServer::get_singleton()->texture_2d_create(image);
+		RenderingServer::get_singleton()->texture_replace(texture, new_texture);
+	}
+	this->frame = frame;
 }
 
-Ref<Image> LottieSheet::get_image() { return image; };
+float LottieTexture2D::get_total_frame() { return animation->totalFrame(); };
 
-Ref<Image> LottieSheet::get_frame_image(float frame) {
-	update_frame(frame);
-	return image;
-};
+float LottieTexture2D::get_duration() { return animation->duration(); };
 
-Vector2i LottieSheet::get_image_size() {
-	return Vector2i(width, height);
-}
-
-float LottieSheet::get_total_frame() { return animation->totalFrame(); };
-
-float LottieSheet::get_duration() { return animation->duration(); };
-
-Ref<JSON> LottieSheet::get_json() { return json; }
-
-void LottieSheet::set_json(Ref<JSON> p_json) {
-	String data = p_json->get_parsed_text();
-	if (data.is_empty()) {
-		data = p_json->to_string();
+void LottieTexture2D::set_json(Ref<JSON> p_json) {
+	String data = p_json.is_valid() ? p_json->get_parsed_text() : "";
+	if (p_json.is_valid() && data.is_empty()) {
+		data = JSON::stringify(p_json->get_data());
 	}
 	_load_data(data, scale);
 	json = p_json;
 }
 
-float LottieSheet::get_scale() { return scale; };
-void LottieSheet::set_scale(float p_scale) {
+void LottieTexture2D::set_scale(float p_scale) {
 	String data = json->get_parsed_text();
 	if (data.is_empty()) {
-		data = json->to_string();
+		data = JSON::stringify(json->get_data());
 	}
 	_load_data(data, scale);
 	scale = p_scale;
 };
 
-LottieSheet::~LottieSheet() { memfree(buffer); }
+void LottieTexture2D::draw(RID p_canvas_item, const Point2 &p_pos, const Color &p_modulate, bool p_transpose) const {
+	if ((width | height) == 0) {
+		return;
+	}
+	RenderingServer::get_singleton()->canvas_item_add_texture_rect(p_canvas_item, Rect2(p_pos, get_size()), texture, false, p_modulate, p_transpose);
+}
 
-void LottieSheet::_bind_methods() {
-	ClassDB::bind_static_method("LottieSheet", D_METHOD("load_string", "p_string", "p_scale"), &LottieSheet::load_string, DEFVAL(1));
-	ClassDB::bind_static_method("LottieSheet", D_METHOD("load_json", "p_json", "p_scale"), &LottieSheet::load_json, DEFVAL(1));
-	ClassDB::bind_method(D_METHOD("get_json"), &LottieSheet::get_json);
-	ClassDB::bind_method(D_METHOD("set_json", "p_json"), &LottieSheet::set_json);
-	ClassDB::bind_method(D_METHOD("get_scale"), &LottieSheet::get_scale);
-	ClassDB::bind_method(D_METHOD("set_scale", "p_scale"), &LottieSheet::set_scale);
-	ClassDB::bind_method(D_METHOD("update_frame", "frame"), &LottieSheet::update_frame);
-	ClassDB::bind_method(D_METHOD("get_image"), &LottieSheet::get_image);
-	ClassDB::bind_method(D_METHOD("get_frame_image", "frame"), &LottieSheet::get_frame_image);
-	ClassDB::bind_method(D_METHOD("get_image_size"), &LottieSheet::get_image_size);
-	ClassDB::bind_method(D_METHOD("get_total_frame"), &LottieSheet::get_total_frame);
-	ClassDB::bind_method(D_METHOD("get_duration"), &LottieSheet::get_duration);
+void LottieTexture2D::draw_rect(RID p_canvas_item, const Rect2 &p_rect, bool p_tile, const Color &p_modulate, bool p_transpose) const {
+	if ((width | height) == 0) {
+		return;
+	}
+	RenderingServer::get_singleton()->canvas_item_add_texture_rect(p_canvas_item, p_rect, texture, p_tile, p_modulate, p_transpose);
+}
 
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "json"), "set_json", "get_json");
+void LottieTexture2D::draw_rect_region(RID p_canvas_item, const Rect2 &p_rect, const Rect2 &p_src_rect, const Color &p_modulate, bool p_transpose, bool p_clip_uv) const {
+	if ((width | height) == 0) {
+		return;
+	}
+	RenderingServer::get_singleton()->canvas_item_add_texture_rect_region(p_canvas_item, p_rect, texture, p_src_rect, p_modulate, p_transpose, p_clip_uv);
+}
+
+LottieTexture2D::~LottieTexture2D() {
+	if (texture.is_valid()) {
+		RenderingServer::get_singleton()->free(texture);
+	}
+	if (buffer) {
+		memfree(buffer);
+	}
+}
+
+void LottieTexture2D::_bind_methods() {
+	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("load_string", "p_string", "p_scale"), &LottieTexture2D::load_string, DEFVAL(1));
+	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("load_json", "p_json", "p_scale"), &LottieTexture2D::load_json, DEFVAL(1));
+	ClassDB::bind_method(D_METHOD("set_json", "p_json"), &LottieTexture2D::set_json);
+	ClassDB::bind_method(D_METHOD("get_json"), &LottieTexture2D::get_json);
+	ClassDB::bind_method(D_METHOD("set_scale", "p_scale"), &LottieTexture2D::set_scale);
+	ClassDB::bind_method(D_METHOD("get_scale"), &LottieTexture2D::get_scale);
+	ClassDB::bind_method(D_METHOD("set_frame", "frame"), &LottieTexture2D::set_frame);
+	ClassDB::bind_method(D_METHOD("get_frame"), &LottieTexture2D::get_frame);
+	ClassDB::bind_method(D_METHOD("get_total_frame"), &LottieTexture2D::get_total_frame);
+	ClassDB::bind_method(D_METHOD("get_duration"), &LottieTexture2D::get_duration);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "json", PROPERTY_HINT_RESOURCE_TYPE, "JSON"), "set_json", "get_json");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "scale"), "set_scale", "get_scale");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "frame"), "set_frame", "get_frame");
 }
