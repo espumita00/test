@@ -27,7 +27,7 @@
 				Returns the duration of the Lottie animation in seconds.
 			</description>
 		</method>
-		<method name="get_total_frame">
+		<method name="get_frame_count">
 			<return type="float" />
 			<description>
 				Returns the total number of frames in the animation.

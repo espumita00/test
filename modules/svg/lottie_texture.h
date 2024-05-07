@@ -69,12 +69,12 @@ public:
 	void set_frame(float frame);
 	float get_frame() { return frame; };
 
-	float get_total_frame();
+	float get_frame_count();
 	float get_duration();
 
-	int get_width() const override { return image->get_width(); };
-	int get_height() const override { return image->get_height(); };
-	Size2 get_size() const override { return image->get_size(); };
+	int get_width() const override { return image.is_valid() ? image->get_width() : 0; };
+	int get_height() const override { return image.is_valid() ? image->get_height() : 0; };
+	Size2 get_size() const override { return image.is_valid() ? image->get_size() : Size2i(); };
 	virtual bool is_pixel_opaque(int p_x, int p_y) const override { return image.is_valid() ? image->get_pixel(p_x, p_y).a > 0.1 : true; };
 	virtual bool has_alpha() const override { return true; };
 	virtual Ref<Image> get_image() const override { return image; };

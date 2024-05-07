@@ -80,6 +80,9 @@ Ref<LottieTexture2D> LottieTexture2D::create_from_string(String p_string, float 
 }
 
 void LottieTexture2D::set_frame(float _frame) {
+	if (image.is_null()) {
+		return;
+	}
 	tvg::Result res = animation->frame(_frame);
 	if (texture.is_null() || res == tvg::Result::Success) {
 		sw_canvas->update(picture);
@@ -135,13 +138,16 @@ void LottieTexture2D::set_frame(float _frame) {
 	emit_changed();
 }
 
-float LottieTexture2D::get_total_frame() { return animation->totalFrame(); };
+float LottieTexture2D::get_frame_count() { return animation->totalFrame(); };
 
 float LottieTexture2D::get_duration() { return animation->duration(); };
 
 void LottieTexture2D::set_json(Ref<JSON> p_json) {
-	String data = p_json.is_valid() ? p_json->get_parsed_text() : "";
-	if (p_json.is_valid() && data.is_empty()) {
+	if (p_json.is_null()) {
+		return;
+	}
+	String data = p_json->get_parsed_text();
+	if (data.is_empty()) {
 		// don't sort keys, otherwise ThorVG can't load it
 		data = JSON::stringify(p_json->get_data(), "", false);
 	}
@@ -190,7 +196,7 @@ void LottieTexture2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_scale"), &LottieTexture2D::get_scale);
 	ClassDB::bind_method(D_METHOD("set_frame", "frame"), &LottieTexture2D::set_frame);
 	ClassDB::bind_method(D_METHOD("get_frame"), &LottieTexture2D::get_frame);
-	ClassDB::bind_method(D_METHOD("get_total_frame"), &LottieTexture2D::get_total_frame);
+	ClassDB::bind_method(D_METHOD("get_frame_count"), &LottieTexture2D::get_frame_count);
 	ClassDB::bind_method(D_METHOD("get_duration"), &LottieTexture2D::get_duration);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "json", PROPERTY_HINT_RESOURCE_TYPE, "JSON"), "set_json", "get_json");
