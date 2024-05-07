@@ -2575,7 +2575,7 @@ void RasterizerSceneGLES3::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	scene_state.enable_gl_depth_draw(false);
 
-	if (draw_sky) {
+	if (!render_data.transparent_bg && draw_sky) {
 		RENDER_TIMESTAMP("Render Sky");
 
 		scene_state.enable_gl_depth_test(true);

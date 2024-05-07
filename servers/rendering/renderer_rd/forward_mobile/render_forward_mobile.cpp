@@ -1008,7 +1008,7 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
 
 		RD::get_singleton()->draw_command_end_label(); //Render Opaque
 
-		if (draw_sky || draw_sky_fog_only) {
+		if (!p_render_data->transparent_bg && (draw_sky || draw_sky_fog_only)) {
 			RD::get_singleton()->draw_command_begin_label("Draw Sky");
 
 			// Note, sky.setup should have been called up above and setup stuff we need.
