@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SharedMutex" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Multithreading primitive for multi-read exclusive write access.
+	</brief_description>
+	<description>
+		Shared mutex to allow better multi-threaded access.
+		Shared mutexes allow you to have multiple threads reading the same data, while only one can modify them, and not while its being read.
+		[b]Note:[/b] Locking shared and then exclusively will cause a deadlock. Please avoid any situations like these.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="lock_exclusive">
+			<return type="void" />
+			<description>
+				Locks the SharedMutex exclusively, meant for write access.
+			</description>
+		</method>
+		<method name="lock_shared">
+			<return type="void" />
+			<description>
+				Locks the SharedMutex in a shared fashion, meant for read access.
+			</description>
+		</method>
+		<method name="try_lock_exclusive">
+			<return type="bool" />
+			<description>
+				Tries to lock the SharedMutex exclusively. Returns true if it successfully acquired the lock with no issues.
+			</description>
+		</method>
+		<method name="try_lock_shared">
+			<return type="bool" />
+			<description>
+				Tries to lock the SharedMutex in a shared fashion. Returns true if it successfully acquired the lock with no issues.
+			</description>
+		</method>
+		<method name="unlock_exclusive">
+			<return type="void" />
+			<description>
+				Unlocks the SharedMutex exclusively, meant for write access.
+			</description>
+		</method>
+		<method name="unlock_shared">
+			<return type="void" />
+			<description>
+				Unlocks the SharedMutex in a shared fashion, meant for read access.
+			</description>
+		</method>
+	</methods>
+</class>

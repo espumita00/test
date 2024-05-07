@@ -382,6 +382,25 @@ public:
 	void unlock();
 };
 
+class SharedMutex : public RefCounted {
+	GDCLASS(SharedMutex, RefCounted);
+	::Semaphore sem;
+	::BinaryMutex mutex;
+	::Mutex exclusive_mutex;
+	unsigned long threads_locking = 0;
+
+	static void _bind_methods();
+
+public:
+	void lock_exclusive();
+	bool try_lock_exclusive();
+	void unlock_exclusive();
+
+	void lock_shared();
+	bool try_lock_shared();
+	void unlock_shared();
+};
+
 class Semaphore : public RefCounted {
 	GDCLASS(Semaphore, RefCounted);
 	::Semaphore semaphore;
