@@ -148,12 +148,12 @@ inline void __swap_tmpl(T &x, T &y) {
 static _FORCE_INLINE_ unsigned int __ctz_32(unsigned int value) {
 	unsigned long num = 0;
 	_BitScanForward(&num, value);
-	return num - 32;
+	return num;
 }
 
 static _FORCE_INLINE_ unsigned int __ctz_64(unsigned long value) {
 	unsigned long num = 0;
-	_BitScanForward(&num, value);
+	_BitScanForward64(&num, value);
 	return num;
 }
 
@@ -175,7 +175,7 @@ static _FORCE_INLINE_ unsigned int previous_power_of_2(unsigned int x) {
 	if (x == 0) {
 		return 0;
 	}
-	return 0x80000000 >> __ctz_32(x - 1);
+	return 0x80000000 >> __ctz_32(x);
 }
 
 static inline int get_shift_from_power_of_2(unsigned int p_bits) {
@@ -214,7 +214,7 @@ static _FORCE_INLINE_ unsigned int previous_power_of_2(unsigned int x) {
 	if (x == 0) {
 		return 0;
 	}
-	return 0x80000000 >> __builtin_clz(x - 1);
+	return 0x80000000 >> __builtin_clz(x);
 }
 
 static inline int get_shift_from_power_of_2(unsigned int p_bits) {
