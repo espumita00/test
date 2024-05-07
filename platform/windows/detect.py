@@ -641,6 +641,14 @@ def configure_mingw(env: "SConsEnvironment"):
     if tool_ranlib:
         env["RANLIB"] = tool_ranlib
 
+    if env["debug_symbols"]:
+        env["OBJCOPY"] = get_mingw_tool("objcopy", env["mingw_prefix"], env["arch"])
+        env["STRIP"] = get_mingw_tool("strip", env["mingw_prefix"], env["arch"])
+
+        if not env["OBJCOPY"] or not env["STRIP"]:
+            print_error('Separating debug symbols requires both "objcopy" and "strip" to function.')
+            sys.exit(255)
+
     ## LTO
 
     if env["lto"] == "auto":  # Full LTO for production with MinGW.
@@ -649,7 +657,7 @@ def configure_mingw(env: "SConsEnvironment"):
     if env["lto"] != "none":
         if env["lto"] == "thin":
             if not env["use_llvm"]:
-                print("ThinLTO is only compatible with LLVM, use `use_llvm=yes` or `lto=full`.")
+                print_error("ThinLTO is only compatible with LLVM, use `use_llvm=yes` or `lto=full`.")
                 sys.exit(255)
             env.Append(CCFLAGS=["-flto=thin"])
             env.Append(LINKFLAGS=["-flto=thin"])
@@ -762,7 +770,7 @@ def configure_mingw(env: "SConsEnvironment"):
     env.Append(CPPDEFINES=["MINGW_ENABLED", ("MINGW_HAS_SECURE_API", 1)])
 
     # resrc
-    env.Append(BUILDERS={"RES": env.Builder(action=build_res_file, suffix=".o", src_suffix=".rc")})
+    env.Append(BUILDERS={"RES": env.Builder(action=env.Run(build_res_file), suffix=".o", src_suffix=".rc")})
 
 
 def configure(env: "SConsEnvironment"):
