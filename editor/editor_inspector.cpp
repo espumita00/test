@@ -477,10 +477,10 @@ StringName EditorProperty::_get_revert_property() const {
 void EditorProperty::_update_property_bg() {
 	// This function is to be called on EditorPropertyResource, EditorPropertyArray, and EditorPropertyDictionary.
 	// Behavior is undetermined on any other EditorProperty.
-	if (!is_inside_tree()) {
+	if (!is_inside_tree() || updating_theme) {
 		return;
 	}
-
+	updating_theme = true;
 	begin_bulk_theme_override();
 
 	if (bottom_editor) {
@@ -514,6 +514,7 @@ void EditorProperty::_update_property_bg() {
 		remove_theme_color_override("property_color");
 	}
 	end_bulk_theme_override();
+	updating_theme = false;
 	queue_redraw();
 }
 
@@ -4079,6 +4080,9 @@ void EditorInspector::_notification(int p_what) {
 
 		case EditorSettings::NOTIFICATION_EDITOR_SETTINGS_CHANGED: {
 			bool needs_update = false;
+			if (EditorThemeManager::is_generated_theme_outdated() && !sub_inspector) {
+				add_theme_style_override("panel", get_theme_stylebox(SNAME("panel"), SNAME("Tree")));
+			}
 
 			if (use_settings_name_style && EditorSettings::get_singleton()->check_changed_settings_in_group("interface/editor/localize_settings")) {
 				EditorPropertyNameProcessor::Style style = EditorPropertyNameProcessor::get_settings_style();
