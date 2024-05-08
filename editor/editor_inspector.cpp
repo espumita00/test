@@ -4111,6 +4111,8 @@ void EditorInspector::_vscroll_changed(double p_offset) {
 		return;
 	}
 
+	propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST);
+
 	if (object) {
 		scroll_cache[object->get_instance_id()] = p_offset;
 	}
