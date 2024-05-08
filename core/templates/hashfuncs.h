@@ -304,15 +304,15 @@ struct HashMapHasherDefault {
 	template <typename T>
 	static _FORCE_INLINE_ uint32_t hash(const Ref<T> &p_ref) { return hash_one_uint64((uint64_t)p_ref.operator->()); }
 
-	static _FORCE_INLINE_ uint32_t hash(const String &p_string) { return p_string.hash(); }
-	static _FORCE_INLINE_ uint32_t hash(const char *p_cstr) { return hash_djb2(p_cstr); }
+	static _FORCE_INLINE_ uint32_t hash(const String &p_string) { return hash_fmix32(p_string.hash()); }
+	static _FORCE_INLINE_ uint32_t hash(const char *p_cstr) { return hash_fmix32(hash_djb2(p_cstr)); }
 	static _FORCE_INLINE_ uint32_t hash(const wchar_t p_wchar) { return hash_fmix32(p_wchar); }
 	static _FORCE_INLINE_ uint32_t hash(const char16_t p_uchar) { return hash_fmix32(p_uchar); }
 	static _FORCE_INLINE_ uint32_t hash(const char32_t p_uchar) { return hash_fmix32(p_uchar); }
 	static _FORCE_INLINE_ uint32_t hash(const RID &p_rid) { return hash_one_uint64(p_rid.get_id()); }
-	static _FORCE_INLINE_ uint32_t hash(const CharString &p_char_string) { return hash_djb2(p_char_string.get_data()); }
-	static _FORCE_INLINE_ uint32_t hash(const StringName &p_string_name) { return p_string_name.hash(); }
-	static _FORCE_INLINE_ uint32_t hash(const NodePath &p_path) { return p_path.hash(); }
+	static _FORCE_INLINE_ uint32_t hash(const CharString &p_char_string) { return hash_fmix32(hash_djb2(p_char_string.get_data())); }
+	static _FORCE_INLINE_ uint32_t hash(const StringName &p_string_name) { return hash_fmix32(p_string_name.hash()); }
+	static _FORCE_INLINE_ uint32_t hash(const NodePath &p_path) { return hash_fmix32(p_path.hash()); }
 	static _FORCE_INLINE_ uint32_t hash(const ObjectID &p_id) { return hash_one_uint64(p_id); }
 
 	static _FORCE_INLINE_ uint32_t hash(const uint64_t p_int) { return hash_one_uint64(p_int); }
