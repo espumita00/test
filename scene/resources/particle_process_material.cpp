@@ -995,13 +995,12 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "	\n";
 	if (collision_mode == COLLISION_RIGID) {
 		code += "	if (COLLIDED) {\n";
-		code += "		if (length(VELOCITY) > 3.0) {\n";
-		code += "			TRANSFORM[3].xyz += COLLISION_NORMAL * COLLISION_DEPTH;\n";
-		code += "			VELOCITY -= COLLISION_NORMAL * dot(COLLISION_NORMAL, VELOCITY) * (1.0 + collision_bounce);\n";
-		code += "			VELOCITY = mix(VELOCITY,vec3(0.0),clamp(collision_friction, 0.0, 1.0));\n";
-		code += "		} else {\n";
-		code += "			VELOCITY = vec3(0.0);\n";
-		code += "		}\n";
+		code += "		float collision_response = dot(COLLISION_NORMAL, VELOCITY);\n";
+		code += "		float slide_to_bounce_trigger = step(2.0/clamp(collision_bounce + 1.0, 1.0, 2.0), abs(collision_response));\n";
+		code += "		TRANSFORM[3].xyz += COLLISION_NORMAL * COLLISION_DEPTH;\n";
+		code += "		VELOCITY -= COLLISION_NORMAL * collision_response;\n";
+		code += "		VELOCITY = mix(VELOCITY,vec3(0.0),clamp(collision_friction, 0.0, 1.0));\n";
+		code += "		VELOCITY -= COLLISION_NORMAL * collision_response * (collision_bounce * slide_to_bounce_trigger);\n";
 		code += "	}\n";
 	} else if (collision_mode == COLLISION_HIDE_ON_CONTACT) {
 		code += "	if (COLLIDED) {\n";
