@@ -883,7 +883,7 @@ Error GLTFDocument::_encode_accessors(Ref<GLTFState> p_state) {
 		Ref<GLTFAccessor> accessor = p_state->accessors[i];
 		d["componentType"] = accessor->component_type;
 		d["count"] = accessor->count;
-		d["type"] = _get_accessor_type_name(accessor->type);
+		d["type"] = _get_accessor_type_name(accessor->accessor_type);
 		d["normalized"] = accessor->normalized;
 		d["max"] = accessor->max;
 		d["min"] = accessor->min;
@@ -931,58 +931,58 @@ Error GLTFDocument::_encode_accessors(Ref<GLTFState> p_state) {
 	return OK;
 }
 
-String GLTFDocument::_get_accessor_type_name(const GLTFType p_type) {
-	if (p_type == GLTFType::TYPE_SCALAR) {
+String GLTFDocument::_get_accessor_type_name(const GLTFAccessorType p_accessor_type) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_SCALAR) {
 		return "SCALAR";
 	}
-	if (p_type == GLTFType::TYPE_VEC2) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_VEC2) {
 		return "VEC2";
 	}
-	if (p_type == GLTFType::TYPE_VEC3) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_VEC3) {
 		return "VEC3";
 	}
-	if (p_type == GLTFType::TYPE_VEC4) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_VEC4) {
 		return "VEC4";
 	}
 
-	if (p_type == GLTFType::TYPE_MAT2) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_MAT2) {
 		return "MAT2";
 	}
-	if (p_type == GLTFType::TYPE_MAT3) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_MAT3) {
 		return "MAT3";
 	}
-	if (p_type == GLTFType::TYPE_MAT4) {
+	if (p_accessor_type == GLTFAccessorType::TYPE_MAT4) {
 		return "MAT4";
 	}
 	ERR_FAIL_V("SCALAR");
 }
 
-GLTFType GLTFDocument::_get_type_from_str(const String &p_string) {
+GLTFAccessorType GLTFDocument::_get_accessor_type_from_str(const String &p_string) {
 	if (p_string == "SCALAR") {
-		return GLTFType::TYPE_SCALAR;
+		return GLTFAccessorType::TYPE_SCALAR;
 	}
 
 	if (p_string == "VEC2") {
-		return GLTFType::TYPE_VEC2;
+		return GLTFAccessorType::TYPE_VEC2;
 	}
 	if (p_string == "VEC3") {
-		return GLTFType::TYPE_VEC3;
+		return GLTFAccessorType::TYPE_VEC3;
 	}
 	if (p_string == "VEC4") {
-		return GLTFType::TYPE_VEC4;
+		return GLTFAccessorType::TYPE_VEC4;
 	}
 
 	if (p_string == "MAT2") {
-		return GLTFType::TYPE_MAT2;
+		return GLTFAccessorType::TYPE_MAT2;
 	}
 	if (p_string == "MAT3") {
-		return GLTFType::TYPE_MAT3;
+		return GLTFAccessorType::TYPE_MAT3;
 	}
 	if (p_string == "MAT4") {
-		return GLTFType::TYPE_MAT4;
+		return GLTFAccessorType::TYPE_MAT4;
 	}
 
-	ERR_FAIL_V(GLTFType::TYPE_SCALAR);
+	ERR_FAIL_V(GLTFAccessorType::TYPE_SCALAR);
 }
 
 Error GLTFDocument::_parse_accessors(Ref<GLTFState> p_state) {
@@ -1001,7 +1001,7 @@ Error GLTFDocument::_parse_accessors(Ref<GLTFState> p_state) {
 		ERR_FAIL_COND_V(!d.has("count"), ERR_PARSE_ERROR);
 		accessor->count = d["count"];
 		ERR_FAIL_COND_V(!d.has("type"), ERR_PARSE_ERROR);
-		accessor->type = _get_type_from_str(d["type"]);
+		accessor->accessor_type = _get_accessor_type_from_str(d["type"]);
 
 		if (d.has("bufferView")) {
 			accessor->buffer_view = d["bufferView"]; //optional because it may be sparse...
@@ -1085,26 +1085,12 @@ String GLTFDocument::_get_component_type_name(const uint32_t p_component) {
 	return "<Error>";
 }
 
-String GLTFDocument::_get_type_name(const GLTFType p_component) {
-	static const char *names[] = {
-		"float",
-		"vec2",
-		"vec3",
-		"vec4",
-		"mat2",
-		"mat3",
-		"mat4"
-	};
-
-	return names[p_component];
-}
-
-Error GLTFDocument::_encode_buffer_view(Ref<GLTFState> p_state, const double *p_src, const int p_count, const GLTFType p_type, const int p_component_type, const bool p_normalized, const int p_byte_offset, const bool p_for_vertex, GLTFBufferViewIndex &r_accessor, const bool p_for_vertex_indices) {
+Error GLTFDocument::_encode_buffer_view(Ref<GLTFState> p_state, const double *p_src, const int p_count, const GLTFAccessorType p_accessor_type, const int p_component_type, const bool p_normalized, const int p_byte_offset, const bool p_for_vertex, GLTFBufferViewIndex &r_accessor, const bool p_for_vertex_indices) {
 	const int component_count_for_type[7] = {
 		1, 2, 3, 4, 4, 9, 16
 	};
 
-	const int component_count = component_count_for_type[p_type];
+	const int component_count = component_count_for_type[p_accessor_type];
 	const int component_size = _get_component_type_size(p_component_type);
 	ERR_FAIL_COND_V(component_size == 0, FAILED);
 
@@ -1114,18 +1100,18 @@ Error GLTFDocument::_encode_buffer_view(Ref<GLTFState> p_state, const double *p_
 	switch (p_component_type) {
 		case COMPONENT_TYPE_BYTE:
 		case COMPONENT_TYPE_UNSIGNED_BYTE: {
-			if (p_type == TYPE_MAT2) {
+			if (p_accessor_type == TYPE_MAT2) {
 				skip_every = 2;
 				skip_bytes = 2;
 			}
-			if (p_type == TYPE_MAT3) {
+			if (p_accessor_type == TYPE_MAT3) {
 				skip_every = 3;
 				skip_bytes = 1;
 			}
 		} break;
 		case COMPONENT_TYPE_SHORT:
 		case COMPONENT_TYPE_UNSIGNED_SHORT: {
-			if (p_type == TYPE_MAT3) {
+			if (p_accessor_type == TYPE_MAT3) {
 				skip_every = 6;
 				skip_bytes = 4;
 			}
@@ -1144,7 +1130,7 @@ Error GLTFDocument::_encode_buffer_view(Ref<GLTFState> p_state, const double *p_
 		stride += 4 - (stride % 4); //according to spec must be multiple of 4
 	}
 	//use to debug
-	print_verbose("glTF: encoding type " + _get_type_name(p_type) + " component type: " + _get_component_type_name(p_component_type) + " stride: " + itos(stride) + " amount " + itos(p_count));
+	print_verbose("glTF: encoding accessor type " + _get_accessor_type_name(p_accessor_type) + " component type: " + _get_component_type_name(p_component_type) + " stride: " + itos(stride) + " amount " + itos(p_count));
 
 	print_verbose("glTF: encoding accessor offset " + itos(p_byte_offset) + " view offset: " + itos(bv->byte_offset) + " total buffer len: " + itos(gltf_buffer.size()) + " view len " + itos(bv->byte_length));
 
@@ -1307,7 +1293,7 @@ Error GLTFDocument::_encode_buffer_view(Ref<GLTFState> p_state, const double *p_
 	return OK;
 }
 
-Error GLTFDocument::_decode_buffer_view(Ref<GLTFState> p_state, double *p_dst, const GLTFBufferViewIndex p_buffer_view, const int p_skip_every, const int p_skip_bytes, const int p_element_size, const int p_count, const GLTFType p_type, const int p_component_count, const int p_component_type, const int p_component_size, const bool p_normalized, const int p_byte_offset, const bool p_for_vertex) {
+Error GLTFDocument::_decode_buffer_view(Ref<GLTFState> p_state, double *p_dst, const GLTFBufferViewIndex p_buffer_view, const int p_skip_every, const int p_skip_bytes, const int p_element_size, const int p_count, const GLTFAccessorType p_accessor_type, const int p_component_count, const int p_component_type, const int p_component_size, const bool p_normalized, const int p_byte_offset, const bool p_for_vertex) {
 	const Ref<GLTFBufferView> bv = p_state->buffer_views[p_buffer_view];
 
 	int stride = p_element_size;
@@ -1325,7 +1311,7 @@ Error GLTFDocument::_decode_buffer_view(Ref<GLTFState> p_state, double *p_dst, c
 	const uint8_t *bufptr = buffer.ptr();
 
 	//use to debug
-	print_verbose("glTF: type " + _get_type_name(p_type) + " component type: " + _get_component_type_name(p_component_type) + " stride: " + itos(stride) + " amount " + itos(p_count));
+	print_verbose("glTF: accessor type " + _get_accessor_type_name(p_accessor_type) + " component type: " + _get_component_type_name(p_component_type) + " stride: " + itos(stride) + " amount " + itos(p_count));
 	print_verbose("glTF: accessor offset " + itos(p_byte_offset) + " view offset: " + itos(bv->byte_offset) + " total buffer len: " + itos(buffer.size()) + " view len " + itos(bv->byte_length));
 
 	const int buffer_end = (stride * (p_count - 1)) + p_element_size;
@@ -1427,7 +1413,7 @@ Vector<double> GLTFDocument::_decode_accessor(Ref<GLTFState> p_state, const GLTF
 		1, 2, 3, 4, 4, 9, 16
 	};
 
-	const int component_count = component_count_for_type[a->type];
+	const int component_count = component_count_for_type[a->accessor_type];
 	const int component_size = _get_component_type_size(a->component_type);
 	ERR_FAIL_COND_V(component_size == 0, Vector<double>());
 	int element_size = component_count * component_size;
@@ -1438,12 +1424,12 @@ Vector<double> GLTFDocument::_decode_accessor(Ref<GLTFState> p_state, const GLTF
 	switch (a->component_type) {
 		case COMPONENT_TYPE_BYTE:
 		case COMPONENT_TYPE_UNSIGNED_BYTE: {
-			if (a->type == TYPE_MAT2) {
+			if (a->accessor_type == TYPE_MAT2) {
 				skip_every = 2;
 				skip_bytes = 2;
 				element_size = 8; //override for this case
 			}
-			if (a->type == TYPE_MAT3) {
+			if (a->accessor_type == TYPE_MAT3) {
 				skip_every = 3;
 				skip_bytes = 1;
 				element_size = 12; //override for this case
@@ -1451,7 +1437,7 @@ Vector<double> GLTFDocument::_decode_accessor(Ref<GLTFState> p_state, const GLTF
 		} break;
 		case COMPONENT_TYPE_SHORT:
 		case COMPONENT_TYPE_UNSIGNED_SHORT: {
-			if (a->type == TYPE_MAT3) {
+			if (a->accessor_type == TYPE_MAT3) {
 				skip_every = 6;
 				skip_bytes = 4;
 				element_size = 16; //override for this case
@@ -1468,7 +1454,7 @@ Vector<double> GLTFDocument::_decode_accessor(Ref<GLTFState> p_state, const GLTF
 	if (a->buffer_view >= 0) {
 		ERR_FAIL_INDEX_V(a->buffer_view, p_state->buffer_views.size(), Vector<double>());
 
-		const Error err = _decode_buffer_view(p_state, dst, a->buffer_view, skip_every, skip_bytes, element_size, a->count, a->type, component_count, a->component_type, component_size, a->normalized, a->byte_offset, p_for_vertex);
+		const Error err = _decode_buffer_view(p_state, dst, a->buffer_view, skip_every, skip_bytes, element_size, a->count, a->accessor_type, component_count, a->component_type, component_size, a->normalized, a->byte_offset, p_for_vertex);
 		if (err != OK) {
 			return Vector<double>();
 		}
@@ -1492,7 +1478,7 @@ Vector<double> GLTFDocument::_decode_accessor(Ref<GLTFState> p_state, const GLTF
 
 		Vector<double> data;
 		data.resize(component_count * a->sparse_count);
-		err = _decode_buffer_view(p_state, data.ptrw(), a->sparse_values_buffer_view, skip_every, skip_bytes, element_size, a->sparse_count, a->type, component_count, a->component_type, component_size, a->normalized, a->sparse_values_byte_offset, p_for_vertex);
+		err = _decode_buffer_view(p_state, data.ptrw(), a->sparse_values_buffer_view, skip_every, skip_bytes, element_size, a->sparse_count, a->accessor_type, component_count, a->component_type, component_size, a->normalized, a->sparse_values_byte_offset, p_for_vertex);
 		if (err != OK) {
 			return Vector<double>();
 		}
@@ -1544,7 +1530,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_ints(Ref<GLTFState> p_state,
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_SCALAR;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_SCALAR;
 	int component_type;
 	if (max_index > 65535 || p_for_vertex) {
 		component_type = GLTFDocument::COMPONENT_TYPE_INT;
@@ -1556,10 +1542,10 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_ints(Ref<GLTFState> p_state,
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = ret_size;
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i, p_for_vertex_indices);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i, p_for_vertex_indices);
 	if (err != OK) {
 		return -1;
 	}
@@ -1655,17 +1641,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec2(Ref<GLTFState> p_state,
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC2;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC2;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1705,17 +1691,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_color(Ref<GLTFState> p_state
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC4;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1769,17 +1755,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_weights(Ref<GLTFState> p_sta
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC4;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1817,17 +1803,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_joints(Ref<GLTFState> p_stat
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC4;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_UNSIGNED_SHORT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1867,17 +1853,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_quaternions(Ref<GLTFState> p
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC4;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1939,17 +1925,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_floats(Ref<GLTFState> p_stat
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_SCALAR;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_SCALAR;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = ret_size;
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -1986,17 +1972,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec3(Ref<GLTFState> p_state,
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC3;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC3;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -2059,12 +2045,12 @@ GLTFAccessorIndex GLTFDocument::_encode_sparse_accessor_as_vec3(Ref<GLTFState> p
 	Ref<GLTFAccessor> sparse_accessor;
 	sparse_accessor.instantiate();
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_VEC3;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_VEC3;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	sparse_accessor->normalized = false;
 	sparse_accessor->count = p_attribs.size();
-	sparse_accessor->type = type;
+	sparse_accessor->accessor_type = accessor_type;
 	sparse_accessor->component_type = component_type;
 	if (p_reference_accessor < p_state->accessors.size() && p_reference_accessor >= 0 && p_state->accessors[p_reference_accessor].is_valid()) {
 		sparse_accessor->byte_offset = p_state->accessors[p_reference_accessor]->byte_offset;
@@ -2087,11 +2073,11 @@ GLTFAccessorIndex GLTFDocument::_encode_sparse_accessor_as_vec3(Ref<GLTFState> p
 		} else {
 			sparse_accessor->sparse_indices_component_type = GLTFDocument::COMPONENT_TYPE_UNSIGNED_SHORT;
 		}
-		if (_encode_buffer_view(p_state, changed_indices.ptr(), changed_indices.size(), GLTFType::TYPE_SCALAR, sparse_accessor->sparse_indices_component_type, sparse_accessor->normalized, sparse_accessor->sparse_indices_byte_offset, false, buffer_view_i_indices) != OK) {
+		if (_encode_buffer_view(p_state, changed_indices.ptr(), changed_indices.size(), GLTFAccessorType::TYPE_SCALAR, sparse_accessor->sparse_indices_component_type, sparse_accessor->normalized, sparse_accessor->sparse_indices_byte_offset, false, buffer_view_i_indices) != OK) {
 			return -1;
 		}
 		// We use changed_indices.size() here, because we must pass the number of vec3 values rather than the number of components.
-		if (_encode_buffer_view(p_state, changed_values.ptr(), changed_indices.size(), sparse_accessor->type, sparse_accessor->component_type, sparse_accessor->normalized, sparse_accessor->sparse_values_byte_offset, false, buffer_view_i_values) != OK) {
+		if (_encode_buffer_view(p_state, changed_values.ptr(), changed_indices.size(), sparse_accessor->accessor_type, sparse_accessor->component_type, sparse_accessor->normalized, sparse_accessor->sparse_values_byte_offset, false, buffer_view_i_values) != OK) {
 			return -1;
 		}
 		sparse_accessor->sparse_indices_buffer_view = buffer_view_i_indices;
@@ -2100,7 +2086,7 @@ GLTFAccessorIndex GLTFDocument::_encode_sparse_accessor_as_vec3(Ref<GLTFState> p
 	} else if (changed_indices.size() > 0) {
 		GLTFBufferIndex buffer_view_i;
 		sparse_accessor->byte_offset = 0;
-		Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, sparse_accessor->normalized, size, p_for_vertex, buffer_view_i);
+		Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, sparse_accessor->normalized, size, p_for_vertex, buffer_view_i);
 		if (err != OK) {
 			return -1;
 		}
@@ -2161,17 +2147,17 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_xform(Ref<GLTFState> p_state
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
 	int64_t size = p_state->buffers[0].size();
-	const GLTFType type = GLTFType::TYPE_MAT4;
+	const GLTFAccessorType accessor_type = GLTFAccessorType::TYPE_MAT4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
 
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->normalized = false;
 	accessor->count = p_attribs.size();
-	accessor->type = type;
+	accessor->accessor_type = accessor_type;
 	accessor->component_type = component_type;
 	accessor->byte_offset = 0;
-	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
+	Error err = _encode_buffer_view(p_state, attribs.ptr(), p_attribs.size(), accessor_type, component_type, accessor->normalized, size, p_for_vertex, buffer_view_i);
 	if (err != OK) {
 		return -1;
 	}
@@ -2214,10 +2200,10 @@ Vector<Color> GLTFDocument::_decode_accessor_as_color(Ref<GLTFState> p_state, co
 		return ret;
 	}
 
-	const int type = p_state->accessors[p_accessor]->type;
-	ERR_FAIL_COND_V(!(type == TYPE_VEC3 || type == TYPE_VEC4), ret);
+	const int accessor_type = p_state->accessors[p_accessor]->accessor_type;
+	ERR_FAIL_COND_V(!(accessor_type == TYPE_VEC3 || accessor_type == TYPE_VEC4), ret);
 	int vec_len = 3;
-	if (type == TYPE_VEC4) {
+	if (accessor_type == TYPE_VEC4) {
 		vec_len = 4;
 	}
 
