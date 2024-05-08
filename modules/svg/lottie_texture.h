@@ -49,28 +49,60 @@ class LottieTexture2D : public Texture2D {
 
 	float scale = 1.0;
 	float origin_width = -1, origin_height = -1;
-	float frame = 0;
 
-	void _update_image(float p_scale);
+	float frame_begin = 0;
+	float frame_end = 0;
+	int frame_count = 1;
+	int rows = -1;
+
+	void _load_lottie_json();
+	void _update_image();
 
 protected:
 	static void _bind_methods();
 
 public:
-	static Ref<LottieTexture2D> create_from_string(String p_string, float p_scale = 1);
-	static Ref<LottieTexture2D> create_from_json(Ref<JSON> p_json, float p_scale = 1);
+	static Ref<LottieTexture2D> create_from_string(String p_string, float p_frame_begin = 0, float p_frame_end = 0, int p_frame_count = 1, float p_scale = 1);
+	static Ref<LottieTexture2D> create_from_json(Ref<JSON> p_json, float p_frame_begin = 0, float p_frame_end = 0, int p_frame_count = 1, float p_scale = 1);
 
 	void set_json(Ref<JSON> p_json);
 	Ref<JSON> get_json() { return json; };
 
-	void set_scale(float p_scale);
+	void set_scale(float p_scale) {
+		scale = p_scale;
+		_update_image();
+	};
 	float get_scale() { return scale; };
 
-	void set_frame(float frame);
-	float get_frame() { return frame; };
+	void set_frame_begin(float p_frame_begin) {
+		frame_begin = CLAMP(p_frame_begin, 0, get_lottie_frame_count());
+		if (frame_begin > frame_end) {
+			frame_end = frame_begin;
+		}
+		_update_image();
+	};
+	float get_frame_begin() { return frame_begin; };
 
-	float get_frame_count();
-	float get_duration();
+	void set_frame_end(float p_frame_end) {
+		frame_end = CLAMP(p_frame_end, frame_begin, get_lottie_frame_count());
+		_update_image();
+	};
+	float get_frame_end() { return frame_end; };
+
+	void set_frame_count(int p_frame_count) {
+		frame_count = p_frame_count;
+		_update_image();
+	};
+	int get_frame_count() { return frame_count; };
+
+	void set_rows(int p_rows) {
+		rows = MIN(p_rows, frame_count);
+		_update_image();
+	}
+	int get_rows() { return rows; }
+
+	float get_lottie_duration() { return animation->duration(); };
+	float get_lottie_frame_count() { return animation->totalFrame(); };
 
 	int get_width() const override { return image.is_valid() ? image->get_width() : 0; };
 	int get_height() const override { return image.is_valid() ? image->get_height() : 0; };

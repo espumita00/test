@@ -35,123 +35,13 @@
 
 #include <thorvg.h>
 
-void LottieTexture2D::_update_image(float p_scale) {
-	if (origin_width < 0 && origin_height < 0) {
-		float fw, fh;
-		picture->size(&fw, &fh);
-		origin_width = fw;
-		origin_height = fh;
-	}
-	uint32_t w = MAX(1, round(origin_width * p_scale));
-	uint32_t h = MAX(1, round(origin_height * p_scale));
-
-	const uint32_t max_dimension = 16384;
-	if (w > max_dimension || h > max_dimension) {
-		WARN_PRINT(vformat(
-				String::utf8("LottieTexture2D: Target canvas dimensions %d×%d (with scale %.2f) exceed the max supported dimensions %d×%d. The target canvas will be scaled down."),
-				w, h, p_scale, max_dimension, max_dimension));
-		w = MIN(w, max_dimension);
-		h = MIN(h, max_dimension);
-	}
-
-	picture->size(w, h);
-	image = Image::create_empty(w, h, false, Image::FORMAT_RGBA8);
-	// Note: memalloc here, be sure to memfree before any return.
-	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * w * h) : memrealloc(buffer, sizeof(uint32_t) * w * h));
-	// Update the image to current frame.
-	set_frame(frame);
-}
-
-Ref<LottieTexture2D> LottieTexture2D::create_from_json(Ref<JSON> p_json, float p_scale) {
-	Ref<LottieTexture2D> ret = memnew(LottieTexture2D);
-	ret->set_json(p_json);
-	ret->set_scale(p_scale);
-	return ret;
-}
-
-Ref<LottieTexture2D> LottieTexture2D::create_from_string(String p_string, float p_scale) {
-	Ref<LottieTexture2D> ret = memnew(LottieTexture2D);
-	Ref<JSON> data = memnew(JSON);
-	Error res = data->parse(p_string, true);
-	ERR_FAIL_COND_V_MSG(res != OK, nullptr, "LottieTexture2D: Parse JSON failed.");
-	ret->set_json(data);
-	ret->set_scale(p_scale);
-	return ret;
-}
-
-void LottieTexture2D::set_frame(float _frame) {
-	if (image.is_null()) {
-		return;
-	}
-	tvg::Result res = animation->frame(_frame);
-	if (texture.is_null() || res == tvg::Result::Success) {
-		sw_canvas->update(picture);
-	}
-
-	uint32_t width = image->get_width();
-	uint32_t height = image->get_height();
-	res = sw_canvas->target(buffer, width, width, height, tvg::SwCanvas::ARGB8888S);
-	if (res != tvg::Result::Success) {
-		ERR_FAIL_MSG("LottieTexture2D: Couldn't set target on ThorVG canvas.");
-	}
-
-	res = sw_canvas->push(tvg::cast(picture));
-	if (res != tvg::Result::Success) {
-		ERR_FAIL_MSG("LottieTexture2D: Couldn't insert ThorVG picture on canvas.");
-	}
-
-	res = sw_canvas->draw();
-	if (res != tvg::Result::Success) {
-		ERR_FAIL_MSG("LottieTexture2D: Couldn't draw ThorVG pictures on canvas.");
-	}
-
-	res = sw_canvas->sync();
-	if (res != tvg::Result::Success) {
-		ERR_FAIL_MSG("LottieTexture2D: Couldn't sync ThorVG canvas.");
-	}
-
-	Vector<uint8_t> image_data;
-	image_data.resize(width * height * sizeof(uint32_t));
-
-	for (uint32_t y = 0; y < height; y++) {
-		for (uint32_t x = 0; x < width; x++) {
-			uint32_t n = buffer[y * width + x];
-			const size_t offset = sizeof(uint32_t) * width * y + sizeof(uint32_t) * x;
-			image_data.write[offset + 0] = (n >> 16) & 0xff;
-			image_data.write[offset + 1] = (n >> 8) & 0xff;
-			image_data.write[offset + 2] = n & 0xff;
-			image_data.write[offset + 3] = (n >> 24) & 0xff;
-		}
-	}
-
-	res = sw_canvas->clear(true);
-
-	image->set_data(width, height, false, Image::FORMAT_RGBA8, image_data);
-
-	if (texture.is_null()) {
-		texture = RenderingServer::get_singleton()->texture_2d_create(image);
-	} else {
-		RID new_texture = RenderingServer::get_singleton()->texture_2d_create(image);
-		RenderingServer::get_singleton()->texture_replace(texture, new_texture);
-	}
-	frame = _frame;
-	emit_changed();
-}
-
-float LottieTexture2D::get_frame_count() { return animation->totalFrame(); };
-
-float LottieTexture2D::get_duration() { return animation->duration(); };
-
-void LottieTexture2D::set_json(Ref<JSON> p_json) {
-	if (p_json.is_null()) {
-		return;
-	}
-	String data = p_json->get_parsed_text();
-	if (data.is_empty()) {
+void LottieTexture2D::_load_lottie_json() {
+	String lottie_str = json->get_parsed_text();
+	if (lottie_str.is_empty()) {
 		// don't sort keys, otherwise ThorVG can't load it
-		data = JSON::stringify(p_json->get_data(), "", false);
+		lottie_str = JSON::stringify(json->get_data(), "", false);
 	}
-	tvg::Result result = picture->load(data.utf8(), data.utf8().size(), "lottie", true);
+	tvg::Result result = picture->load(lottie_str.utf8(), lottie_str.utf8().size(), "lottie", true);
 	if (result != tvg::Result::Success) {
 		ERR_FAIL_MSG(vformat("LottieTexture2D: Couldn't load Lottie: %s.",
 				result == tvg::Result::InvalidArguments				   ? "InvalidArguments"
@@ -159,17 +49,119 @@ void LottieTexture2D::set_json(Ref<JSON> p_json) {
 						: result == tvg::Result::InsufficientCondition ? "InsufficientCondition"
 																	   : "Unknown Error"));
 	}
-	_update_image(scale);
-	json = p_json;
+}
+
+void LottieTexture2D::_update_image() {
+	if (origin_width < 0 && origin_height < 0) {
+		float fw, fh;
+		picture->size(&fw, &fh);
+		origin_width = fw;
+		origin_height = fh;
+	}
+	if (json.is_null() || frame_count <= 0) {
+		return;
+	}
+
+	int _rows = rows < 0 ? Math::ceil(Math::sqrt((float)frame_count)) : rows;
+	int _columns = Math::ceil(((float)frame_count) / _rows);
+
+	uint32_t w = MAX(1, round(origin_width * scale));
+	uint32_t h = MAX(1, round(origin_height * scale));
+
+	const uint32_t max_dimension = 16384;
+	if (w * _columns > max_dimension || h * _rows > max_dimension) {
+		WARN_PRINT(vformat(
+				String::utf8("LottieTexture2D: Target canvas dimensions %d×%d (with scale %.2f, rows %d, columns %d) exceed the max supported dimensions %d×%d. The target canvas will be scaled down."),
+				w, h, scale, _rows, _columns, max_dimension, max_dimension));
+		w = MIN(w, max_dimension / _columns);
+		h = MIN(h, max_dimension / _rows);
+		scale = MIN(w / origin_width, h / origin_height);
+	}
+	picture->size(w, h);
+
+	image = Image::create_empty(w * _columns, h * _rows, false, Image::FORMAT_RGBA8);
+	buffer = (uint32_t *)(buffer == nullptr ? memalloc(sizeof(uint32_t) * w * h) : memrealloc(buffer, sizeof(uint32_t) * w * h));
+
+	for (int row = 0; row < _rows; row++) {
+		for (int column = 0; column < _columns; column++) {
+			if (row * _columns + column >= frame_count) {
+				break;
+			}
+			float progress = ((float)(row * _columns + column)) / frame_count;
+			float current_frame = frame_begin + (frame_end - frame_begin) * progress;
+
+			tvg::Result res = animation->frame(current_frame);
+			if (res == tvg::Result::Success) {
+				sw_canvas->update(picture);
+			}
+			res = sw_canvas->target(buffer, w, w, h, tvg::SwCanvas::ARGB8888S);
+			if (res != tvg::Result::Success) {
+				ERR_FAIL_MSG("LottieTexture2D: Couldn't set target on ThorVG canvas.");
+			}
+
+			res = sw_canvas->push(tvg::cast(picture));
+			if (res != tvg::Result::Success) {
+				ERR_FAIL_MSG("LottieTexture2D: Couldn't insert ThorVG picture on canvas.");
+			}
+
+			res = sw_canvas->draw();
+			if (res != tvg::Result::Success) {
+				ERR_FAIL_MSG("LottieTexture2D: Couldn't draw ThorVG pictures on canvas.");
+			}
+
+			res = sw_canvas->sync();
+			if (res != tvg::Result::Success) {
+				ERR_FAIL_MSG("LottieTexture2D: Couldn't sync ThorVG canvas.");
+			}
+
+			res = sw_canvas->clear(true);
+
+			for (uint32_t y = 0; y < h; y++) {
+				for (uint32_t x = 0; x < w; x++) {
+					uint32_t n = buffer[y * w + x];
+					Color color;
+					color.set_r8((n >> 16) & 0xff);
+					color.set_g8((n >> 8) & 0xff);
+					color.set_b8(n & 0xff);
+					color.set_a8((n >> 24) & 0xff);
+					image->set_pixel(x + w * column, y + h * row, color);
+				}
+			}
+		}
+	}
+	if (texture.is_null()) {
+		texture = RenderingServer::get_singleton()->texture_2d_create(image);
+	} else {
+		RID new_texture = RenderingServer::get_singleton()->texture_2d_create(image);
+		RenderingServer::get_singleton()->texture_replace(texture, new_texture);
+	}
 	emit_changed();
 }
 
-void LottieTexture2D::set_scale(float p_scale) {
-	ERR_FAIL_COND_MSG(Math::is_zero_approx(p_scale), "LottieTexture2D: Can't load Lottie with a scale of 0.");
-	_update_image(p_scale);
-	scale = p_scale;
-	emit_changed();
-};
+Ref<LottieTexture2D> LottieTexture2D::create_from_json(Ref<JSON> p_json, float p_frame_begin, float p_frame_end, int p_frame_count, float p_scale) {
+	Ref<LottieTexture2D> ret = memnew(LottieTexture2D);
+	ret->frame_begin = p_frame_begin;
+	ret->frame_end = p_frame_end;
+	ret->frame_count = p_frame_count;
+	ret->scale = p_scale;
+	ret->json = p_json;
+	ret->_load_lottie_json();
+	ret->_update_image();
+	return ret;
+}
+
+Ref<LottieTexture2D> LottieTexture2D::create_from_string(String p_string, float p_frame_begin, float p_frame_end, int p_frame_count, float p_scale) {
+	Ref<JSON> p_json = memnew(JSON);
+	Error res = p_json->parse(p_string, true);
+	ERR_FAIL_COND_V_MSG(res != OK, nullptr, "LottieTexture2D: Parse JSON failed.");
+	return create_from_json(p_json, p_frame_begin, p_frame_end, p_frame_count, p_scale);
+}
+
+void LottieTexture2D::set_json(Ref<JSON> p_json) {
+	json = p_json;
+	_load_lottie_json();
+	_update_image();
+}
 
 RID LottieTexture2D::get_rid() const {
 	if (texture.is_null()) {
@@ -188,18 +180,27 @@ LottieTexture2D::~LottieTexture2D() {
 }
 
 void LottieTexture2D::_bind_methods() {
-	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("create_from_string", "p_string", "p_scale"), &LottieTexture2D::create_from_string, DEFVAL(1));
-	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("create_from_json", "p_json", "p_scale"), &LottieTexture2D::create_from_json, DEFVAL(1));
+	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("create_from_string", "p_string", "p_frame_begin", "p_frame_end", "p_frame_count", "p_scale"), &LottieTexture2D::create_from_string, DEFVAL(0), DEFVAL(0), DEFVAL(1), DEFVAL(1));
+	ClassDB::bind_static_method("LottieTexture2D", D_METHOD("create_from_json", "p_json", "p_frame_begin", "p_frame_end", "p_frame_count", "p_scale"), &LottieTexture2D::create_from_json, DEFVAL(0), DEFVAL(0), DEFVAL(1), DEFVAL(1));
 	ClassDB::bind_method(D_METHOD("set_json", "p_json"), &LottieTexture2D::set_json);
 	ClassDB::bind_method(D_METHOD("get_json"), &LottieTexture2D::get_json);
 	ClassDB::bind_method(D_METHOD("set_scale", "p_scale"), &LottieTexture2D::set_scale);
 	ClassDB::bind_method(D_METHOD("get_scale"), &LottieTexture2D::get_scale);
-	ClassDB::bind_method(D_METHOD("set_frame", "frame"), &LottieTexture2D::set_frame);
-	ClassDB::bind_method(D_METHOD("get_frame"), &LottieTexture2D::get_frame);
+	ClassDB::bind_method(D_METHOD("set_frame_begin", "frame"), &LottieTexture2D::set_frame_begin);
+	ClassDB::bind_method(D_METHOD("get_frame_begin"), &LottieTexture2D::get_frame_begin);
+	ClassDB::bind_method(D_METHOD("set_frame_end", "frame"), &LottieTexture2D::set_frame_end);
+	ClassDB::bind_method(D_METHOD("get_frame_end"), &LottieTexture2D::get_frame_end);
+	ClassDB::bind_method(D_METHOD("set_frame_count", "p_frame_count"), &LottieTexture2D::set_frame_count);
 	ClassDB::bind_method(D_METHOD("get_frame_count"), &LottieTexture2D::get_frame_count);
-	ClassDB::bind_method(D_METHOD("get_duration"), &LottieTexture2D::get_duration);
+	ClassDB::bind_method(D_METHOD("set_rows", "p_rows"), &LottieTexture2D::set_rows);
+	ClassDB::bind_method(D_METHOD("get_rows"), &LottieTexture2D::get_rows);
+	ClassDB::bind_method(D_METHOD("get_lottie_duration"), &LottieTexture2D::get_lottie_duration);
+	ClassDB::bind_method(D_METHOD("get_lottie_frame_count"), &LottieTexture2D::get_lottie_frame_count);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "json", PROPERTY_HINT_RESOURCE_TYPE, "JSON"), "set_json", "get_json");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "scale"), "set_scale", "get_scale");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "frame"), "set_frame", "get_frame");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "frame_begin"), "set_frame_begin", "get_frame_begin");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "frame_end"), "set_frame_end", "get_frame_end");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "frame_count"), "set_frame_count", "get_frame_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "rows"), "set_rows", "get_rows");
 }
