@@ -634,7 +634,9 @@ void ParticleProcessMaterial::_update_shader() {
 	if (emission_shape == EMISSION_SHAPE_RING) {
 		code += "		\n";
 		code += "		float ring_spawn_angle = rand_from_seed(alt_seed) * 2.0 * pi;\n";
-		code += "		float ring_random_radius = sqrt(rand_from_seed(alt_seed) * (emission_ring_radius - emission_ring_inner_radius * emission_ring_inner_radius) + emission_ring_inner_radius * emission_ring_inner_radius);\n";
+		code += "		float inner_radius_clamped = clamp(emission_ring_inner_radius, 0.001, emission_ring_radius);\n";
+		code += "		float ring_random_radius = rand_from_seed(alt_seed);\n";
+		code += "		ring_random_radius = mix(sqrt(ring_random_radius), ring_random_radius, inner_radius_clamped / emission_ring_radius) * (emission_ring_radius - inner_radius_clamped) + inner_radius_clamped;\n";
 		code += "		vec3 axis = emission_ring_axis == vec3(0.0) ? vec3(0.0, 0.0, 1.0) : normalize(emission_ring_axis);\n";
 		code += "		vec3 ortho_axis = vec3(0.0);\n";
 		code += "		if (abs(axis) == vec3(1.0, 0.0, 0.0)) {\n";
