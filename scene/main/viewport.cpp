@@ -1968,6 +1968,11 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			if (stopped) {
 				set_input_as_handled();
 			}
+		} else {
+			// No control under mouse.
+			if (gui.tooltip_popup) {
+				_gui_cancel_tooltip();
+			}
 		}
 
 		if (gui.dragging) {
