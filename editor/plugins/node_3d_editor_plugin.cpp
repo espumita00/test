@@ -7592,7 +7592,7 @@ void Node3DEditor::_snap_selected_nodes_to_floor() {
 	}
 }
 
-void Node3DEditor::shortcut_input(const Ref<InputEvent> &p_event) {
+void Node3DEditor::input(const Ref<InputEvent> &p_event) {
 	ERR_FAIL_COND(p_event.is_null());
 
 	if (!is_visible_in_tree()) {
@@ -8736,7 +8736,7 @@ Node3DEditor::Node3DEditor() {
 
 	selected = nullptr;
 
-	set_process_shortcut_input(true);
+	set_process_input(true);
 	add_to_group("_spatial_editor_group");
 
 	EDITOR_DEF("editors/3d/manipulator_gizmo_size", 80);
