@@ -2579,6 +2579,8 @@ Error CSharpScript::reload(bool p_keep_state) {
 #endif
 	}
 
+	emit_reloaded();
+
 	return OK;
 }
 
