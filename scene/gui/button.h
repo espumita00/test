@@ -94,7 +94,6 @@ private:
 		int icon_max_width = 0;
 	} theme_cache;
 
-	Size2 _fit_icon_size(const Size2 &p_size) const;
 
 	void _shape(Ref<TextParagraph> p_paragraph = Ref<TextParagraph>(), String p_text = "");
 	void _texture_changed();
@@ -103,6 +102,7 @@ protected:
 	void _set_internal_margin(Side p_side, float p_value);
 	virtual void _queue_update_size_cache();
 
+	Size2 _fit_icon_size(const Size2 &p_size) const;
 	Ref<StyleBox> _get_current_stylebox() const;
 	void _notification(int p_what);
 	static void _bind_methods();
