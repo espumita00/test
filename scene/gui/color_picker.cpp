@@ -31,11 +31,13 @@
 #include "color_picker.h"
 
 #include "core/input/input.h"
+#include "core/io/config_file.h"
 #include "core/io/image.h"
 #include "core/math/color.h"
 #include "core/os/keyboard.h"
 #include "core/os/os.h"
 #include "scene/gui/color_mode.h"
+#include "scene/gui/file_dialog.h"
 #include "scene/gui/margin_container.h"
 #include "scene/resources/image_texture.h"
 #include "scene/resources/style_box_flat.h"
@@ -75,6 +77,8 @@ void ColorPicker::_notification(int p_what) {
 			_update_drop_down_arrow(btn_preset->is_pressed(), btn_preset);
 			_update_drop_down_arrow(btn_recent_preset->is_pressed(), btn_recent_preset);
 			btn_add_preset->set_icon(theme_cache.add_preset);
+			load_palette->set_icon(get_theme_icon(SNAME("load"), SNAME("FileDialog")));
+			save_palette->set_icon(get_theme_icon(SNAME("save"), SNAME("FileDialog")));
 
 			btn_pick->set_custom_minimum_size(Size2(28 * theme_cache.base_scale, 0));
 			btn_shape->set_custom_minimum_size(Size2(28 * theme_cache.base_scale, 0));
@@ -774,10 +778,78 @@ void ColorPicker::_add_recent_preset_button(int p_size, const Color &p_color) {
 	btn_preset_new->connect("toggled", callable_mp(this, &ColorPicker::_recent_preset_pressed).bind(btn_preset_new));
 }
 
+void ColorPicker::_load_palette() {
+	file_dialog->set_title(RTR("Load Palette"));
+	file_dialog->clear_filters();
+	file_dialog->add_filter("*.cpl");
+
+	file_dialog->set_file_mode(FileDialog::FILE_MODE_OPEN_FILE);
+	file_dialog->set_access(FileDialog::ACCESS_USERDATA);
+	file_dialog->set_current_file("");
+	file_dialog->popup_centered_ratio();
+}
+
+void ColorPicker::_save_palette() {
+	file_dialog->set_title(RTR("Save Palette"));
+	file_dialog->set_current_file("new_palette.cpl");
+	file_dialog->clear_filters();
+	file_dialog->add_filter("*.cpl");
+
+	file_dialog->set_file_mode(FileDialog::FILE_MODE_SAVE_FILE);
+	file_dialog->set_access(FileDialog::ACCESS_USERDATA);
+	file_dialog->popup_centered_ratio();
+}
+
+void ColorPicker::_palette_file_selected(const String &p_path) {
+	switch (file_dialog->get_file_mode()) {
+		case FileDialog::FileMode::FILE_MODE_OPEN_FILE: {
+			Ref<ConfigFile> cf;
+			cf.instantiate();
+			if (cf->load(p_path) == OK) {
+				palette_name->set_text(p_path.get_file().get_basename());
+				palette_name->set_tooltip_text("");
+				preset_cache.clear();
+				presets.clear();
+				PackedColorArray saved_presets = cf->get_value("", "palette", PackedColorArray());
+				for (const Color &saved_preset : saved_presets) {
+					preset_cache.push_back(saved_preset);
+					presets.push_back(saved_preset);
+				}
+			} else {
+				ERR_FAIL_MSG("Cannot open file to Read.");
+			}
+
+			_update_presets();
+		} break;
+		case FileDialog::FileMode::FILE_MODE_SAVE_FILE: {
+			Ref<ConfigFile> cf;
+			cf.instantiate();
+			cf->set_value("", "palette", get_presets());
+			if (cf->save(p_path) == OK) {
+				palette_name->set_text(p_path.get_file().get_basename());
+				palette_name->set_tooltip_text("");
+			} else {
+				ERR_FAIL_MSG("Cannot open file to write.");
+			}
+		} break;
+		default:
+			break;
+	}
+
+	if (btn_preset->is_pressed()) {
+		palette_name->show();
+	}
+}
+
 void ColorPicker::_show_hide_preset(const bool &p_is_btn_pressed, Button *p_btn_preset, Container *p_preset_container) {
 	if (p_is_btn_pressed) {
+		palette_name->hide();
+		if (!palette_name->get_text().is_empty()) {
+			palette_name->show();
+		}
 		p_preset_container->show();
 	} else {
+		palette_name->hide();
 		p_preset_container->hide();
 	}
 	_update_drop_down_arrow(p_is_btn_pressed, p_btn_preset);
@@ -857,6 +929,9 @@ void ColorPicker::add_preset(const Color &p_color) {
 		_add_preset_button(_get_preset_size(), p_color);
 	}
 
+	palette_name->set_text(vformat(ETR("%s*"), palette_name->get_text().replace("*", "")));
+	palette_name->set_tooltip_text(ETR("The changes to this palette have not been saved to a file."));
+
 #ifdef TOOLS_ENABLED
 	if (editor_settings) {
 		PackedColorArray arr_to_save = get_presets();
@@ -900,6 +975,9 @@ void ColorPicker::erase_preset(const Color &p_color) {
 				break;
 			}
 		}
+
+		palette_name->set_text(vformat(ETR("%s*"), palette_name->get_text().replace("*", "")));
+		palette_name->set_tooltip_text(ETR("The changes to this palette have not been saved to a file."));
 
 #ifdef TOOLS_ENABLED
 		if (editor_settings) {
@@ -1811,6 +1889,10 @@ void ColorPicker::_bind_methods() {
 }
 
 ColorPicker::ColorPicker() {
+	file_dialog = memnew(FileDialog);
+	add_child(file_dialog, false, INTERNAL_MODE_FRONT);
+	file_dialog->connect("file_selected", callable_mp(this, &ColorPicker::_palette_file_selected));
+
 	internal_margin = memnew(MarginContainer);
 	add_child(internal_margin, false, INTERNAL_MODE_FRONT);
 
@@ -1993,6 +2075,10 @@ ColorPicker::ColorPicker() {
 
 	preset_group.instantiate();
 
+	HBoxContainer *palette_box = memnew(HBoxContainer);
+	palette_box->set_h_size_flags(SIZE_EXPAND_FILL);
+	real_vbox->add_child(palette_box);
+
 	btn_preset = memnew(Button);
 	btn_preset->set_text("Swatches");
 	btn_preset->set_flat(true);
@@ -2000,7 +2086,31 @@ ColorPicker::ColorPicker() {
 	btn_preset->set_focus_mode(FOCUS_NONE);
 	btn_preset->set_text_alignment(HORIZONTAL_ALIGNMENT_LEFT);
 	btn_preset->connect("toggled", callable_mp(this, &ColorPicker::_show_hide_preset).bind(btn_preset, preset_container));
-	real_vbox->add_child(btn_preset);
+	palette_box->add_child(btn_preset);
+
+	HBoxContainer *padding_box = memnew(HBoxContainer);
+	padding_box->set_h_size_flags(SIZE_EXPAND_FILL);
+	palette_box->add_child(padding_box);
+
+	load_palette = memnew(Button);
+	load_palette->set_flat(true);
+	load_palette->set_tooltip_text(ETR("Load existing color palette."));
+	load_palette->set_toggle_mode(true);
+	load_palette->set_focus_mode(FOCUS_NONE);
+	load_palette->connect("pressed", callable_mp(this, &ColorPicker::_load_palette));
+	palette_box->add_child(load_palette);
+
+	save_palette = memnew(Button);
+	save_palette->set_flat(true);
+	save_palette->set_tooltip_text(ETR("Save the current color palette to reuse later."));
+	save_palette->set_toggle_mode(true);
+	save_palette->set_focus_mode(FOCUS_NONE);
+	save_palette->connect("pressed", callable_mp(this, &ColorPicker::_save_palette));
+	palette_box->add_child(save_palette);
+
+	palette_name = memnew(Label);
+	palette_name->hide();
+	real_vbox->add_child(palette_name);
 
 	real_vbox->add_child(preset_container);
 

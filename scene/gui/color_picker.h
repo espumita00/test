@@ -53,6 +53,7 @@ class ColorModeRGB;
 class ColorModeHSV;
 class ColorModeRAW;
 class ColorModeOKHSL;
+class FileDialog;
 
 class ColorPresetButton : public BaseButton {
 	GDCLASS(ColorPresetButton, BaseButton);
@@ -134,6 +135,9 @@ private:
 	Label *picker_preview_label = nullptr;
 	Ref<StyleBoxFlat> picker_preview_style_box;
 	Color picker_color;
+	FileDialog *file_dialog = nullptr;
+	Button *load_palette = nullptr;
+	Button *save_palette = nullptr;
 
 	MarginContainer *internal_margin = nullptr;
 	Control *uv_edit = nullptr;
@@ -149,6 +153,7 @@ private:
 	HBoxContainer *recent_preset_hbc = nullptr;
 	Button *btn_add_preset = nullptr;
 	Button *btn_pick = nullptr;
+	Label *palette_name = nullptr;
 	Button *btn_preset = nullptr;
 	Button *btn_recent_preset = nullptr;
 	PopupMenu *shape_popup = nullptr;
@@ -286,6 +291,9 @@ private:
 	inline int _get_preset_size();
 	void _add_preset_button(int p_size, const Color &p_color);
 	void _add_recent_preset_button(int p_size, const Color &p_color);
+	void _save_palette();
+	void _load_palette();
+	void _palette_file_selected(const String &p_path);
 
 	void _show_hide_preset(const bool &p_is_btn_pressed, Button *p_btn_preset, Container *p_preset_container);
 	void _update_drop_down_arrow(const bool &p_is_btn_pressed, Button *p_btn_preset);
