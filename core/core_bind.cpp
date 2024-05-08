@@ -1224,6 +1224,74 @@ void Mutex::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("unlock"), &Mutex::unlock);
 }
 
+////// SharedMutex //////
+
+void SharedMutex::lock_exclusive() {
+	exclusive_mutex.lock();
+	mutex.lock();
+
+	while (threads_locking > 0) {
+		mutex.unlock();
+
+		sem.wait();
+	}
+}
+
+bool SharedMutex::try_lock_exclusive() {
+	if (exclusive_mutex.try_lock()) {
+		mutex.lock();
+		if (threads_locking == 0) {
+			return true;
+		}
+		mutex.unlock();
+		exclusive_mutex.unlock();
+	}
+	return false;
+}
+
+void SharedMutex::unlock_exclusive() {
+	exclusive_mutex.unlock();
+}
+
+void SharedMutex::lock_shared() {
+	exclusive_mutex.lock();
+	mutex.lock();
+	threads_locking++;
+	mutex.unlock();
+	exclusive_mutex.unlock();
+}
+
+bool SharedMutex::try_lock_shared() {
+	if (exclusive_mutex.try_lock()) {
+		mutex.lock();
+		threads_locking++;
+		mutex.unlock();
+		exclusive_mutex.unlock();
+		return true;
+	}
+	return false;
+}
+
+void SharedMutex::unlock_shared() {
+	mutex.lock();
+	threads_locking--;
+	if (threads_locking == 0) {
+		mutex.unlock();
+		sem.post();
+	} else {
+		mutex.unlock();
+	}
+}
+
+void SharedMutex::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("lock_exclusive"), &SharedMutex::lock_exclusive);
+	ClassDB::bind_method(D_METHOD("try_lock_exclusive"), &SharedMutex::try_lock_exclusive);
+	ClassDB::bind_method(D_METHOD("unlock_exclusive"), &SharedMutex::unlock_exclusive);
+	ClassDB::bind_method(D_METHOD("lock_shared"), &SharedMutex::lock_shared);
+	ClassDB::bind_method(D_METHOD("try_lock_shared"), &SharedMutex::try_lock_shared);
+	ClassDB::bind_method(D_METHOD("unlock_shared"), &SharedMutex::unlock_shared);
+}
+
 ////// Thread //////
 
 void Thread::_start_func(void *ud) {
